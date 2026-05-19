@@ -64,7 +64,7 @@ export default function ProfileScreen() {
           <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Active Streak</span>
         </div>
         <div className="glass p-5 rounded-3xl border-white/5 flex flex-col items-center text-center">
-          <span className="text-2xl font-black italic text-blue-500">#{crew.rank}</span>
+          <span className="text-2xl font-black italic text-blue-500">#{crew?.rank || "—"}</span>
           <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Global Rank</span>
         </div>
       </div>

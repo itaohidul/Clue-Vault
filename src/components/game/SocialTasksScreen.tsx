@@ -79,6 +79,56 @@ export default function SocialTasksScreen() {
     }, 2000);
   };
 
+  // Safely execute Ads with a timeout to prevent hanging / adex timeout issues from blocking users
+  const executeAdWithTimeout = (adFn: () => any, timeoutMs: number = 4000) => {
+    let completed = false;
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        if (!completed) {
+          completed = true;
+          console.warn("Clip ad network timeout. Invoking local user fallback reward.");
+          resolve();
+        }
+      }, timeoutMs);
+
+      try {
+        const result = adFn();
+        if (result && typeof result.then === 'function') {
+          result.then(() => {
+            if (!completed) {
+              completed = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          }).catch((err: any) => {
+            console.error("Ad promise error fallback:", err);
+            if (!completed) {
+              completed = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          });
+        } else {
+          // Non-promise or synchronous return, resolve after 1500ms
+          setTimeout(() => {
+            if (!completed) {
+              completed = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          }, 1500);
+        }
+      } catch (err) {
+        console.error("Ad exception fallback launched:", err);
+        if (!completed) {
+          completed = true;
+          clearTimeout(timer);
+          resolve();
+        }
+      }
+    });
+  };
+
   // Handle Watching Ads (Section 2)
   const watchAd = async (format: 'popup' | 'interstitial') => {
     if (!user.onboarded) return;
@@ -89,17 +139,10 @@ export default function SocialTasksScreen() {
 
       const showAd = (window as any).show_11030019;
       if (typeof showAd === "function") {
-        showAd('pop').then(() => {
-          completeMission({ coins: 1200, xp: true });
-          triggerHaptic("success");
-          setAd1Loading(false);
-        }).catch((err: any) => {
-          console.error("Ad error fallback:", err);
-          // Reward user as fallback in preview mode
-          completeMission({ coins: 1200, xp: true });
-          triggerHaptic("success");
-          setAd1Loading(false);
-        });
+        await executeAdWithTimeout(() => showAd('pop'), 4000);
+        completeMission({ coins: 1200, xp: true });
+        triggerHaptic("success");
+        setAd1Loading(false);
       } else {
         // Sandboxed fallback for preview
         setTimeout(() => {
@@ -114,17 +157,10 @@ export default function SocialTasksScreen() {
 
       const showAd = (window as any).show_11030019;
       if (typeof showAd === "function") {
-        showAd().then(() => {
-          completeMission({ coins: 1000, xp: true });
-          triggerHaptic("success");
-          setAd2Loading(false);
-        }).catch((err: any) => {
-          console.error("Ad error fallback:", err);
-          // Reward user as fallback in preview mode
-          completeMission({ coins: 1000, xp: true });
-          triggerHaptic("success");
-          setAd2Loading(false);
-        });
+        await executeAdWithTimeout(() => showAd(), 4000);
+        completeMission({ coins: 1000, xp: true });
+        triggerHaptic("success");
+        setAd2Loading(false);
       } else {
         // Sandboxed fallback for preview
         setTimeout(() => {

@@ -6,6 +6,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function() {
+        try {
+          var tg = window.Telegram && window.Telegram.WebApp;
+          if (tg) {
+            var mockCloudStorage = {
+              setItem: function(key, value, callback) {
+                localStorage.setItem('tg_cloud_' + key, value);
+                if (callback) callback(null, true);
+                return Promise.resolve(true);
+              },
+              getItem: function(key, callback) {
+                var val = localStorage.getItem('tg_cloud_' + key);
+                if (callback) callback(null, val);
+                return Promise.resolve(val);
+              },
+              getItems: function(keys, callback) {
+                var res = {};
+                keys.forEach(function(k) {
+                  res[k] = localStorage.getItem('tg_cloud_' + k);
+                });
+                if (callback) callback(null, res);
+                return Promise.resolve(res);
+              },
+              removeItem: function(key, callback) {
+                localStorage.removeItem('tg_cloud_' + key);
+                if (callback) callback(null, true);
+                return Promise.resolve(true);
+              },
+              removeItems: function(keys, callback) {
+                keys.forEach(function(k) { localStorage.removeItem('tg_cloud_' + k); });
+                if (callback) callback(null, true);
+                return Promise.resolve(true);
+              },
+              getKeys: function(callback) {
+                var keys = Object.keys(localStorage)
+                  .filter(function(k) { return k.indexOf('tg_cloud_') === 0; })
+                  .map(function(k) { return k.replace('tg_cloud_', ''); });
+                if (callback) callback(null, keys);
+                return Promise.resolve(keys);
+              }
+            };
+            Object.defineProperty(tg, 'CloudStorage', {
+              get: function() { return mockCloudStorage; },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          console.warn("Early TG storage polyfill failed:", e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

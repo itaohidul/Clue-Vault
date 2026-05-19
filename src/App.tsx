@@ -174,9 +174,16 @@ function AppContent() {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initData) {
+      // Force sync completion as a failsafe after 3 seconds so the app never hangs on a black loading screen
+      const failSafeTimer = setTimeout(() => {
+        setInitSyncCompleted(true);
+      }, 3000);
+
       syncWithBackend(tg.initData).then(() => {
+        clearTimeout(failSafeTimer);
         setInitSyncCompleted(true);
       }).catch(() => {
+        clearTimeout(failSafeTimer);
         setInitSyncCompleted(true);
       });
     } else {
@@ -186,6 +193,14 @@ function AppContent() {
       return () => clearTimeout(timer);
     }
   }, [syncWithBackend]);
+
+  // Inside Telegram, automatically route from landing "/" to "/app/home"
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg && location.pathname === "/") {
+      navigate("/app/home", { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   // Support Onboarding popup selection
   useEffect(() => {
@@ -242,7 +257,7 @@ function AppContent() {
         console.warn("In-App Interstitial failed to show:", e);
       }
     }
-  }, [location.pathname]);
+  }, []);
 
   // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
   useEffect(() => {

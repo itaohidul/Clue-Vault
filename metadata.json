@@ -1,0 +1,6 @@
+{
+  "name": "ClueVault",
+  "description": "Daily mystery missions, vault rewards, and crew competition in a premium Telegram Mini App.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

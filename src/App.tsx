@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, createContext, useContext } from "react";
 import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu } from "lucide-react";
@@ -21,6 +21,8 @@ import ShopScreen from "./components/game/ShopScreen";
 import ReferralScreen from "./components/game/ReferralScreen";
 import EventHubScreen from "./components/game/EventHubScreen";
 import SocialTasksScreen from "./components/game/SocialTasksScreen";
+import TelegramProvider from "./providers/TelegramProvider";
+import { useUserStore } from "./store/userStore";
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -30,7 +32,7 @@ export const useGame = () => useContext(GameContext);
 // Declare types for Telegram WebApp
 declare global {
   interface Window {
-    Telegram: any;
+    Telegram?: any;
   }
 }
 
@@ -153,17 +155,152 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: any) => void }) {
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isApp = location.pathname.startsWith("/app");
-  const { user, finalizeOnboarding } = useGame();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  
+  const { 
+    user, 
+    resources, 
+    finalizeOnboarding, 
+    triggerHaptic, 
+    syncWithBackend,
+    isLoading
+  } = useUserStore();
 
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [initSyncCompleted, setInitSyncCompleted] = useState(false);
+
+  // Sync state with Telegram WebApp Backend on load
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg && tg.initData) {
+      syncWithBackend(tg.initData).then(() => {
+        setInitSyncCompleted(true);
+      }).catch(() => {
+        setInitSyncCompleted(true);
+      });
+    } else {
+      const timer = setTimeout(() => {
+        setInitSyncCompleted(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncWithBackend]);
+
+  // Support Onboarding popup selection
   useEffect(() => {
     const hidden = localStorage.getItem("cluevault_onboarding_hidden");
     const skipped = localStorage.getItem("cluevault_onboarding_skipped");
-    if (!hidden && !skipped && isApp && !user.onboarded) {
+    if (!hidden && !skipped && isApp && !user.onboarded && initSyncCompleted) {
       setShowOnboarding(true);
     }
-  }, [isApp, user.onboarded]);
+  }, [isApp, user.onboarded, initSyncCompleted]);
+
+  // Handle Telegram BackButton dynamic visibility
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    if (location.pathname === "/app/home" || location.pathname === "/" || location.pathname === "") {
+      tg.BackButton.hide();
+    } else {
+      tg.BackButton.show();
+    }
+  }, [location.pathname]);
+
+  // Handle BackButton click callbacks
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    const handleBack = () => {
+      navigate(-1);
+    };
+
+    tg.BackButton.onClick(handleBack);
+    return () => {
+      tg.BackButton.offClick(handleBack);
+    };
+  }, [navigate]);
+
+  // Background in-App Interstitial Ad for dynamic page transitions
+  useEffect(() => {
+    const showAd = (window as any).show_11030019;
+    if (typeof showAd === "function") {
+      try {
+        showAd({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 2,
+            capping: 0.1,
+            interval: 30,
+            timeout: 5,
+            everyPage: false
+          }
+        });
+      } catch (e) {
+        console.warn("In-App Interstitial failed to show:", e);
+      }
+    }
+  }, [location.pathname]);
+
+  // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    if (location.pathname === "/app/home") {
+      tg.MainButton.setText("PLAY OPERATIONS");
+      tg.MainButton.show();
+
+      const handleMain = () => {
+        navigate("/app/missions");
+      };
+
+      tg.MainButton.onClick(handleMain);
+      return () => {
+        tg.MainButton.hide();
+        tg.MainButton.offClick(handleMain);
+      };
+    } else {
+      tg.MainButton.hide();
+    }
+  }, [location.pathname, navigate]);
+
+  // Render Screen Preloader Loader Splash
+  if (isLoading || !initSyncCompleted) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="space-y-6"
+        >
+          <div className="w-20 h-20 bg-amber-500/10 rounded-[2.5rem] border border-amber-500/30 flex items-center justify-center mx-auto relative overflow-hidden">
+            <Shield className="text-amber-500 animate-pulse" size={40} />
+            <motion.div 
+              className="absolute inset-x-0 h-0.5 bg-amber-500 shadow-[0_0_10px_#f59e0b]"
+              animate={{ y: [-40, 40] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">SYNCING CREDENTIALS</h1>
+            <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
+          </div>
+          <div className="w-48 h-1 bg-white/5 rounded-full mx-auto overflow-hidden">
+            <motion.div 
+              className="h-full bg-amber-500 glow-gold" 
+              animate={{ x: [-192, 192] }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+              style={{ width: '48px' }}
+            />
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black overflow-hidden flex flex-col">
@@ -192,7 +329,7 @@ function AppContent() {
                     <ShoppingCart size={18} />
                   </Link>
                   <Link to="/app/profile" className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30">
-                    <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={user.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=agent"} alt="Avatar" className="w-full h-full object-cover" />
                   </Link>
                 </div>
               </header>
@@ -222,208 +359,57 @@ function AppContent() {
 }
 
 export default function App() {
-  const [gameState, setGameState] = useState(() => {
-    const saved = localStorage.getItem("cluevault_game_state");
-    if (saved) return JSON.parse(saved);
-    
-    return {
-      user: {
-        name: "",
-        level: 1,
-        streak: 1,
-        completedToday: false,
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=agent",
-        onboarded: false,
-      },
-      resources: {
-        coins: 100,
-        keys: 1,
-        fragments: 0,
-        baseMaterials: 0,
-        energy: 100,
-        maxEnergy: 100,
-      },
-      crew: null, // User starts without a crew
-      base: {
-        style: "Cyber Lab",
-        rooms: [
-          { id: "command", name: "Command Room", level: 1, type: "primary" }
-        ],
-        level: 1,
-      },
-      activeMission: null,
-      unlockedTabs: ["daily"],
-      inventory: [],
-      lastEnergyUpdate: Date.now(),
-    };
-  });
+  const store = useUserStore();
 
   // Energy Regeneration
   useEffect(() => {
     const timer = setInterval(() => {
-      setGameState((prev: any) => {
-        if (prev.resources.energy >= prev.resources.maxEnergy) return prev;
-        
-        const now = Date.now();
-        const elapsed = (now - prev.lastEnergyUpdate) / 1000; // seconds
-        if (elapsed >= 300) { // 1 energy every 5 minutes
-          const gained = Math.floor(elapsed / 300);
-          return {
-            ...prev,
-            resources: {
-              ...prev.resources,
-              energy: Math.min(prev.resources.maxEnergy, prev.resources.energy + gained)
-            },
-            lastEnergyUpdate: now
-          };
-        }
-        return prev;
-      });
-    }, 10000); // Check every 10 seconds
+      const energy = store.resources.energy;
+      const maxEnergy = store.resources.maxEnergy || 100;
+      if (energy < maxEnergy) {
+        store.updateResources({ energy: 1 });
+      }
+    }, 300000); // 5 minutes
 
     return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("cluevault_game_state", JSON.stringify(gameState));
-  }, [gameState]);
-
-  // Telegram SDK Init
-  useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      if (tg.initDataUnsafe?.user && !gameState.user.onboarded) {
-        setGameState((prev: any) => ({
-          ...prev,
-          user: {
-            ...prev.user,
-            name: tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || "Agent",
-            avatar: tg.initDataUnsafe.user.photo_url || prev.user.avatar
-          }
-        }));
-      }
-      tg.BackButton.onClick(() => {
-        if (window.location.pathname === "/app/home") {
-          tg.close();
-        } else {
-          window.history.back();
-        }
-      });
-    }
-  }, [gameState.user.onboarded]);
-
-  const triggerHaptic = (style: any = "light") => {
-    const tg = window.Telegram?.WebApp;
-    if (tg?.HapticFeedback) {
-      if (style === "success") tg.HapticFeedback.notificationOccurred("success");
-      else if (style === "error") tg.HapticFeedback.notificationOccurred("error");
-      else tg.HapticFeedback.impactOccurred(style);
-    } else if (navigator.vibrate) {
-      navigator.vibrate(style === "success" ? [10, 30, 10] : 10);
-    }
-  };
-
-  const updateResources = (diff: any) => {
-    setGameState((prev: any) => ({
-      ...prev,
-      resources: { ...prev.resources, ...diff }
-    }));
-    triggerHaptic("light");
-  };
-
-  const consumeEnergy = (amount: number) => {
-    if (gameState.resources.energy >= amount) {
-      updateResources({ energy: gameState.resources.energy - amount });
-      return true;
-    }
-    triggerHaptic("error");
-    return false;
-  };
-
-  const completeMission = (reward: any) => {
-    setGameState((prev: any) => ({
-      ...prev,
-      resources: { 
-        ...prev.resources, 
-        coins: prev.resources.coins + (reward.coins || 0),
-        keys: prev.resources.keys + (reward.keys || 0),
-        fragments: prev.resources.fragments + (reward.fragments || 0),
-        baseMaterials: prev.resources.baseMaterials + (reward.baseMaterials || 0),
-      },
-      user: { ...prev.user, completedToday: true, level: prev.user.level + (reward.xp ? 0.1 : 0) },
-      unlockedTabs: Array.from(new Set([...prev.unlockedTabs, "bonus", "crew", "referral"]))
-    }));
-    triggerHaptic("success");
-  };
-
-  const finalizeOnboarding = (data: any) => {
-    if (!data) {
-      // User chose view-only
-      setGameState((prev: any) => ({
-        ...prev,
-        user: { ...prev.user, onboarded: false }
-      }));
-      localStorage.setItem("cluevault_onboarding_skipped", "true");
-      return;
-    }
-    setGameState((prev: any) => ({
-      ...prev,
-      user: { ...prev.user, name: data.name, onboarded: true },
-      crew: data.crew,
-      base: { ...prev.base, style: data.baseStyle },
-    }));
-    localStorage.setItem("cluevault_onboarding_hidden", "true");
-    localStorage.removeItem("cluevault_onboarding_skipped");
-    triggerHaptic("success");
-  };
-
-  const buyItem = (item: any) => {
-    if (gameState.resources.coins >= item.cost) {
-      updateResources({ coins: gameState.resources.coins - item.cost, ...item.reward });
-      triggerHaptic("success");
-      return true;
-    }
-    triggerHaptic("error");
-    return false;
-  };
-
-  const updateCrewBadge = (newBadge: any) => {
-    setGameState((prev: any) => {
-      if (!prev.crew) return prev;
-      return {
-        ...prev,
-        crew: { ...prev.crew, badge: { ...prev.crew.badge, ...newBadge } }
-      };
-    });
-  };
-
-  const updateCrewHallTheme = (theme: string) => {
-    setGameState((prev: any) => {
-      if (!prev.crew) return prev;
-      return {
-        ...prev,
-        crew: { ...prev.crew, hallTheme: theme }
-      };
-    });
-  };
+  }, [store]);
 
   return (
-    <GameContext.Provider value={{ 
-      ...gameState, 
-      updateResources, 
-      consumeEnergy,
-      completeMission, 
-      buyItem,
-      updateCrewBadge,
-      updateCrewHallTheme,
-      finalizeOnboarding,
-      triggerHaptic 
-    }}>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </GameContext.Provider>
+    <TelegramProvider>
+      <GameContext.Provider value={{ 
+        user: store.user,
+        resources: store.resources,
+        crew: store.crew,
+        base: store.base,
+        unlockedTabs: store.unlockedTabs,
+        loading: store.isLoading,
+        updateResources: store.updateResources, 
+        consumeEnergy: store.consumeEnergy,
+        completeMission: store.completeMission, 
+        buyItem: store.buyItem,
+        updateCrewBadge: (newBadge: any) => {
+          const currentCrew = store.crew;
+          if (currentCrew) {
+            useUserStore.setState({
+              crew: { ...currentCrew, badge: { ...currentCrew.badge, ...newBadge } }
+            });
+          }
+        },
+        updateCrewHallTheme: (theme: string) => {
+          const currentCrew = store.crew;
+          if (currentCrew) {
+            useUserStore.setState({
+              crew: { ...currentCrew, hallTheme: theme }
+            });
+          }
+        },
+        finalizeOnboarding: store.finalizeOnboarding,
+        triggerHaptic: store.triggerHaptic 
+      }}>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </GameContext.Provider>
+    </TelegramProvider>
   );
 }

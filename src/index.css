@@ -7,7 +7,11 @@
 }
 
 @layer base {
+  html,
   body {
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    padding-bottom: env(safe-area-inset-bottom);
     @apply bg-black text-[#E4E3E0] antialiased selection:bg-amber-500/30 overflow-x-hidden;
   }
 }

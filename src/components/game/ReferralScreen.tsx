@@ -1,6 +1,6 @@
 import { useGame } from "../../App";
 import { useUserStore } from "../../store/userStore";
-import { Share2, Users, Gift, Copy, Check, ChevronRight, Trophy, Coins, Zap, Sparkles, UserPlus } from "lucide-react";
+import { Share2, Users, Gift, Copy, Check, ChevronRight, Trophy, Coins, Zap, Sparkles, UserPlus, Pause, Play, RotateCcw } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
@@ -8,6 +8,14 @@ import { cn } from "../../lib/utils";
 export default function ReferralScreen() {
   const { user, resources, claimReferralCommission, addMockReferral, triggerHaptic } = useGame();
   const [copied, setCopied] = useState(false);
+  const [isSimActive, setIsSimActive] = useState(() => {
+    const saved = localStorage.getItem("cluevault_sandbox_yield_active");
+    return saved === null ? true : saved === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("cluevault_sandbox_yield_active", String(isSimActive));
+  }, [isSimActive]);
   
   const referralCode = user.referralCode || "CV-RESET";
   const inviteLink = `https://t.me/cluevaultbot?start=ref_${referralCode}`;
@@ -15,7 +23,7 @@ export default function ReferralScreen() {
   // Passive real-time commission ticker
   useEffect(() => {
     const referCount = user.referCount || 0;
-    if (referCount === 0) return;
+    if (referCount === 0 || !isSimActive) return;
 
     const interval = setInterval(() => {
       // Passive commission rate from referrals (0.1% - 0.5% of their solving, simulated)
@@ -32,7 +40,7 @@ export default function ReferralScreen() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [user.referCount]);
+  }, [user.referCount, isSimActive]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -52,6 +60,28 @@ export default function ReferralScreen() {
     } else {
       copyLink();
     }
+  };
+
+  const resetSimulation = () => {
+    triggerHaptic("heavy");
+    useUserStore.setState((state) => {
+      const nextUser = {
+        ...state.user,
+        referCount: 0,
+        referralCommission: 0,
+        claimedCommission: 0,
+      };
+      
+      localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+        user: nextUser,
+        resources: state.resources,
+        crew: state.crew,
+        base: state.base,
+        unlockedTabs: state.unlockedTabs,
+      }));
+      
+      return { user: nextUser };
+    });
   };
 
   // Milestones
@@ -221,12 +251,45 @@ export default function ReferralScreen() {
             <UserPlus size={16} />
           </div>
         </div>
+
         <button 
           onClick={addMockReferral}
-          className="w-full bg-blue-500 hover:bg-blue-400 active:scale-95 transition-all text-black py-3 rounded-2xl font-black uppercase italic tracking-widest text-[10px] flex items-center justify-center gap-2"
+          className="w-full bg-blue-500 hover:bg-blue-400 active:scale-95 transition-all text-black py-3.5 rounded-2xl font-black uppercase italic tracking-widest text-[10px] flex items-center justify-center gap-2"
         >
           <Sparkles size={14} /> Recruit Mock Agent (+1 Refer Count)
         </button>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button 
+            onClick={() => {
+              triggerHaptic("medium");
+              setIsSimActive(!isSimActive);
+            }}
+            className={cn(
+              "py-3 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 border",
+              isSimActive 
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/25 shadow-[0_0_10px_rgba(245,158,11,0.05)]" 
+                : "bg-white/5 text-white/50 border-white/5"
+            )}
+          >
+            {isSimActive ? (
+              <>
+                <Pause size={12} /> Pause Yields
+              </>
+            ) : (
+              <>
+                <Play size={12} /> Resume Yields
+              </>
+            )}
+          </button>
+
+          <button 
+            onClick={resetSimulation}
+            className="py-3 rounded-xl text-[9px] font-black uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+          >
+            <RotateCcw size={12} /> Reset Crew
+          </button>
+        </div>
       </div>
 
       {/* Milestones Progress */}

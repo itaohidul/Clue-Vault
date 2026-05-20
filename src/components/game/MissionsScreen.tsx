@@ -5,6 +5,7 @@ import { Search, Zap, Clock, Star, ChevronRight, Lock, Target, Eye, X, Shield, C
 import { cn } from "../../lib/utils";
 import { useNavigate } from "react-router-dom";
 import ReferralScreen from "./ReferralScreen";
+import SocialTasksScreen from "./SocialTasksScreen";
 
 // Mini-game component for interactive missions
 function DecryptionGame({ onComplete, onCancel }: { onComplete: () => void; onCancel: () => void }) {
@@ -222,7 +223,10 @@ export default function MissionsScreen() {
     { id: 3, title: "Night Shift", type: "Event", reward: 1200, mats: 50, icon: Zap, difficulty: "Hard", desc: "Investigate unusual activity in Sector 4.", energyCost: 20 },
   ];
 
-  const isUnlocked = (tab: string) => unlockedTabs.includes(tab);
+  const isUnlocked = (tab: string) => {
+    if (tab === "daily" || tab === "tasks" || tab === "referral") return true;
+    return unlockedTabs.includes(tab);
+  };
 
   return (
     <div className="p-5 pb-24 space-y-6">
@@ -242,7 +246,7 @@ export default function MissionsScreen() {
 
       {/* Tabs */}
       <div className="flex gap-2 bg-white/5 p-1 rounded-2xl">
-        {["daily", "bonus", "crew", "referral"].map((tab) => (
+        {["daily", "tasks", "referral"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -272,6 +276,8 @@ export default function MissionsScreen() {
           >
             {activeTab === "referral" ? (
               <ReferralScreen />
+            ) : activeTab === "tasks" ? (
+              <SocialTasksScreen />
             ) : (
               <>
                 {activeTab === "daily" && (

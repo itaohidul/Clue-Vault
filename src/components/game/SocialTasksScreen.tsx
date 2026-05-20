@@ -10,7 +10,8 @@ import {
   Tv, 
   Sparkles, 
   Eye, 
-  RefreshCw 
+  RefreshCw,
+  Coins
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
@@ -225,9 +226,126 @@ export default function SocialTasksScreen() {
         <p className="text-sm text-white/50 italic font-medium">Link credentials and stream transmission waves.</p>
       </header>
 
-      {/* Section 1: Community Credentials */}
+      {/* Section 1: Broadcast Transmissions (Ad rewards) - Moved to top & highly polished */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. HIGH-YIELD BROADCAST CHANNELS</h3>
+          <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full animate-pulse border border-emerald-500/20">
+            SIGNAL: ONLINE (MAX PAYOUT)
+          </span>
+        </div>
+        
+        <div className="bg-amber-500/5 border border-dashed border-amber-500/20 rounded-2xl p-3 text-center">
+          <p className="text-[9px] text-amber-300 font-black uppercase tracking-wider">
+            ⚡ SUPPORT THE PROJECT & EARN CONTINUOUS BOUNTIES
+          </p>
+          <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
+            Watch sponsors broadcasts entirely to credit rewards instantly. No limits.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          
+          <motion.button
+            onClick={() => watchAd('popup')}
+            disabled={ad1Loading || !user.onboarded}
+            className={cn(
+              "glass rounded-[2rem] p-6 border flex flex-col justify-between text-left group gap-4 relative overflow-hidden transition-all duration-300 shadow-xl",
+              !user.onboarded 
+                ? "opacity-35 cursor-not-allowed" 
+                : "border-amber-500/20 bg-gradient-to-br from-amber-500/[0.08] via-transparent to-transparent hover:border-amber-500/50 hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] active:scale-[0.98]"
+            )}
+          >
+            {/* Ambient Background Glow Effect */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-500/10 transition-all duration-500" />
+            
+            <div className="flex items-center justify-between w-full relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500 border border-amber-500/30 group-hover:bg-amber-500 group-hover:text-black group-hover:scale-110 transition-all duration-300">
+                {ad1Loading ? <RefreshCw className="animate-spin" size={20} /> : <Tv size={20} />}
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase bg-amber-500 text-black px-2 py-0.5 rounded-full tracking-widest block font-mono">
+                  POPUP FEED
+                </span>
+                <span className="text-[7px] text-emerald-400 font-bold block mt-1">HIGH MULTIPLIER</span>
+              </div>
+            </div>
+            
+            <div className="relative z-10">
+              <h4 className="text-sm font-black uppercase tracking-tight mb-1 group-hover:text-amber-400 transition-colors">Decrypt Core Terminal Feed</h4>
+              <p className="text-[10px] text-white/50 mb-4 leading-relaxed">Extract deep-archive assets by connecting fully with sponsored network beams.</p>
+              
+              <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-xl">
+                <span className="text-[12px] font-black text-amber-500 font-mono tracking-tight flex items-center gap-1">
+                  <Coins size={14} className="animate-bounce" /> +1,200 ZP
+                </span>
+                <span className="text-[8px] text-[#34d399] font-black bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/15">
+                  INSTANT CREDIT
+                </span>
+              </div>
+            </div>
+            
+            {ad1Loading && (
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-2 z-25 backdrop-blur-xs">
+                <RefreshCw className="animate-spin text-amber-500" size={32} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 animate-pulse">Decrypting Signal...</span>
+              </div>
+            )}
+          </motion.button>
+
+          <motion.button
+            onClick={() => watchAd('interstitial')}
+            disabled={ad2Loading || !user.onboarded}
+            className={cn(
+              "glass rounded-[2rem] p-6 border flex flex-col justify-between text-left group gap-4 relative overflow-hidden transition-all duration-300 shadow-xl",
+              !user.onboarded 
+                ? "opacity-35 cursor-not-allowed" 
+                : "border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] via-transparent to-transparent hover:border-blue-500/50 hover:shadow-[0_0_25px_rgba(59,130,246,0.15)] active:scale-[0.98]"
+            )}
+          >
+            {/* Ambient Background Glow Effect */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-500/10 transition-all duration-500" />
+            
+            <div className="flex items-center justify-between w-full relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30 group-hover:bg-blue-500 group-hover:text-black group-hover:scale-110 transition-all duration-300">
+                {ad2Loading ? <RefreshCw className="animate-spin" size={20} /> : <Sparkles size={20} />}
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase bg-blue-500 text-black px-2 py-0.5 rounded-full tracking-widest block font-mono">
+                  VIDEO STREAM
+                </span>
+                <span className="text-[7px] text-emerald-400 font-bold block mt-1">REPEATABLE BOUNTY</span>
+              </div>
+            </div>
+            
+            <div className="relative z-10">
+              <h4 className="text-sm font-black uppercase tracking-tight mb-1 group-hover:text-blue-400 transition-colors">Premium Intercellular Feed</h4>
+              <p className="text-[10px] text-white/50 mb-4 leading-relaxed">Establish telemetry connection for immediate coin payout and network credits.</p>
+              
+              <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-xl">
+                <span className="text-[12px] font-black text-blue-400 font-mono tracking-tight flex items-center gap-1">
+                  <Coins size={14} className="animate-pulse" /> +1,000 ZP
+                </span>
+                <span className="text-[8px] text-[#38bdf8] font-black bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/15">
+                  UNLIMITED PLAYS
+                </span>
+              </div>
+            </div>
+            
+            {ad2Loading && (
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-2 z-25 backdrop-blur-xs">
+                <RefreshCw className="animate-spin text-blue-400" size={32} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 animate-pulse">Uplinking stream...</span>
+              </div>
+            )}
+          </motion.button>
+
+        </div>
+      </section>
+
+      {/* Section 2: Community Credentials */}
       <section className="space-y-3">
-        <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] mb-2 px-1">I. Credential Verification</h3>
+        <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] mb-2 px-1">II. Credential Verification</h3>
         <div className="space-y-3">
           {communityTasks.map((task) => (
             <motion.button
@@ -268,78 +386,6 @@ export default function SocialTasksScreen() {
               </div>
             </motion.button>
           ))}
-        </div>
-      </section>
-
-      {/* Section 2: Broadcast Transmissions (Ad rewards) */}
-      <section className="space-y-3">
-        <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] mb-2 px-1">II. Broadcast Transmissions</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          
-          <motion.button
-            onClick={() => watchAd('popup')}
-            disabled={ad1Loading || !user.onboarded}
-            className={cn(
-              "glass rounded-3xl p-5 border-white/5 flex flex-col justify-between text-left group gap-4 relative overflow-hidden transition-all",
-              !user.onboarded ? "opacity-35 cursor-not-allowed" : "hover:border-amber-500/30 active:scale-[0.98]"
-            )}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                {ad1Loading ? <RefreshCw className="animate-spin" size={18} /> : <Tv size={18} />}
-              </div>
-              <span className="text-[8px] font-black uppercase bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full">POPUP AD</span>
-            </div>
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-tight mb-1">Decrypt Memory Matrix</h4>
-              <p className="text-[10px] text-white/40 mb-3">Watch sponsored broadcast fully to receive terminal assets.</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold text-amber-500">+1,200 ZP</span>
-                <span className="text-[9px] text-white/20 uppercase font-black">• Instantly</span>
-              </div>
-            </div>
-            {ad1Loading && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-xs">
-                <div className="text-center">
-                  <RefreshCw className="animate-spin text-amber-500 mx-auto mb-1" size={20} />
-                  <span className="text-[8px] font-black uppercase text-amber-500">Decrypting...</span>
-                </div>
-              </div>
-            )}
-          </motion.button>
-
-          <motion.button
-            onClick={() => watchAd('interstitial')}
-            disabled={ad2Loading || !user.onboarded}
-            className={cn(
-              "glass rounded-3xl p-5 border-white/5 flex flex-col justify-between text-left group gap-4 relative overflow-hidden transition-all",
-              !user.onboarded ? "opacity-35 cursor-not-allowed" : "hover:border-amber-500/30 active:scale-[0.98]"
-            )}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                {ad2Loading ? <RefreshCw className="animate-spin" size={18} /> : <Sparkles size={18} />}
-              </div>
-              <span className="text-[8px] font-black uppercase bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full">VIDEO AD</span>
-            </div>
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-tight mb-1">Frequency Uplink</h4>
-              <p className="text-[10px] text-white/40 mb-3">Connect to the sponsor frequency stream for immediate payout.</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold text-amber-500">+1,000 ZP</span>
-                <span className="text-[9px] text-white/20 uppercase font-black">• Unlimited</span>
-              </div>
-            </div>
-            {ad2Loading && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-xs">
-                <div className="text-center">
-                  <RefreshCw className="animate-spin text-amber-500 mx-auto mb-1" size={20} />
-                  <span className="text-[8px] font-black uppercase text-amber-500">Uplinking...</span>
-                </div>
-              </div>
-            )}
-          </motion.button>
-
         </div>
       </section>
 

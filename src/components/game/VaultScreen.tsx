@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useGame } from "../../App";
+import { useUserStore } from "../../store/userStore";
 import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -30,9 +31,30 @@ export default function VaultScreen() {
         const rewardCoins = vault.id === 1 ? 750 : vault.id === 2 ? 2500 : 5000;
         const rewardMats = vault.id === 1 ? 12 : vault.id === 2 ? 40 : 100;
         
-        updateResources({ 
-          coins: rewardCoins, 
-          baseMaterials: rewardMats 
+        // Atomically award prizes and reset Decryption Game (completedToday = false)
+        useUserStore.setState((state) => {
+          const nextResources = {
+            ...state.resources,
+            coins: state.resources.coins + rewardCoins,
+            baseMaterials: state.resources.baseMaterials + rewardMats,
+          };
+          const nextUser = {
+            ...state.user,
+            completedToday: false
+          };
+
+          localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+            user: nextUser,
+            resources: nextResources,
+            crew: state.crew,
+            base: state.base,
+            unlockedTabs: state.unlockedTabs,
+          }));
+
+          return {
+            user: nextUser,
+            resources: nextResources
+          };
         });
         
         setOpening(null);
@@ -155,7 +177,11 @@ export default function VaultScreen() {
                  <ShieldCheck size={48} />
               </div>
               <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-2">Vault Cleared</h2>
-              <p className="text-white/50 text-sm mb-8">Access granted. Resources extracted and transferred to your inventory.</p>
+              <p className="text-white/50 text-sm mb-4">Access granted. Resources extracted and transferred to your inventory.</p>
+              
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider mb-6 animate-pulse">
+                🔓 NEW SIGNAL DECRYPTED: Another Mystery Game is now playable!
+              </div>
               
               <div className="grid grid-cols-2 gap-4 mb-8">
                  <div className="bg-white/5 rounded-2xl p-4 flex flex-col items-center">

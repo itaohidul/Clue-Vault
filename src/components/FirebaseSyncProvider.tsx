@@ -21,6 +21,8 @@ interface FirebaseSyncContextType {
   googleSignOut: () => Promise<void>;
   isSyncing: boolean;
   isCloudLoaded: boolean;
+  authError: string | null;
+  setAuthError: (err: string | null) => void;
 }
 
 const FirebaseSyncContext = createContext<FirebaseSyncContextType | null>(null);
@@ -37,17 +39,28 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isCloudLoaded, setIsCloudLoaded] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   // Guard to prevent write recursion loops when updating local state from cloud snapshots
   const isSyncingFromCloudRef = useRef(false);
 
   const googleSignIn = async () => {
     setIsSyncing(true);
+    setAuthError(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
     } catch (err: any) {
       console.error("Google Authentication failed", err.message);
+      let friendlyMessage = err.message || "Unknown auth error.";
+      if (err.code === "auth/popup-blocked" || err.message?.includes("popup") || err.message?.includes("block")) {
+        friendlyMessage = "Popup blocked! The AI Studio sandbox iframe blocks external authentication popups. Please click the 'Open in New Tab' icon in the upper-right of the preview interface and sign in directly.";
+      } else if (err.code === "auth/cancelled-popup-request") {
+        friendlyMessage = "Authentication cancelled. Please complete the Google Sign-In popup process to secure your user profile.";
+      } else if (err.code === "auth/network-request-failed") {
+        friendlyMessage = "Network error. Please verify your internet connection and try again.";
+      }
+      setAuthError(friendlyMessage);
     } finally {
       setIsSyncing(false);
     }
@@ -55,11 +68,13 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
 
   const googleSignOut = async () => {
     setIsSyncing(true);
+    setAuthError(null);
     try {
       await signOut(auth);
       setIsCloudLoaded(false);
     } catch (err: any) {
       console.error("Sign out failed", err.message);
+      setAuthError("Sign out failed: " + err.message);
     } finally {
       setIsSyncing(false);
     }
@@ -188,6 +203,8 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
         googleSignOut,
         isSyncing,
         isCloudLoaded,
+        authError,
+        setAuthError,
       }}
     >
       {children}

@@ -11,7 +11,8 @@ import {
   Sparkles, 
   Eye, 
   RefreshCw,
-  Coins
+  Coins,
+  Key
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
@@ -141,13 +142,13 @@ export default function SocialTasksScreen() {
       const showAd = (window as any).show_11030019;
       if (typeof showAd === "function") {
         await executeAdWithTimeout(() => showAd('pop'), 4000);
-        completeMission({ coins: 1200, xp: true });
+        completeMission({ coins: 1200, keys: 1, xp: true });
         triggerHaptic("success");
         setAd1Loading(false);
       } else {
         // Sandboxed fallback for preview
         setTimeout(() => {
-          completeMission({ coins: 1200, xp: true });
+          completeMission({ coins: 1200, keys: 1, xp: true });
           triggerHaptic("success");
           setAd1Loading(false);
         }, 2000);
@@ -159,13 +160,13 @@ export default function SocialTasksScreen() {
       const showAd = (window as any).show_11030019;
       if (typeof showAd === "function") {
         await executeAdWithTimeout(() => showAd(), 4000);
-        completeMission({ coins: 1000, xp: true });
+        completeMission({ coins: 1000, keys: 1, xp: true });
         triggerHaptic("success");
         setAd2Loading(false);
       } else {
         // Sandboxed fallback for preview
         setTimeout(() => {
-          completeMission({ coins: 1000, xp: true });
+          completeMission({ coins: 1000, keys: 1, xp: true });
           triggerHaptic("success");
           setAd2Loading(false);
         }, 2000);
@@ -276,11 +277,16 @@ export default function SocialTasksScreen() {
               <p className="text-[10px] text-white/50 mb-4 leading-relaxed">Extract deep-archive assets by connecting fully with sponsored network beams.</p>
               
               <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-xl">
-                <span className="text-[12px] font-black text-amber-500 font-mono tracking-tight flex items-center gap-1">
-                  <Coins size={14} className="animate-bounce" /> +1,200 ZP
-                </span>
-                <span className="text-[8px] text-[#34d399] font-black bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/15">
-                  INSTANT CREDIT
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[12px] font-black text-amber-500 font-mono tracking-tight flex items-center gap-1">
+                    <Coins size={14} className="animate-bounce" /> +1,200 ZP
+                  </span>
+                  <span className="text-[10px] font-black text-blue-400 font-mono tracking-tight flex items-center gap-1">
+                    <Key size={12} className="text-blue-400 animate-pulse" /> +1 SECURE KEY
+                  </span>
+                </div>
+                <span className="text-[8px] text-[#34d399] font-black bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/15">
+                  INSTANT
                 </span>
               </div>
             </div>
@@ -323,11 +329,16 @@ export default function SocialTasksScreen() {
               <p className="text-[10px] text-white/50 mb-4 leading-relaxed">Establish telemetry connection for immediate coin payout and network credits.</p>
               
               <div className="flex items-center justify-between bg-black/40 border border-white/5 p-3 rounded-xl">
-                <span className="text-[12px] font-black text-blue-400 font-mono tracking-tight flex items-center gap-1">
-                  <Coins size={14} className="animate-pulse" /> +1,000 ZP
-                </span>
-                <span className="text-[8px] text-[#38bdf8] font-black bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/15">
-                  UNLIMITED PLAYS
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[12px] font-black text-blue-400 font-mono tracking-tight flex items-center gap-1">
+                    <Coins size={14} className="animate-pulse" /> +1,000 ZP
+                  </span>
+                  <span className="text-[10px] font-black text-blue-400 font-mono tracking-tight flex items-center gap-1">
+                    <Key size={12} className="text-blue-400 animate-pulse" /> +1 SECURE KEY
+                  </span>
+                </div>
+                <span className="text-[8px] text-[#38bdf8] font-black bg-blue-500/10 px-2 py-1 rounded border border-blue-500/15">
+                  REPLAYABLE
                 </span>
               </div>
             </div>

@@ -15,7 +15,7 @@ export default function ProfileScreen() {
     triggerHaptic("light");
   };
 
-  const { firebaseUser, googleSignIn, googleSignOut, isSyncing } = useFirebaseSync();
+  const { firebaseUser, googleSignIn, googleSignOut, isSyncing, authError, setAuthError } = useFirebaseSync();
 
   const achievements = [
     { name: "First Breach", icon: Zap, unlocked: true },
@@ -133,6 +133,19 @@ export default function ProfileScreen() {
               </p>
             </div>
           </div>
+
+          {authError && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3.5 rounded-2xl text-[9px] font-bold leading-relaxed uppercase relative pr-8">
+              <p>{authError}</p>
+              <button 
+                onClick={() => setAuthError(null)}
+                className="absolute top-2 right-2 text-red-400 hover:text-red-200 text-xs font-black w-5 h-5 flex items-center justify-center rounded bg-red-500/10 transition-all active:scale-90"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           <button 
             onClick={googleSignIn}
             disabled={isSyncing}

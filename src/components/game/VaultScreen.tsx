@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { useGame } from "../../App";
 import { useUserStore } from "../../store/userStore";
-import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star } from "lucide-react";
+import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 const VAULTS = [
@@ -13,9 +14,11 @@ const VAULTS = [
 ];
 
 export default function VaultScreen() {
+  const navigate = useNavigate();
   const { user, resources, updateResources, triggerHaptic } = useGame();
   const [opening, setOpening] = useState<number | null>(null);
   const [showReward, setShowReward] = useState<any>(false);
+  const [showKeyShortage, setShowKeyShortage] = useState<{ required: number; current: number } | null>(null);
 
   const openVault = (vault: any) => {
     if (!user.onboarded) {
@@ -63,6 +66,7 @@ export default function VaultScreen() {
       }, 3000);
     } else {
       triggerHaptic("error");
+      setShowKeyShortage({ required: vault.keys, current: resources.keys });
     }
   };
 
@@ -201,6 +205,54 @@ export default function VaultScreen() {
               >
                 Continue Operations
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showKeyShortage && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.8, rotate: 5 }}
+              animate={{ scale: 1, rotate: 0 }}
+              className="glass rounded-[3rem] p-8 max-w-sm w-full text-center border-red-500/50"
+            >
+              <div className="w-20 h-20 bg-red-500/20 border border-red-500/40 rounded-[2.2rem] flex items-center justify-center text-red-500 mx-auto mb-6">
+                 <AlertTriangle size={40} className="animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-red-500 mb-2">Insufficient Keys</h2>
+              <p className="text-white/80 text-[11px] uppercase font-bold leading-relaxed mb-6">
+                You need <span className="text-red-400">{showKeyShortage.required} Keys</span> to unlock this vault. You currently have <span className="text-amber-500">{showKeyShortage.current} Keys</span>.
+              </p>
+              
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center mb-6">
+                <p className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wide">💡 CLUE CREDITS NOTATION</p>
+                <p className="text-[9px] text-white/50 leading-relaxed uppercase font-bold mt-1">
+                  Decryption keys cannot be obtained through standard missions. Watch ads & earn instantly under Earn Network!
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => {
+                    setShowKeyShortage(null);
+                    navigate("/app/social-tasks");
+                  }}
+                  className="w-full bg-amber-500 font-sans text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
+                >
+                  <Key size={14} /> Complete Tasks & Get Keys
+                </button>
+                <button 
+                  onClick={() => setShowKeyShortage(null)}
+                  className="w-full bg-white/10 text-white/60 py-3 rounded-xl font-black uppercase text-[10px] hover:text-white transition-all"
+                >
+                  Cancel Operation
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

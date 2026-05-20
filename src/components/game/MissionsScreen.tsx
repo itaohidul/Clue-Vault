@@ -197,7 +197,7 @@ export default function MissionsScreen() {
 
   const onDailyComplete = () => {
     setGameMode("none");
-    completeMission({ coins: 300, keys: 1, xp: true, fragments: 2, isDaily: true });
+    completeMission({ coins: 300, xp: true, fragments: 2, isDaily: true });
   };
 
   const handleSideMission = (m: any) => {

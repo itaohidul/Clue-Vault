@@ -185,16 +185,19 @@ export default function MissionsScreen() {
       return;
     }
     if (!user.completedToday) {
-      if (consumeEnergy(clue?.energyCost || 10)) {
-        setGameMode("daily");
-        triggerHaptic("medium");
+      const cost = clue?.energyCost || 10;
+      // Consume energy if available, otherwise bypass for unlimited gameplay!
+      if (consumeEnergy(cost)) {
+        // consumed successfully
       }
+      setGameMode("daily");
+      triggerHaptic("medium");
     }
   };
 
   const onDailyComplete = () => {
     setGameMode("none");
-    completeMission({ coins: 300, keys: 1, xp: true, fragments: 2 });
+    completeMission({ coins: 300, keys: 1, xp: true, fragments: 2, isDaily: true });
   };
 
   const handleSideMission = (m: any) => {
@@ -335,15 +338,24 @@ export default function MissionsScreen() {
                           disabled={user.completedToday}
                           className={cn(
                             "w-full py-4 rounded-2xl font-black uppercase italic active:scale-95 transition-all text-black",
-                            user.completedToday ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/20" : "bg-amber-500 hover:bg-amber-400 glow-gold"
+                            user.completedToday ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 cursor-default" : "bg-amber-500 hover:bg-amber-400 glow-gold"
                           )}
                         >
                           {user.completedToday ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <CheckCircle2 size={16} /> Mission Complete
+                            <div className="flex flex-col items-center justify-center py-1">
+                              <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider"><CheckCircle2 size={16} /> Mission Complete</span>
                             </div>
                           ) : "Start Deciphering"}
                         </button>
+
+                        {user.completedToday && (
+                          <div className="mt-4 bg-amber-500/10 border border-dashed border-amber-500/20 rounded-xl p-3 text-center">
+                            <p className="text-[10px] text-amber-400 font-black uppercase tracking-wider">⚡ UNLIMITED GAMEPLAY MODE ACTIVE</p>
+                            <p className="text-[9px] text-white/50 uppercase font-bold mt-1 leading-relaxed">
+                              Unlock any Vault in the <span className="text-amber-500">Vault Room</span> using keys to instantly decrypt another transmission and refresh this game!
+                            </p>
+                          </div>
+                        )}
                      </div>
                      <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
                   </div>

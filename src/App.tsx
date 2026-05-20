@@ -323,7 +323,7 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black overflow-hidden flex flex-col">
+    <div className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative">
       <AnimatePresence>
         {showOnboarding && <OnboardingWizard onComplete={(data) => {
           finalizeOnboarding(data);
@@ -335,7 +335,7 @@ function AppContent() {
         <Routes location={location}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/app/*" element={
-            <div className="flex-1 flex flex-col relative pb-20 overflow-y-auto">
+            <div className="flex-1 flex flex-col relative pb-20 overflow-y-auto min-h-0 scroll-smooth">
               {/* Global App Header */}
               <header className="sticky top-0 z-40 glass-dark border-b border-white/5 py-3 px-5 flex justify-between items-center backdrop-blur-xl">
                 <Link to="/app/home" className="flex items-center gap-2">

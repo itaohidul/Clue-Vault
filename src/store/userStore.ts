@@ -56,7 +56,7 @@ export interface GameState {
   setLoadedState: (state: any) => void;
   updateResources: (diff: Partial<GameState['resources']>) => void;
   consumeEnergy: (amount: number) => boolean;
-  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; clue?: number; activityScore?: number }) => void;
+  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; clue?: number; activityScore?: number; isDaily?: boolean }) => void;
   finalizeOnboarding: (data: { name: string; crew: any; baseStyle: string } | null) => void;
   buyItem: (item: { cost: number; reward: Partial<GameState['resources']> }) => boolean;
   syncWithBackend: (initData: string) => Promise<void>;
@@ -171,19 +171,25 @@ export const useUserStore = create<GameState>((set, get) => ({
 
   completeMission: (reward) => {
     const { user, resources, unlockedTabs } = get();
+    
+    // Reward some random Clue tokens (1 to 20) on every mission completed!
+    const randomClueBonus = Math.floor(Math.random() * 20) + 1;
+    const clueReward = (reward.clue || 0) + randomClueBonus;
+
     const nextResources = {
       ...resources,
       coins: resources.coins + (reward.coins || 0),
       keys: resources.keys + (reward.keys || 0),
       fragments: resources.fragments + (reward.fragments || 0),
       baseMaterials: resources.baseMaterials + (reward.baseMaterials || 0),
-      clue: resources.clue + (reward.clue || 0),
+      clue: resources.clue + clueReward,
       activityScore: resources.activityScore + (reward.activityScore || 0),
     };
 
     const nextUser = {
       ...user,
-      completedToday: true,
+      // Only lock the decryption game today if isDaily is explicitly passed
+      completedToday: reward.isDaily ? true : user.completedToday,
       level: user.level + (reward.xp ? 0.15 : 0), // boosted slightly to encourage faster level progress
     };
 

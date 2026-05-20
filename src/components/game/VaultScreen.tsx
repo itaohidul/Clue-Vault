@@ -31,12 +31,13 @@ export default function VaultScreen() {
         const rewardCoins = vault.id === 1 ? 750 : vault.id === 2 ? 2500 : 5000;
         const rewardMats = vault.id === 1 ? 12 : vault.id === 2 ? 40 : 100;
         
-        // Atomically award prizes and reset Decryption Game (completedToday = false)
+        // Atomically award prizes, refill energy, and reset Decryption Game (completedToday = false)
         useUserStore.setState((state) => {
           const nextResources = {
             ...state.resources,
             coins: state.resources.coins + rewardCoins,
             baseMaterials: state.resources.baseMaterials + rewardMats,
+            energy: state.resources.maxEnergy || 100, // Fully restore energy!
           };
           const nextUser = {
             ...state.user,

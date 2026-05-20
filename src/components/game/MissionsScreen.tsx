@@ -4,6 +4,7 @@ import { useGame } from "../../App";
 import { Search, Zap, Clock, Star, ChevronRight, Lock, Target, Eye, X, Shield, Cpu, RefreshCw, CheckCircle2, Share2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useNavigate } from "react-router-dom";
+import ReferralScreen from "./ReferralScreen";
 
 // Mini-game component for interactive missions
 function DecryptionGame({ onComplete, onCancel }: { onComplete: () => void; onCancel: () => void }) {
@@ -269,103 +270,109 @@ export default function MissionsScreen() {
             key={activeTab}
             className="space-y-4"
           >
-            {activeTab === "daily" && (
-              <div className="glass rounded-[2rem] border-amber-500/30 overflow-hidden relative">
-                 <div className="p-6">
-                    <div className="flex justify-between items-start mb-6">
-                      <div className="flex flex-col">
-                         <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Incoming Transmission...</span>
-                         <h2 className="text-2xl font-black uppercase italic tracking-tighter leading-none">
-                           {loading ? "Scanning Frequencies..." : clue?.title || "Classified Intel"}
-                         </h2>
-                      </div>
-                      <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 glow-blue">
-                         <Search size={20} />
-                      </div>
-                    </div>
-
-                    <div className="glass-dark rounded-2xl p-4 border-white/5 mb-6">
-                      {loading ? (
-                        <div className="space-y-2 animate-pulse">
-                           <div className="h-4 bg-white/5 rounded-full w-3/4" />
-                           <div className="h-4 bg-white/5 rounded-full w-1/2" />
+            {activeTab === "referral" ? (
+              <ReferralScreen />
+            ) : (
+              <>
+                {activeTab === "daily" && (
+                  <div className="glass rounded-[2rem] border-amber-500/30 overflow-hidden relative">
+                     <div className="p-6">
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="flex flex-col">
+                             <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Incoming Transmission...</span>
+                             <h2 className="text-2xl font-black uppercase italic tracking-tighter leading-none">
+                               {loading ? "Scanning Frequencies..." : clue?.title || "Classified Intel"}
+                             </h2>
+                          </div>
+                          <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 glow-blue">
+                             <Search size={20} />
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-sm text-white/70 italic leading-relaxed font-mono">
-                          "{clue?.clue || "A mysterious message awaits your decryption. Higher clearance required."}"
-                        </p>
-                      )}
-                    </div>
 
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3 text-center">
-                         <div>
-                            <div className="text-[8px] font-bold uppercase text-white/30">Target</div>
-                            <div className="text-xs font-black text-amber-500 uppercase">{clue?.difficulty || "Expert"}</div>
-                         </div>
-                         <div className="w-px h-6 bg-white/10" />
-                         <div>
-                            <div className="text-[8px] font-bold uppercase text-white/30">Energy</div>
-                            <div className="text-xs font-black text-red-500 uppercase">{clue?.energyCost || 15}</div>
-                         </div>
-                         <div className="w-px h-6 bg-white/10" />
-                         <div>
-                            <div className="text-[8px] font-bold uppercase text-white/30">Reward</div>
-                            <div className="text-xs font-black text-blue-500 uppercase">{clue?.reward || "300 Z + 1K"}</div>
-                         </div>
-                      </div>
-                      <button className="text-[10px] font-black uppercase text-amber-500 border-b border-amber-500/50 pb-0.5">
-                        Intel Hint
-                      </button>
-                    </div>
-
-                    <button 
-                      onClick={handleStartMission}
-                      disabled={user.completedToday}
-                      className={cn(
-                        "w-full py-4 rounded-2xl font-black uppercase italic active:scale-95 transition-all text-black",
-                        user.completedToday ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/20" : "bg-amber-500 hover:bg-amber-400 glow-gold"
-                      )}
-                    >
-                      {user.completedToday ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <CheckCircle2 size={16} /> Mission Complete
+                        <div className="glass-dark rounded-2xl p-4 border-white/5 mb-6">
+                          {loading ? (
+                            <div className="space-y-2 animate-pulse">
+                               <div className="h-4 bg-white/5 rounded-full w-3/4" />
+                               <div className="h-4 bg-white/5 rounded-full w-1/2" />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-white/70 italic leading-relaxed font-mono">
+                              "{clue?.clue || "A mysterious message awaits your decryption. Higher clearance required."}"
+                            </p>
+                          )}
                         </div>
-                      ) : "Start Deciphering"}
-                    </button>
-                 </div>
-                 <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
-              </div>
-            )}
 
-            {/* Other Missions */}
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 pl-2">Available Operations</h3>
-            {missions.map((mission) => (
-              <motion.div 
-                onClick={() => handleSideMission(mission)}
-                whileTap={{ scale: 0.98 }}
-                key={mission.id} 
-                className="glass rounded-2xl p-4 flex items-center gap-4 border-white/5 group cursor-pointer"
-              >
-                <div className={cn(
-                  "w-12 h-12 rounded-xl flex items-center justify-center transition-all",
-                  completing === mission.id ? "bg-amber-500 text-black animate-pulse" : "bg-white/5 text-white/40 group-hover:bg-amber-500/20 group-hover:text-amber-500"
-                )}>
-                   <mission.icon size={22} className={completing === mission.id ? "animate-spin" : ""} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-0.5">
-                    <h4 className="text-sm font-black uppercase tracking-tight">{mission.title}</h4>
-                    <div className="flex gap-2">
-                       {mission.energyCost > 0 && <span className="text-[10px] font-bold text-red-500">-{mission.energyCost} E</span>}
-                       <span className="text-[10px] font-bold text-amber-500">+{mission.reward} ZP</span>
-                    </div>
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-3 text-center">
+                             <div>
+                                <div className="text-[8px] font-bold uppercase text-white/30">Target</div>
+                                <div className="text-xs font-black text-amber-500 uppercase">{clue?.difficulty || "Expert"}</div>
+                             </div>
+                             <div className="w-px h-6 bg-white/10" />
+                             <div>
+                                <div className="text-[8px] font-bold uppercase text-white/30">Energy</div>
+                                <div className="text-xs font-black text-red-500 uppercase">{clue?.energyCost || 15}</div>
+                             </div>
+                             <div className="w-px h-6 bg-white/10" />
+                             <div>
+                                <div className="text-[8px] font-bold uppercase text-white/30">Reward</div>
+                                <div className="text-xs font-black text-blue-500 uppercase">{clue?.reward || "300 Z + 1K"}</div>
+                             </div>
+                          </div>
+                          <button className="text-[10px] font-black uppercase text-amber-500 border-b border-amber-500/50 pb-0.5">
+                            Intel Hint
+                          </button>
+                        </div>
+
+                        <button 
+                          onClick={handleStartMission}
+                          disabled={user.completedToday}
+                          className={cn(
+                            "w-full py-4 rounded-2xl font-black uppercase italic active:scale-95 transition-all text-black",
+                            user.completedToday ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/20" : "bg-amber-500 hover:bg-amber-400 glow-gold"
+                          )}
+                        >
+                          {user.completedToday ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <CheckCircle2 size={16} /> Mission Complete
+                            </div>
+                          ) : "Start Deciphering"}
+                        </button>
+                     </div>
+                     <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
                   </div>
-                  <p className="text-[10px] text-white/40 leading-tight">{mission.desc}</p>
-                </div>
-                <ChevronRight size={16} className="text-white/20" />
-              </motion.div>
-            ))}
+                )}
+
+                {/* Other Missions */}
+                <h3 className="text-xs font-black uppercase tracking-widest text-white/30 pl-2">Available Operations</h3>
+                {missions.map((mission) => (
+                  <motion.div 
+                    onClick={() => handleSideMission(mission)}
+                    whileTap={{ scale: 0.98 }}
+                    key={mission.id} 
+                    className="glass rounded-2xl p-4 flex items-center gap-4 border-white/5 group cursor-pointer"
+                  >
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center transition-all",
+                      completing === mission.id ? "bg-amber-500 text-black animate-pulse" : "bg-white/5 text-white/40 group-hover:bg-amber-500/20 group-hover:text-amber-500"
+                    )}>
+                       <mission.icon size={22} className={completing === mission.id ? "animate-spin" : ""} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start mb-0.5">
+                        <h4 className="text-sm font-black uppercase tracking-tight">{mission.title}</h4>
+                        <div className="flex gap-2">
+                           {mission.energyCost > 0 && <span className="text-[10px] font-bold text-red-500">-{mission.energyCost} E</span>}
+                           <span className="text-[10px] font-bold text-amber-500">+{mission.reward} ZP</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-white/40 leading-tight">{mission.desc}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-white/20" />
+                  </motion.div>
+                ))}
+              </>
+            )}
           </motion.div>
         ) : (
            <motion.div 

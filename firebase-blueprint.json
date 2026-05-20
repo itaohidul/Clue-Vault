@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "The complete profile, resources, and state of a ClueVault user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Firebase Authentication UID."
+        },
+        "user": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "level": { "type": "number" },
+            "streak": { "type": "number" },
+            "completedToday": { "type": "boolean" },
+            "avatar": { "type": "string" },
+            "onboarded": { "type": "boolean" }
+          },
+          "required": ["name", "level", "streak", "completedToday", "avatar", "onboarded"]
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "coins": { "type": "number" },
+            "keys": { "type": "number" },
+            "fragments": { "type": "number" },
+            "baseMaterials": { "type": "number" },
+            "energy": { "type": "number" },
+            "maxEnergy": { "type": "number" },
+            "clue": { "type": "number" },
+            "stakedClue": { "type": "number" },
+            "stakingTier": { "type": "string" },
+            "activityScore": { "type": "number" }
+          },
+          "required": ["coins", "keys", "fragments", "baseMaterials", "energy", "maxEnergy", "clue", "stakedClue", "stakingTier", "activityScore"]
+        },
+        "crew": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": { "type": "string" },
+            "badge": { 
+              "type": "object",
+              "properties": {
+                "icon": { "type": "string" },
+                "color": { "type": "string" },
+                "shape": { "type": "string" }
+              }
+            },
+            "rank": { "type": "number" },
+            "points": { "type": "number" },
+            "hallTheme": { "type": "string" }
+          }
+        },
+        "base": {
+          "type": "object",
+          "properties": {
+            "style": { "type": "string" },
+            "level": { "type": "number" },
+            "rooms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "level": { "type": "number" },
+                  "type": { "type": "string" }
+                }
+              }
+            }
+          },
+          "required": ["style", "level", "rooms"]
+        },
+        "unlockedTabs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last sync."
+        }
+      },
+      "required": ["userId", "user", "resources", "base", "unlockedTabs"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Primary user profile, resources, and progress document."
+    }
+  }
+}

@@ -25,6 +25,7 @@ import EarnScreen from "./components/game/EarnScreen";
 import TelegramProvider from "./providers/TelegramProvider";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
+import FirebaseSyncProvider, { useFirebaseSync } from "./components/FirebaseSyncProvider";
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -168,6 +169,8 @@ function AppContent() {
     syncWithBackend,
     isLoading
   } = useUserStore();
+
+  const { firebaseUser } = useFirebaseSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
@@ -349,8 +352,11 @@ function AppContent() {
                   <Link to="/app/shop" className="bg-white/5 hover:bg-amber-500/10 p-2 rounded-xl text-amber-500 transition-all border border-white/5">
                     <ShoppingCart size={18} />
                   </Link>
-                  <Link to="/app/profile" className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30">
+                  <Link to="/app/profile" className="relative w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30">
                     <img src={user.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=agent"} alt="Avatar" className="w-full h-full object-cover" />
+                    {firebaseUser && (
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border border-black rounded-full shadow-[0_0_8px_#10b981] animate-pulse" />
+                    )}
                   </Link>
                 </div>
               </header>
@@ -398,40 +404,44 @@ export default function App() {
 
   return (
     <TelegramProvider>
-      <GameContext.Provider value={{ 
-        user: store.user,
-        resources: store.resources,
-        crew: store.crew,
-        base: store.base,
-        unlockedTabs: store.unlockedTabs,
-        loading: store.isLoading,
-        updateResources: store.updateResources, 
-        consumeEnergy: store.consumeEnergy,
-        completeMission: store.completeMission, 
-        buyItem: store.buyItem,
-        updateCrewBadge: (newBadge: any) => {
-          const currentCrew = store.crew;
-          if (currentCrew) {
-            useUserStore.setState({
-              crew: { ...currentCrew, badge: { ...currentCrew.badge, ...newBadge } }
-            });
-          }
-        },
-        updateCrewHallTheme: (theme: string) => {
-          const currentCrew = store.crew;
-          if (currentCrew) {
-            useUserStore.setState({
-              crew: { ...currentCrew, hallTheme: theme }
-            });
-          }
-        },
-        finalizeOnboarding: store.finalizeOnboarding,
-        triggerHaptic: store.triggerHaptic 
-      }}>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </GameContext.Provider>
+      <FirebaseSyncProvider>
+        <GameContext.Provider value={{ 
+          user: store.user,
+          resources: store.resources,
+          crew: store.crew,
+          base: store.base,
+          unlockedTabs: store.unlockedTabs,
+          loading: store.isLoading,
+          updateResources: store.updateResources, 
+          consumeEnergy: store.consumeEnergy,
+          completeMission: store.completeMission, 
+          buyItem: store.buyItem,
+          claimReferralCommission: store.claimReferralCommission,
+          addMockReferral: store.addMockReferral,
+          updateCrewBadge: (newBadge: any) => {
+            const currentCrew = store.crew;
+            if (currentCrew) {
+              useUserStore.setState({
+                crew: { ...currentCrew, badge: { ...currentCrew.badge, ...newBadge } }
+              });
+            }
+          },
+          updateCrewHallTheme: (theme: string) => {
+            const currentCrew = store.crew;
+            if (currentCrew) {
+              useUserStore.setState({
+                crew: { ...currentCrew, hallTheme: theme }
+              });
+            }
+          },
+          finalizeOnboarding: store.finalizeOnboarding,
+          triggerHaptic: store.triggerHaptic 
+        }}>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </GameContext.Provider>
+      </FirebaseSyncProvider>
     </TelegramProvider>
   );
 }

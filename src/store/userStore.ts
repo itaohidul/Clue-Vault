@@ -19,6 +19,10 @@ export interface GameState {
     completedToday: boolean;
     avatar: string;
     onboarded: boolean;
+    referralCode?: string;
+    referCount?: number;
+    referralCommission?: number;
+    claimedCommission?: number;
   };
   resources: {
     coins: number;
@@ -57,6 +61,8 @@ export interface GameState {
   buyItem: (item: { cost: number; reward: Partial<GameState['resources']> }) => boolean;
   syncWithBackend: (initData: string) => Promise<void>;
   triggerHaptic: (style?: 'light' | 'medium' | 'heavy' | 'success' | 'error') => void;
+  claimReferralCommission: () => void;
+  addMockReferral: () => void;
 }
 
 const getInitialState = () => {
@@ -68,6 +74,10 @@ const getInitialState = () => {
       completedToday: false,
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=agent",
       onboarded: false,
+      referralCode: "CV-" + Math.random().toString(36).substring(2, 7).toUpperCase(),
+      referCount: 0,
+      referralCommission: 0,
+      claimedCommission: 0,
     },
     resources: {
       coins: 100,
@@ -277,6 +287,54 @@ export const useUserStore = create<GameState>((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  claimReferralCommission: () => {
+    const { user, resources } = get();
+    const comm = user.referralCommission || 0;
+    if (comm <= 0) {
+      get().triggerHaptic('error');
+      return;
+    }
+    
+    const nextUser = {
+      ...user,
+      claimedCommission: (user.claimedCommission || 0) + comm,
+      referralCommission: 0,
+    };
+    
+    const nextResources = {
+      ...resources,
+      coins: Math.round(resources.coins + comm),
+    };
+    
+    set({ user: nextUser, resources: nextResources });
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: nextUser,
+      resources: nextResources,
+      crew: get().crew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+    }));
+    get().triggerHaptic('success');
+  },
+
+  addMockReferral: () => {
+    const { user } = get();
+    const nextUser = {
+      ...user,
+      referCount: (user.referCount || 0) + 1,
+    };
+    
+    set({ user: nextUser });
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: nextUser,
+      resources: get().resources,
+      crew: get().crew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+    }));
+    get().triggerHaptic('success');
   },
 
   triggerHaptic: (style = 'light') => {

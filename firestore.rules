@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.userId is string 
+          && data.userId == request.auth.uid
+          && data.user is map
+          && data.user.name is string
+          && data.user.name.size() > 0
+          && data.user.name.size() <= 128
+          && data.user.level is number
+          && data.user.streak is number
+          && data.user.completedToday is bool
+          && data.user.avatar is string
+          && data.user.avatar.size() <= 512
+          && data.user.onboarded is bool
+          && data.resources is map
+          // Resource validations
+          && data.resources.coins is number
+          && data.resources.coins >= 0
+          && data.resources.keys is number
+          && data.resources.keys >= 0
+          && data.resources.fragments is number
+          && data.resources.fragments >= 0
+          && data.resources.baseMaterials is number
+          && data.resources.baseMaterials >= 0
+          && data.resources.energy is number
+          && data.resources.energy >= 0
+          && data.resources.maxEnergy is number
+          && data.resources.maxEnergy >= 0
+          && data.resources.clue is number
+          && data.resources.clue >= 0
+          && data.resources.stakedClue is number
+          && data.resources.stakedClue >= 0
+          && data.resources.stakingTier is string
+          && data.resources.activityScore is number
+          && data.resources.activityScore >= 0
+          // Base validations
+          && data.base is map
+          && data.base.style is string
+          && data.base.level is number
+          && data.base.rooms is list
+          // Array size boundaries
+          && data.base.rooms.size() <= 32
+          && data.unlockedTabs is list
+          && data.unlockedTabs.size() <= 32
+          // Enforce strict overall keys properties
+          && data.keys().hasAll(['userId', 'user', 'resources', 'base', 'unlockedTabs'])
+          && data.keys().size() <= 8;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+
+      allow create: if isOwner(userId) 
+                    && isValidId(userId)
+                    && isValidUser(incoming())
+                    && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(userId)
+                    && isValidId(userId)
+                    && isValidUser(incoming())
+                    && incoming().userId == existing().userId
+                    && incoming().updatedAt == request.time;
+                    
+      allow delete: if isOwner(userId);
+    }
+  }
+}

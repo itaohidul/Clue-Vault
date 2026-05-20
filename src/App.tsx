@@ -6,7 +6,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, createContext, useContext } from "react";
-import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu } from "lucide-react";
+import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu, Coins } from "lucide-react";
 import { cn } from "./lib/utils";
 import LandingPage from "./components/landing/LandingPage";
 import AppNavbar from "./components/layout/AppNavbar";
@@ -21,8 +21,10 @@ import ShopScreen from "./components/game/ShopScreen";
 import ReferralScreen from "./components/game/ReferralScreen";
 import EventHubScreen from "./components/game/EventHubScreen";
 import SocialTasksScreen from "./components/game/SocialTasksScreen";
+import EarnScreen from "./components/game/EarnScreen";
 import TelegramProvider from "./providers/TelegramProvider";
 import { useUserStore } from "./store/userStore";
+import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -73,8 +75,8 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: any) => void }) {
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div key="s0" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="text-center space-y-6">
-              <div className="w-24 h-24 bg-amber-500 rounded-[2.5rem] flex items-center justify-center text-black mx-auto glow-gold">
-                <Shield size={48} />
+              <div className="w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(245,158,11,0.25)] border border-amber-500/20 overflow-hidden">
+                <img src={cluevaultLogo} alt="ClueVault Logo" className="w-full h-full object-cover rounded-[2.5rem]" referrerPolicy="no-referrer" />
               </div>
                <h2 className="text-4xl font-black uppercase italic tracking-tighter">Recruitment Initialized</h2>
                <p className="text-white/50 text-sm italic">"Several hidden vaults were sealed years ago. Only crews capable of solving the mystery network can unlock them."</p>
@@ -292,8 +294,8 @@ function AppContent() {
           transition={{ duration: 0.5 }}
           className="space-y-6"
         >
-          <div className="w-20 h-20 bg-amber-500/10 rounded-[2.5rem] border border-amber-500/30 flex items-center justify-center mx-auto relative overflow-hidden">
-            <Shield className="text-amber-500 animate-pulse" size={40} />
+          <div className="w-20 h-20 bg-black/60 rounded-[2.5rem] border border-amber-500/30 flex items-center justify-center mx-auto relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+            <img src={cluevaultLogo} alt="ClueVault Logo" className="w-full h-full object-cover rounded-[2.5rem] p-1 animate-pulse" referrerPolicy="no-referrer" />
             <motion.div 
               className="absolute inset-x-0 h-0.5 bg-amber-500 shadow-[0_0_10px_#f59e0b]"
               animate={{ y: [-40, 40] }}
@@ -334,12 +336,16 @@ function AppContent() {
               {/* Global App Header */}
               <header className="sticky top-0 z-40 glass-dark border-b border-white/5 py-3 px-5 flex justify-between items-center backdrop-blur-xl">
                 <Link to="/app/home" className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-amber-500 flex items-center justify-center rounded-lg glow-gold">
-                    <Shield className="text-black" size={18} />
+                  <div className="w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30 flex items-center justify-center">
+                    <img src={cluevaultLogo} alt="ClueVault" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
-                  <span className="text-sm font-black uppercase tracking-tighter italic">ClueVault</span>
+                  <span className="text-sm font-black uppercase tracking-tighter italic text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-200">ClueVault</span>
                 </Link>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Link to="/app/earn" onClick={() => triggerHaptic("light")} className="bg-amber-500/10 hover:bg-amber-500/25 px-2.5 py-1.5 rounded-xl text-amber-500 transition-all border border-amber-500/20 flex items-center gap-1.5">
+                    <Coins size={14} className="shrink-0 leading-none" />
+                    <span className="text-[10px] font-black italic tracking-tight">{resources.clue ? resources.clue.toFixed(1) : "0.0"}</span>
+                  </Link>
                   <Link to="/app/shop" className="bg-white/5 hover:bg-amber-500/10 p-2 rounded-xl text-amber-500 transition-all border border-white/5">
                     <ShoppingCart size={18} />
                   </Link>
@@ -361,6 +367,7 @@ function AppContent() {
                 <Route path="referral" element={<ReferralScreen />} />
                 <Route path="events" element={<EventHubScreen />} />
                 <Route path="social-tasks" element={<SocialTasksScreen />} />
+                <Route path="earn" element={<EarnScreen />} />
                 <Route path="*" element={<Navigate to="/app/home" />} />
               </Routes>
               <AppNavbar />

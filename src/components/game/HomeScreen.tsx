@@ -124,6 +124,33 @@ export default function HomeScreen() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(245,158,11,0.05)_1px,transparent_1px)] bg-[size:100%_4px] pointer-events-none opacity-20" />
       </motion.div>
 
+      {/* CLUE REWARD ENGINE HUB LINK */}
+      <Link to="/app/earn" onClick={handleTileClick}>
+        <motion.div 
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          className="relative overflow-hidden bg-gradient-to-br from-emerald-500/15 via-black to-black border border-emerald-500/25 rounded-3xl p-5 flex flex-col justify-between shadow-[0_0_15px_rgba(16,185,129,0.05)]"
+        >
+          <div className="flex justify-between items-start mb-3">
+             <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500">REWARD ENGINE ACTIVE</span>
+              </div>
+              <span className="text-[9px] font-mono font-black text-white bg-white/5 border border-white/5 px-2 py-0.5 rounded-lg">120K DAILY POOL</span>
+          </div>
+          
+          <div className="flex justify-between items-end">
+             <div>
+                <h4 className="text-xl font-black uppercase italic tracking-tighter text-white">Your Reward Share</h4>
+                <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest mt-0.5 font-mono">Accrued Today: {resources.activityScore || 0} PTS</p>
+             </div>
+             <div className="text-right">
+                <span className="text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-lg">CALCULATE POOL</span>
+             </div>
+          </div>
+        </motion.div>
+      </Link>
+
       {/* Daily Clue Preview */}
       <motion.div 
         onClick={handleTileClick}

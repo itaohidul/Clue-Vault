@@ -27,6 +27,10 @@ export interface GameState {
     baseMaterials: number;
     energy: number;
     maxEnergy: number;
+    clue: number;
+    stakedClue: number;
+    stakingTier: string;
+    activityScore: number;
   };
   crew: {
     name: string;
@@ -48,7 +52,7 @@ export interface GameState {
   setLoadedState: (state: any) => void;
   updateResources: (diff: Partial<GameState['resources']>) => void;
   consumeEnergy: (amount: number) => boolean;
-  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean }) => void;
+  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; clue?: number; activityScore?: number }) => void;
   finalizeOnboarding: (data: { name: string; crew: any; baseStyle: string } | null) => void;
   buyItem: (item: { cost: number; reward: Partial<GameState['resources']> }) => boolean;
   syncWithBackend: (initData: string) => Promise<void>;
@@ -56,15 +60,7 @@ export interface GameState {
 }
 
 const getInitialState = () => {
-  const saved = localStorage.getItem('cluevault_game_state_zustand');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error("Local storage parse error", e);
-    }
-  }
-  return {
+  const defaults = {
     user: {
       name: "",
       level: 1,
@@ -80,6 +76,10 @@ const getInitialState = () => {
       baseMaterials: 0,
       energy: 100,
       maxEnergy: 100,
+      clue: 250,
+      stakedClue: 0,
+      stakingTier: "none",
+      activityScore: 420,
     },
     crew: null,
     base: {
@@ -91,6 +91,28 @@ const getInitialState = () => {
     },
     unlockedTabs: ["daily"],
   };
+
+  const saved = localStorage.getItem('cluevault_game_state_zustand');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        ...defaults,
+        ...parsed,
+        resources: {
+          ...defaults.resources,
+          ...(parsed.resources || {}),
+        },
+        user: {
+          ...defaults.user,
+          ...(parsed.user || {}),
+        }
+      };
+    } catch (e) {
+      console.error("Local storage parse error", e);
+    }
+  }
+  return defaults;
 };
 
 export const useUserStore = create<GameState>((set, get) => ({
@@ -109,7 +131,11 @@ export const useUserStore = create<GameState>((set, get) => ({
     
     Object.entries(diff).forEach(([key, value]) => {
       const k = key as keyof GameState['resources'];
-      nextResources[k] = (nextResources[k] || 0) + (value as number);
+      if (typeof value === "number") {
+        (nextResources[k] as number) = ((nextResources[k] as number) || 0) + value;
+      } else {
+        (nextResources[k] as any) = value;
+      }
     });
 
     set({ resources: nextResources });
@@ -141,12 +167,14 @@ export const useUserStore = create<GameState>((set, get) => ({
       keys: resources.keys + (reward.keys || 0),
       fragments: resources.fragments + (reward.fragments || 0),
       baseMaterials: resources.baseMaterials + (reward.baseMaterials || 0),
+      clue: resources.clue + (reward.clue || 0),
+      activityScore: resources.activityScore + (reward.activityScore || 0),
     };
 
     const nextUser = {
       ...user,
       completedToday: true,
-      level: user.level + (reward.xp ? 0.1 : 0),
+      level: user.level + (reward.xp ? 0.15 : 0), // boosted slightly to encourage faster level progress
     };
 
     const nextTabs = Array.from(new Set([...unlockedTabs, 'bonus', 'crew', 'referral']));
@@ -204,9 +232,9 @@ export const useUserStore = create<GameState>((set, get) => ({
   buyItem: (item) => {
     const coins = get().resources.coins;
     if (coins >= item.cost) {
-      const diff: Partial<GameState['resources']> = { coins: -item.cost };
+      const diff: any = { coins: -item.cost };
       Object.entries(item.reward).forEach(([k, v]) => {
-        diff[k as keyof GameState['resources']] = v as number;
+        diff[k] = v;
       });
       get().updateResources(diff);
       get().triggerHaptic('success');

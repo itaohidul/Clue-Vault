@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { Shield, Search, Zap, Trophy, ArrowRight, Github, Users } from "lucide-react";
+import cluevaultLogo from "../../assets/images/cluevault_logo_1779272321887.png";
 
 export default function LandingPage() {
   return (
@@ -13,11 +14,9 @@ export default function LandingPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-40 glass border-b border-white/5 py-4 px-6 md:px-12 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-amber-500 flex items-center justify-center rounded-xl glow-gold">
-            <Shield className="text-black" size={24} />
-          </div>
-          <span className="text-xl font-bold tracking-tighter uppercase italic">ClueVault</span>
+        <div className="flex items-center gap-3">
+          <img src={cluevaultLogo} alt="ClueVault Logo" className="w-10 h-10 object-cover rounded-xl border border-amber-500/30" referrerPolicy="no-referrer" />
+          <span className="text-xl font-black tracking-tighter uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-200">ClueVault</span>
         </div>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/60">
           <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
@@ -82,8 +81,8 @@ export default function LandingPage() {
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                   <div className="glass p-8 rounded-full glow-gold animate-float">
-                      <Shield size={64} className="text-amber-500" />
+                   <div className="p-2 bg-black/60 rounded-[3rem] border border-amber-500/20 backdrop-blur-md shadow-[0_0_50px_rgba(245,158,11,0.2)] animate-float">
+                      <img src={cluevaultLogo} alt="ClueVault Logo" className="w-40 h-40 object-cover rounded-[2.5rem]" referrerPolicy="no-referrer" />
                    </div>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
@@ -126,8 +125,8 @@ export default function LandingPage() {
       <footer className="py-16 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-12 text-sm text-white/40">
           <div className="col-span-2">
-            <div className="flex items-center gap-2 mb-6">
-              <Shield className="text-amber-500" size={24} />
+            <div className="flex items-center gap-3 mb-6">
+              <img src={cluevaultLogo} alt="ClueVault Logo" className="w-8 h-8 object-cover rounded-lg border border-amber-500/20" referrerPolicy="no-referrer" />
               <span className="text-xl font-bold text-white tracking-tighter uppercase italic">ClueVault</span>
             </div>
             <p className="max-w-xs leading-relaxed">

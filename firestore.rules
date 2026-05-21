@@ -35,6 +35,8 @@ service cloud.firestore {
           && data.user.name.size() > 0
           && data.user.name.size() <= 128
           && data.user.level is number
+          && data.user.exp is number
+          && data.user.maxExp is number
           && data.user.streak is number
           && data.user.completedToday is bool
           && data.user.avatar is string
@@ -70,9 +72,11 @@ service cloud.firestore {
           && data.base.rooms.size() <= 32
           && data.unlockedTabs is list
           && data.unlockedTabs.size() <= 32
+          && data.purchases is list
+          && data.purchases.size() <= 128
           // Enforce strict overall keys properties
-          && data.keys().hasAll(['userId', 'user', 'resources', 'base', 'unlockedTabs'])
-          && data.keys().size() <= 8;
+          && data.keys().hasAll(['userId', 'user', 'resources', 'base', 'unlockedTabs', 'purchases'])
+          && data.keys().size() <= 9;
     }
 
     match /users/{userId} {

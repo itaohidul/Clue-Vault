@@ -95,6 +95,17 @@ const genAI = apiKey ? new GoogleGenAI({
   }
 }) : null;
 
+// Dynamic TonConnect Manifest Endpoint
+app.get("/tonconnect-manifest.json", (req, res) => {
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+  const host = req.get("host");
+  res.json({
+    url: `${protocol}://${host}`,
+    name: "ClueVault",
+    iconUrl: `${protocol}://${host}/assets/icon.png`
+  });
+});
+
 // ==========================================
 // 8 & 9. CREATE BACKEND AUTH ROUTE & VALIDATE 
 // ==========================================

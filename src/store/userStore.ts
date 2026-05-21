@@ -15,6 +15,8 @@ export interface GameState {
     id?: number;
     name: string;
     level: number;
+    exp: number;
+    maxExp: number;
     clearanceCount: number;
     streak: number;
     completedToday: boolean;
@@ -57,7 +59,7 @@ export interface GameState {
   setLoadedState: (state: any) => void;
   updateResources: (diff: Partial<GameState['resources']>) => void;
   consumeEnergy: (amount: number) => boolean;
-  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; clue?: number; activityScore?: number; isDaily?: boolean }) => void;
+  completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; xpAmount?: number; clue?: number; activityScore?: number; isDaily?: boolean }) => void;
   finalizeOnboarding: (data: { name: string; crew: any; baseStyle: string } | null) => void;
   buyItem: (item: { cost: number; reward: Partial<GameState['resources']> }) => boolean;
   syncWithBackend: (initData: string) => Promise<void>;
@@ -77,6 +79,8 @@ const getInitialState = () => {
     user: {
       name: "",
       level: 1,
+      exp: 0,
+      maxExp: 100,
       clearanceCount: 0,
       streak: 1,
       completedToday: false,
@@ -195,13 +199,29 @@ export const useUserStore = create<GameState>((set, get) => ({
       activityScore: resources.activityScore + (reward.activityScore || 0) + 50,
     };
 
+    // Calculate EXP award
+    const baseNewXp = 40 + (user.level * 5);
+    const xpAwarded = reward.xpAmount || (reward.xp ? baseNewXp : 0);
+
+    let newExp = (user.exp || 0) + xpAwarded;
+    let newLevel = user.level || 1;
+    let newMaxExp = user.maxExp || 100;
+
+    // Support multiple level-ups in a single transaction if they gain a massive amount of EXP (e.g. from high tier Vaults)
+    while (newExp >= newMaxExp) {
+      newExp -= newMaxExp;
+      newLevel += 1;
+      newMaxExp = newLevel * 100;
+    }
+
     const nextUser = {
       ...user,
       clearanceCount: (user.clearanceCount || 0) + 1,
       // Only lock the decryption game today if isDaily is explicitly passed
       completedToday: reward.isDaily ? true : user.completedToday,
-      // Increment full clearance levels to increase game difficulty dynamically
-      level: user.level + 1,
+      level: newLevel,
+      exp: newExp,
+      maxExp: newMaxExp,
     };
 
     const nextTabs = Array.from(new Set([...unlockedTabs, 'bonus', 'crew', 'referral']));

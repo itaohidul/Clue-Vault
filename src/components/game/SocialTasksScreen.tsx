@@ -111,6 +111,8 @@ export default function SocialTasksScreen() {
   // Link task countdown
   const [linkCountdown, setLinkCountdown] = useState<number>(5);
 
+  const [activeAd, setActiveAd] = useState<TaskState | null>(null);
+
   // One-time telegram community links
   const [communityTasks, setCommunityTasks] = useState(() => {
     const saved = localStorage.getItem("cluevault_oneoff_tasks");
@@ -197,6 +199,38 @@ export default function SocialTasksScreen() {
     });
   };
 
+  // Handle interactive closure of active sponsor transmissions
+  const handleCloseActiveAd = (isTap: boolean) => {
+    if (!activeAd) return;
+    const task = activeAd;
+    const randomClue = Math.floor(Math.random() * 20) + 1;
+
+    // Complete & Reward
+    completeMission({ 
+      coins: task.rewardCoins, 
+      keys: task.rewardKeys, 
+      clue: randomClue, 
+      xp: true 
+    });
+
+    // Update state
+    const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+    saveBatchState(nextTasks);
+    
+    setActiveAd(null);
+    setLoadingTaskId(null);
+    setSuccessAnimation({ active: true, clueAwarded: randomClue });
+    triggerHaptic("success");
+
+    // Start task-specific cooling timer!
+    startTaskCooldown(task.id);
+
+    if (isTap) {
+      // open link in a new window/tab as requested when tapping on ads
+      window.open(task.link || "https://omg10.com/4/11030019", "_blank");
+    }
+  };
+
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
@@ -211,40 +245,16 @@ export default function SocialTasksScreen() {
     setLoadingTaskId(task.id);
     triggerHaptic("medium");
 
+    // Handle ads format with immersive custom activeAd frame
+    if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
+      setActiveAd(task);
+      setLoadingTaskId(null);
+      return;
+    }
+
     const randomClue = Math.floor(Math.random() * 20) + 1;
 
-    // Handle ads format
-    if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
-      const showAd = (window as any).show_11030019;
-      const isPop = task.type === 'ad_pop';
-
-      if (typeof showAd === "function") {
-        await executeAdWithTimeout(() => showAd(isPop ? 'pop' : undefined), 4500);
-      } else {
-        // Sandboxed emulator delay
-        await new Promise(r => setTimeout(r, 2000));
-      }
-
-      // Complete & Reward
-      completeMission({ 
-        coins: task.rewardCoins, 
-        keys: task.rewardKeys, 
-        clue: randomClue, 
-        xp: true 
-      });
-
-      // Update state
-      const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-      saveBatchState(nextTasks);
-      setLoadingTaskId(null);
-      setSuccessAnimation({ active: true, clueAwarded: randomClue });
-      triggerHaptic("success");
-
-      // Start task-specific cooling timer!
-      startTaskCooldown(task.id);
-
-    } else {
-      // Handle Link matching
+    // Handle Link matching
       if (task.link) {
         window.open(task.link, "_blank");
       }
@@ -276,12 +286,11 @@ export default function SocialTasksScreen() {
           return prev - 1;
         });
       }, 1000);
-    }
   };
 
   // Convert elements & ZP to refresh the batch & bypass cooldown
   const handleConvertRefresh = () => {
-    const costZP = 500;
+    const costZP = 7200;
     const costElements = 10;
 
     if (resources.coins >= costZP && resources.baseMaterials >= costElements) {
@@ -509,7 +518,7 @@ export default function SocialTasksScreen() {
             <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block">OVERRIDE FEE REQ</span>
             <div className="flex gap-3">
               <span className="text-[10px] font-mono font-black text-amber-500 flex items-center gap-1">
-                <Coins size={11} /> 500 ZP
+                <Coins size={11} /> 7200 ZP
               </span>
               <span className="text-[10px] font-mono font-black text-emerald-400 flex items-center gap-1">
                 <Cpu size={11} /> 10 Elements
@@ -519,15 +528,15 @@ export default function SocialTasksScreen() {
 
           <button
             onClick={handleConvertRefresh}
-            disabled={resources.coins < 500 || resources.baseMaterials < 10}
+            disabled={resources.coins < 7200 || resources.baseMaterials < 10}
             className={cn(
               "px-5 py-3 rounded-xl font-black uppercase text-[10px] italic active:scale-95 transition-all text-black",
-              (resources.coins >= 500 && resources.baseMaterials >= 10)
+              (resources.coins >= 7200 && resources.baseMaterials >= 10)
                 ? "bg-gradient-to-r from-amber-500 to-amber-600 glow-gold hover:from-amber-400 hover:to-amber-500"
                 : "bg-white/5 text-white/20 border border-white/5 cursor-default"
             )}
           >
-            {(resources.coins >= 500 && resources.baseMaterials >= 10) ? "Force Refresh Batch" : "Insufficient Assets"}
+            {(resources.coins >= 7200 && resources.baseMaterials >= 10) ? "Force Refresh Batch" : "Insufficient Assets"}
           </button>
         </div>
       </section>
@@ -618,6 +627,83 @@ export default function SocialTasksScreen() {
               >
                 Close Session Link
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Immersive Fullscreen Active Ad telemetry Stream */}
+      <AnimatePresence>
+        {activeAd && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/98 z-50 flex flex-col justify-between p-6 overflow-y-auto"
+          >
+            {/* Topbar of transmission stream */}
+            <div className="flex justify-between items-center border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-widest">
+                  LIVE SPONSOR TELEMETRY DECODE
+                </span>
+              </div>
+              <button 
+                onClick={() => handleCloseActiveAd(false)}
+                className="bg-white/5 border border-white/10 text-white/60 hover:text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all"
+              >
+                <span>← BACK</span>
+              </button>
+            </div>
+
+            {/* Immersive Main Sponsor Board card */}
+            <div className="my-auto max-w-md mx-auto w-full space-y-6 text-center">
+              <div className="glass rounded-[3rem] p-6 border-amber-500/30 bg-gradient-to-t from-neutral-950 to-amber-500/5 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+                
+                {/* Visual telemetry node */}
+                <div 
+                  onClick={() => handleCloseActiveAd(true)}
+                  className="w-full aspect-video rounded-[1.8rem] bg-neutral-900 border border-white/10 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden cursor-pointer hover:border-amber-500/40 select-none transition-all shadow-[0_0_30px_rgba(0,0,0,0.8)] animate-pulse"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/[0.03] to-violet-500/[0.03]" />
+                  <Database size={48} className="text-amber-500/65 mb-4" />
+                  <span className="text-[11px] font-black uppercase text-amber-500/80 tracking-widest block mb-1">
+                    [ SPONSOR LINK DIRECTORY ]
+                  </span>
+                  <p className="text-[14px] font-black uppercase text-white tracking-tight px-4 mb-2">
+                    {activeAd.name}
+                  </p>
+                  <span className="text-[8px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
+                    TAP GRAPHIC TO OPEN WEBLINK
+                  </span>
+                </div>
+
+                {/* Sub banner text */}
+                <div className="mt-6 space-y-2">
+                  <h4 className="text-sm font-black uppercase italic tracking-tighter text-white">Interactive Sponsor Channel Code</h4>
+                  <p className="text-[10px] text-white/40 leading-relaxed font-bold">
+                    Tapping the sponsor banner or backing out returns you instantly to the secure node while unlocking rewards coordinate buffers!
+                  </p>
+                </div>
+              </div>
+
+              {/* Mega CTA Button action to tap the ad directly */}
+              <button
+                onClick={() => handleCloseActiveAd(true)}
+                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(245,158,11,0.2)]"
+              >
+                <span>DECODE SPONSOR CHANNEL WEB & SECURE</span>
+                <ExternalLink size={14} />
+              </button>
+            </div>
+
+            {/* Bottom info banner */}
+            <div className="text-center pt-4 border-t border-white/5">
+              <span className="text-[8px] font-mono text-white/20 uppercase tracking-[0.15em] block">
+                SYSTEM CORRELATION FEEDBACK SECURED — SAFE EXIT EMULATOR ENABLED
+              </span>
             </div>
           </motion.div>
         )}

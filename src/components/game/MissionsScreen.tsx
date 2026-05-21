@@ -164,12 +164,13 @@ export default function MissionsScreen() {
     setLoading(true);
     // Simulation of fetching a story fragment
     setTimeout(() => {
+      const levelMult = 1 + (user.level - 1) * 0.15;
       setClue({
          title: "The Sector 7 Archive",
          clue: "A hidden vault was recently discovered in the underground network. The first clue is already active: 'The code is hidden where shadows repeat twice.' Locate the entry point to bypass security.",
-         difficulty: "Expert",
-         reward: "300 Z + 1K",
-         energyCost: 15
+         difficulty: user.level >= 15 ? "Expert" : user.level >= 8 ? "Hard" : "Medium",
+         reward: `${Math.round(300 * levelMult)} ZP + 2 Frags`,
+         energyCost: Math.min(30, 10 + Math.floor(user.level / 2))
       });
       setLoading(false);
     }, 1500);
@@ -177,7 +178,7 @@ export default function MissionsScreen() {
 
   useEffect(() => {
     fetchDailyClue();
-  }, []);
+  }, [user.level]);
 
   const handleStartMission = () => {
     if (!user.onboarded) {
@@ -197,7 +198,14 @@ export default function MissionsScreen() {
 
   const onDailyComplete = () => {
     setGameMode("none");
-    completeMission({ coins: 300, xp: true, fragments: 2, isDaily: true });
+    const levelMult = 1 + (user.level - 1) * 0.15;
+    completeMission({ 
+      coins: Math.round(300 * levelMult), 
+      xp: true, 
+      xpAmount: Math.round(50 * levelMult), 
+      fragments: 2, 
+      isDaily: true 
+    });
   };
 
   const handleSideMission = (m: any) => {
@@ -213,17 +221,23 @@ export default function MissionsScreen() {
       setCompleting(m.id);
       triggerHaptic("medium");
       setTimeout(() => {
-        completeMission({ coins: m.reward, xp: true, baseMaterials: m.mats });
+        completeMission({ 
+          coins: typeof m.reward === 'number' ? m.reward : 0, 
+          xp: true, 
+          xpAmount: m.xpAmount, 
+          baseMaterials: typeof m.mats === 'number' ? m.mats : 0 
+        });
         setCompleting(null);
         triggerHaptic("success");
       }, 1500);
     }
   };
 
+  const levelMult = 1 + (user.level - 1) * 0.15;
   const missions = [
-    { id: 1, title: "Social Tasks", type: "Social", reward: "Multi", mats: "Multi", icon: Share2, difficulty: "Easy", desc: "Join community and follow news for rewards.", energyCost: 0 },
-    { id: 2, title: "The Mole", type: "Sponsored", reward: 500, mats: 25, icon: Target, difficulty: "Medium", desc: "Visit our partner site and find the secret code.", energyCost: 10 },
-    { id: 3, title: "Night Shift", type: "Event", reward: 1200, mats: 50, icon: Zap, difficulty: "Hard", desc: "Investigate unusual activity in Sector 4.", energyCost: 20 },
+    { id: 1, title: "Social Tasks", type: "Social", reward: "Multi", mats: "Multi", xpAmount: 0, icon: Share2, difficulty: "Easy", desc: "Join community and follow news for rewards.", energyCost: 0 },
+    { id: 2, title: `The Mole (Level ${user.level})`, type: "Sponsored", reward: Math.round(500 * levelMult), mats: Math.round(25 * levelMult), xpAmount: Math.round(40 * levelMult), icon: Target, difficulty: user.level >= 15 ? "Expert" : user.level >= 8 ? "Hard" : "Medium", desc: "Visit our partner site and find the secret code.", energyCost: Math.min(30, 10 + Math.floor(user.level / 2)) },
+    { id: 3, title: `Night Shift (Level ${user.level})`, type: "Event", reward: Math.round(1200 * levelMult), mats: Math.round(50 * levelMult), xpAmount: Math.round(80 * levelMult), icon: Zap, difficulty: user.level >= 20 ? "Master" : user.level >= 12 ? "Expert" : "Hard", desc: "Investigate unusual activity in Sector 4.", energyCost: Math.min(50, 20 + Math.floor(user.level)) },
   ];
 
   const isUnlocked = (tab: string) => {
@@ -381,7 +395,8 @@ export default function MissionsScreen() {
                         <h4 className="text-sm font-black uppercase tracking-tight">{mission.title}</h4>
                         <div className="flex gap-2">
                            {mission.energyCost > 0 && <span className="text-[10px] font-bold text-red-500">-{mission.energyCost} E</span>}
-                           <span className="text-[10px] font-bold text-amber-500">+{mission.reward} ZP</span>
+                           {mission.xpAmount > 0 && <span className="text-[10px] font-bold text-violet-400">+{mission.xpAmount} XP</span>}
+                           <span className="text-[10px] font-bold text-amber-500">+{typeof mission.reward === 'number' ? `${mission.reward} ZP` : mission.reward}</span>
                         </div>
                       </div>
                       <p className="text-[10px] text-white/40 leading-tight">{mission.desc}</p>

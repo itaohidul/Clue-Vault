@@ -24,6 +24,49 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { TonConnectUI } from "@tonconnect/ui";
+import { beginCell, Address } from "@ton/core";
+
+// Helper to construct jetton transfer payload cell
+function buildUsdtPayload(recipientAddress: string, amountUsdt: number, responseAddress: string): string {
+  // USDT has 6 decimals on TON Network
+  const usdtAmountUnits = Math.round(amountUsdt * 1000000); 
+  
+  const cell = beginCell()
+    .storeUint(0xf8a7ea5, 32)            // Opcode for jetton transfer (32 bits)
+    .storeUint(0, 64)                     // Query ID (64 bits)
+    .storeCoins(usdtAmountUnits)          // Amount of USDT to transfer (Coins format, e.g. 1000000 = 1 USDT)
+    .storeAddress(Address.parse(recipientAddress)) // Recipient (your merchant wallet address!)
+    .storeAddress(Address.parse(responseAddress))  // Response address (sender wallet to receive change)
+    .storeBit(0)                          // Custom payload: null (1 bit)
+    .storeCoins(1)                        // Forward TON amount (1 nanoTON as forward payload fee)
+    .storeBit(0)                          // Forward payload in-place: null (1 bit)
+    .endCell();
+    
+  return cell.toBoc().toString("base64");
+}
+
+// Fetch user's USDT wallet dynamically from TonAPI
+async function fetchUserUsdtWallet(userAddress: string): Promise<string> {
+  try {
+    const res = await fetch(`https://tonapi.io/v2/accounts/${userAddress}/jettons`);
+    if (res.ok) {
+      const data = await res.json();
+      const usdtJetton = data?.balances?.find(
+        (b: any) => b.jetton?.address?.toLowerCase() === "0:c6114a9b4b7881407d725e5eb7dd9c755ef0bc3a5de293fdcd1f00bfd8d75626" || // friendly representation: EQCxE6mUt4gUB9cl5et963zF9XvC3Z5W8pNfHg_Y13YoGDEq
+                     b.jetton?.address?.toLowerCase() === "eqcxe6mut4gub9cl5et963zf9xvc3z5w8pnfhg_y13yogdeq"
+      );
+      if (usdtJetton?.wallet_address?.address) {
+        return usdtJetton.wallet_address.address;
+      }
+    }
+  } catch (err) {
+    console.warn("TonAPI jettons call failed, trying fallback...", err);
+  }
+  
+  // Standard derive prediction or query fallback. If no custom jetton wallet is indexed,
+  // let's prompt them that they can pay with TON or we throws clear alert.
+  throw new Error("Could not automatically locate your USDT wallet contract on TON. Ensure you have some USDT, or select TON directly for instant checkouts!");
+}
 
 interface WalletState {
   connected: boolean;
@@ -59,7 +102,7 @@ export default function ShopScreen() {
   useEffect(() => {
     // Initialize Web3 TonConnect interface
     const tc = new TonConnectUI({
-      manifestUrl: "https://raw.githubusercontent.com/ton-connect/demo-dapp-with-react-ui/master/public/tonconnect-manifest.json",
+      manifestUrl: `${window.location.origin}/tonconnect-manifest.json`,
       restoreConnection: true
     });
 
@@ -108,25 +151,53 @@ export default function ShopScreen() {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   
+  // Custom Merchant Gateway state to let users configure payment routing on-chain
+  const [merchantAddress, setMerchantAddress] = useState<string>(() => {
+    const saved = localStorage.getItem("cluevault_merchant_wallet_recipient");
+    if (saved) return saved;
+    // Defaults to the environment preset, or standard placeholder node
+    return import.meta.env.VITE_MERCHANT_WALLET_ADDRESS || "UQCO_k9G7iM6Z6pZ3aF0pS2wX3r9D5f8Y9B0X1V2C3D4E5FA";
+  });
+
+  const saveMerchantAddress = (addr: string) => {
+    setMerchantAddress(addr);
+    localStorage.setItem("cluevault_merchant_wallet_recipient", addr);
+  };
+
+  // Check if merchant destination address is structurally correct
+  const isMerchantAddressValid = (() => {
+    try {
+      if (!merchantAddress.trim()) return false;
+      Address.parse(merchantAddress);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
   // Checkout/Transaction flow state
   const [activeTx, setActiveTx] = useState<{
     pack: any;
     costTON: number;
+    costUSDT: number;
     feeTON: number;
+    payType: 'TON' | 'USDT';
     step: 'review' | 'broadcasting' | 'success' | 'failed';
     txHash?: string;
+    errorMessage?: string;
   } | null>(null);
 
   // Success indicator for standard swaps
   const [swapSuccessItem, setSwapSuccessItem] = useState<any | null>(null);
 
-  // Premium packs priced in TON (1 TON ≈ $5.00 equivalent valuation)
+  // Premium packs priced in TON and USDT (USDT matches approximate USD valuation)
   const premiumPacks = [
     { 
       id: "pack_starter", 
       name: "Starter Kit", 
       priceUSD: "$2.99",
       costTON: 0.6, 
+      costUSDT: 2.99,
       reward: { keys: 10, coins: 5000 }, 
       items: "10 Keys, 5k Coins", 
       highlight: true, 
@@ -137,6 +208,7 @@ export default function ShopScreen() {
       name: "Agent Bundle", 
       priceUSD: "$9.99",
       costTON: 2.0, 
+      costUSDT: 9.99,
       reward: { keys: 50, coins: 25000 }, 
       items: "50 Keys, 25k Coins, Rare Skin", 
       highlight: false, 
@@ -147,6 +219,7 @@ export default function ShopScreen() {
       name: "Global Pass", 
       priceUSD: "$19.99",
       costTON: 4.0, 
+      costUSDT: 19.99,
       reward: { keys: 100, coins: 100000 }, 
       items: "Unlimited Hints, Season Rewards", 
       highlight: false, 
@@ -194,33 +267,30 @@ export default function ShopScreen() {
       return;
     }
 
-    // If TON wallet is disconnected, force prompt
-    if (!wallet.connected) {
-      triggerHaptic("error");
-      connectWallet();
-      return;
-    }
-
     // Trigger transaction review overlay
     const fee = 0.05; // standard TON nano-fee
     setActiveTx({
       pack: pack,
-      costTON: pack.costTON,
+      costTON: pack.costTON || 1.0,
+      costUSDT: pack.costUSDT || 5.0,
       feeTON: fee,
+      payType: 'TON', // Default to TON buy, can switch to USDT
       step: 'review'
     });
     triggerHaptic("medium");
   };
 
-  // Confirm and Broadast Web3 purchase
-  const confirmWeb3Transaction = () => {
-    if (!activeTx || !wallet.connected) return;
+  // Confirm and Broadcast Web3 purchase through real connected TON Wallet
+  const confirmWeb3Transaction = async () => {
+    if (!activeTx || !wallet.connected || !tonConnectUI) return;
 
-    const totalCost = activeTx.costTON + activeTx.feeTON;
-
-    if (wallet.balance < totalCost) {
+    if (!isMerchantAddressValid) {
       triggerHaptic("error");
-      setActiveTx(prev => prev ? { ...prev, step: 'failed' } : null);
+      setActiveTx(prev => prev ? { 
+        ...prev, 
+        step: 'failed', 
+        errorMessage: "Invalid Merchant Recipient Address! Please configure a valid address at the top." 
+      } : null);
       return;
     }
 
@@ -228,31 +298,78 @@ export default function ShopScreen() {
     setActiveTx(prev => prev ? { ...prev, step: 'broadcasting' } : null);
     triggerHaptic("heavy");
 
-    // Simulating block generation of standard ledger
-    setTimeout(() => {
-      // Deduct TON Wallet Balance
-      const nextBalance = Number((wallet.balance - totalCost).toFixed(4));
-      saveWalletState({
-        ...wallet,
-        balance: nextBalance
-      });
+    try {
+      let finalTxHash = "";
 
-      // Award game resources atomically to Zustand store
+      if (activeTx.payType === 'USDT') {
+        // 1. Resolve user's USDT wallet dynamically from on-chain indexes
+        let userUsdtWallet: string;
+        try {
+          userUsdtWallet = await fetchUserUsdtWallet(wallet.address!);
+        } catch (e: any) {
+          console.error(e);
+          throw new Error(e.message || "Failed to locate your USDT wallet contract on TON. Ensure you have an active USDT balance, or choose to pay with TON instead!");
+        }
+
+        // 2. Build official USDT Jetton transfer payload
+        const payloadBoc = buildUsdtPayload(merchantAddress, activeTx.costUSDT, wallet.address!);
+
+        // 3. Compose Jetton Transfer transaction
+        const usdtTxPayload = {
+          validUntil: Math.floor(Date.now() / 1000) + 360,
+          messages: [
+            {
+              address: userUsdtWallet, // Send message to user's USDT wallet
+              amount: "50000000",      // 0.05 TON to cover Jetton gas fees
+              payload: payloadBoc      // Base64 BOC transfer payload
+            }
+          ]
+        };
+
+        // 4. Request signature from Connected App
+        const res = await tonConnectUI.sendTransaction(usdtTxPayload);
+        finalTxHash = res.boc ? "USDT_TX_" + res.boc.substring(0, 16) : "SUCCESS";
+
+      } else {
+        // Standard TON Payment Transaction
+        const tonTxPayload = {
+          validUntil: Math.floor(Date.now() / 1000) + 360,
+          messages: [
+            {
+              address: merchantAddress,
+              amount: Math.round(activeTx.costTON * 1e9).toString() // in nanotons
+            }
+          ]
+        };
+
+        // Request signature
+        const res = await tonConnectUI.sendTransaction(tonTxPayload);
+        finalTxHash = res.boc ? "TON_TX_" + res.boc.substring(0, 16) : "SUCCESS";
+      }
+
+      // If successful, credit game resource inventory atomically!
       updateResources(activeTx.pack.reward);
 
-      // Create a mock tx hash
-      const randomHashObj = new Uint8Array(16);
-      window.crypto.getRandomValues(randomHashObj);
-      const hashString = Array.from(randomHashObj).map(b => b.toString(16).padStart(2, '0')).join('');
-
+      // Save success
       setActiveTx(prev => prev ? { 
         ...prev, 
         step: 'success',
-        txHash: hashString
+        txHash: finalTxHash
       } : null);
 
       triggerHaptic("success");
-    }, 2400);
+
+    } catch (err: any) {
+      console.error("USDT/TON Checkout failed:", err);
+      
+      setActiveTx(prev => prev ? { 
+        ...prev, 
+        step: 'failed',
+        errorMessage: err?.message || err?.toString() || "User rejected signature request or network timeout."
+      } : null);
+      
+      triggerHaptic("error");
+    }
   };
 
   // Process standard swaps (coinpacks using ZP Coins)
@@ -373,6 +490,44 @@ export default function ShopScreen() {
         <h1 className="text-3xl font-black uppercase italic tracking-tighter">Acquisitions</h1>
         <p className="text-sm text-white/50 italic font-medium">Bypass anti-decryption locks with secure TON blockchain checkouts.</p>
       </header>
+
+      {/* Merchant Target Route Settings Panel */}
+      <div className="glass rounded-[2rem] border-white/5 p-5 bg-gradient-to-b from-neutral-900 to-black/8 w-full text-left space-y-3.5">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Coins size={15} className={cn(isMerchantAddressValid ? "text-emerald-400" : "text-amber-500")} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#E4E3E0]/70">Merchant Routing Gateway</span>
+          </div>
+          <span className={cn(
+            "text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border",
+            isMerchantAddressValid 
+              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+              : "bg-red-500/10 text-red-500 border-red-500/20"
+          )}>
+            {isMerchantAddressValid ? "✅ Active Routing" : "❌ Invalid Address"}
+          </span>
+        </div>
+        
+        <p className="text-[9px] text-white/45 uppercase font-extrabold leading-relaxed">
+          Configure a personal TON address to route TON/USDT purchases directly to your wallet.
+        </p>
+
+        <div className="space-y-1.5">
+          <input
+            type="text"
+            value={merchantAddress}
+            onChange={(e) => saveMerchantAddress(e.target.value)}
+            placeholder="Enter destination TON address (e.g. UQ...)"
+            className={cn(
+              "w-full bg-black/60 font-mono text-[11px] font-bold text-white px-4 py-3 rounded-xl border transition-all placeholder-white/20 select-all",
+              isMerchantAddressValid ? "border-white/5 focus:border-emerald-500/30" : "border-red-500/30 focus:border-red-500/50"
+            )}
+          />
+          <span className="text-[8px] text-white/35 font-bold uppercase tracking-tight block px-1">
+            {isMerchantAddressValid ? "⚡ Real on-chain transfers will be sent directly here via TonConnect." : "⚠️ Enter a valid TON wallet address to initiate purchases."}
+          </span>
+        </div>
+      </div>
 
       {/* TON Wallet Integration Area */}
       <div className={cn(
@@ -603,148 +758,187 @@ export default function ShopScreen() {
             >
               
               {/* STAGE A: REVIEW */}
-              {activeTx.step === 'review' && (
-                <div className="space-y-5 text-left">
-                  <div className="text-center">
-                    <span className="w-14 h-14 bg-amber-500/10 border border-amber-500/25 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto mb-3 animate-pulse">
-                      <Wallet size={26} />
-                    </span>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Sign Code Payload</h3>
-                    <p className="text-[8px] text-white/40 uppercase font-black">TON blockchain smart contract interaction</p>
-                  </div>
+               {activeTx.step === 'review' && (
+                 <div className="space-y-4 text-left">
+                   <div className="text-center">
+                     <span className="w-14 h-14 bg-amber-500/10 border border-amber-500/25 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto mb-3 animate-pulse">
+                       <Wallet size={26} />
+                     </span>
+                     <h3 className="text-xl font-black uppercase italic tracking-tighter">Sign Code Payload</h3>
+                     <p className="text-[8px] text-white/40 uppercase font-black">TON blockchain smart contract interaction</p>
+                   </div>
 
-                  <div className="space-y-2 border-t border-b border-dashed border-white/5 py-4">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-white/40 font-bold uppercase">PAYABLE OPTION</span>
-                      <span className="text-white font-black uppercase">{activeTx.pack.name}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-white/40 font-bold uppercase">LEDGER VALUE</span>
-                      <span className="text-emerald-400 font-black font-mono">{activeTx.costTON} TON</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-white/40 font-bold uppercase">BLOCKCHAIN GAS</span>
-                      <span className="text-white/60 font-black font-mono">+{activeTx.feeTON} TON</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] border-t border-dashed border-white/5 pt-2 mt-2">
-                      <span className="text-amber-500 font-extrabold uppercase text-xs">TOTAL COST</span>
-                      <span className="text-emerald-400 font-black font-mono text-xs">{(activeTx.costTON + activeTx.feeTON).toFixed(2)} TON</span>
-                    </div>
-                  </div>
+                   {/* Toggle payment currency type */}
+                   <div className="grid grid-cols-2 gap-2 bg-black/40 border border-white/5 rounded-2xl p-1.5 my-1">
+                     <button
+                       type="button"
+                       onClick={() => setActiveTx(prev => prev ? { ...prev, payType: 'TON' } : null)}
+                       className={cn(
+                         "py-2.5 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider flex items-center justify-center gap-1.5",
+                         activeTx.payType === 'TON' ? "bg-amber-500 text-black shadow-md font-black" : "text-white/45 hover:text-white"
+                       )}
+                     >
+                       TON Token
+                     </button>
+                     <button
+                       type="button"
+                       onClick={() => setActiveTx(prev => prev ? { ...prev, payType: 'USDT' } : null)}
+                       className={cn(
+                         "py-2.5 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider flex items-center justify-center gap-1.5",
+                         activeTx.payType === 'USDT' ? "bg-emerald-500 text-black shadow-md font-black" : "text-white/45 hover:text-white"
+                       )}
+                     >
+                       USDT (Jetton)
+                     </button>
+                   </div>
 
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                    <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block mb-1">MOCK TARGET OP CODES</span>
-                    <p className="text-[9px] text-white/50 font-mono break-all uppercase">
-                      OP:0x5e2d9b • ADDR:{wallet.address?.substring(0, 10)}...{wallet.address?.substring(wallet.address.length - 10)}
-                    </p>
-                  </div>
+                   <div className="space-y-2 border-t border-b border-dashed border-white/5 py-3">
+                     <div className="flex justify-between items-center text-[10px]">
+                       <span className="text-white/40 font-bold uppercase">PAYABLE OPTION</span>
+                       <span className="text-white font-black uppercase">{activeTx.pack.name}</span>
+                     </div>
+                     <div className="flex justify-between items-center text-[10px]">
+                       <span className="text-white/40 font-bold uppercase">LEDGER VALUE</span>
+                       <span className="text-emerald-400 font-black font-mono">
+                         {activeTx.payType === 'USDT' ? `${activeTx.costUSDT} USDT` : `${activeTx.costTON} TON`}
+                       </span>
+                     </div>
+                     <div className="flex justify-between items-center text-[10px]">
+                       <span className="text-white/40 font-bold uppercase">BLOCKCHAIN GAS</span>
+                       <span className="text-white/60 font-black font-mono">+{activeTx.payType === 'USDT' ? "0.05 TON" : `${activeTx.feeTON} TON`}</span>
+                     </div>
+                     <div className="flex justify-between items-center text-[10px] border-t border-dashed border-white/5 pt-2 mt-2">
+                       <span className="text-amber-500 font-extrabold uppercase text-xs">TOTAL COST</span>
+                       <span className="text-emerald-400 font-black font-mono text-xs">
+                         {activeTx.payType === 'USDT' ? `${activeTx.costUSDT} USDT` : `${(activeTx.costTON + activeTx.feeTON).toFixed(2)} TON`}
+                       </span>
+                     </div>
+                   </div>
 
-                  <div className="flex flex-col gap-3">
-                    <button
-                      onClick={confirmWeb3Transaction}
-                      className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs"
-                    >
-                      Sign & Broadcast Pay
-                    </button>
-                    <button
-                      onClick={() => setActiveTx(null)}
-                      className="w-full bg-white/5 text-white/40 py-3 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all"
-                    >
-                      Reject TX Payload
-                    </button>
-                  </div>
-                </div>
-              )}
+                   <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                     <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block mb-1">CASHIER ROUTEMENT PATH</span>
+                     <p className="text-[9px] font-mono text-emerald-400 break-all select-all uppercase">
+                       ROUTE TO: {merchantAddress.substring(0, 10)}... {merchantAddress.substring(merchantAddress.length - 10)}
+                     </p>
+                   </div>
 
-              {/* STAGE B: BROADCASTING */}
-              {activeTx.step === 'broadcasting' && (
-                <div className="py-8 space-y-6">
-                  <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto">
-                    <Loader2 className="animate-spin" size={32} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Mining Block Consensus</h3>
-                    <p className="text-[9px] text-white/40 uppercase font-black mt-1 leading-relaxed">
-                      Broadcasting parameters to TON nodes. Please await state transition signature confirmation...
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1 text-[8px] font-mono text-white/20 uppercase tracking-widest animate-pulse">
-                    <span>&lt; DISPATCHING HEX PAYLOADS &gt;</span>
-                    <span>&lt; SYNCING CRYPTO ENCRYPTORS &gt;</span>
-                  </div>
-                </div>
-              )}
+                   <div className="flex flex-col gap-2.5">
+                     {wallet.connected ? (
+                       <button
+                         onClick={confirmWeb3Transaction}
+                         className="w-full bg-amber-500 text-black py-3.5 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs"
+                       >
+                         Sign & Broadcast Pay
+                       </button>
+                     ) : (
+                       <button
+                         onClick={async () => {
+                           await connectWallet();
+                         }}
+                         className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3.5 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs shadow-md"
+                       >
+                         Connect Wallet to Pay
+                       </button>
+                     )}
+                     <button
+                       onClick={() => setActiveTx(null)}
+                       className="w-full bg-white/5 text-white/40 py-2.5 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all"
+                     >
+                       Reject TX Payload
+                     </button>
+                   </div>
+                 </div>
+               )}
 
-              {/* STAGE C: SUCCESS */}
-              {activeTx.step === 'success' && (
-                <div className="py-6 space-y-6">
-                  <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/30 rounded-[1.8rem] flex items-center justify-center text-emerald-400 mx-auto">
-                    <CheckCircle2 size={32} className="animate-bounce" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-emerald-400">Block Confirmed</h3>
-                    <p className="text-[9px] text-white/40 uppercase font-extrabold mt-1">Transaction block signed successfully!</p>
-                  </div>
+               {/* STAGE B: BROADCASTING */}
+               {activeTx.step === 'broadcasting' && (
+                 <div className="py-8 space-y-6">
+                   <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto">
+                     <Loader2 className="animate-spin" size={32} />
+                   </div>
+                   <div>
+                     <h3 className="text-xl font-black uppercase italic tracking-tighter">Mining Block Consensus</h3>
+                     <p className="text-[9px] text-white/40 uppercase font-black mt-1 leading-relaxed">
+                       Broadcasting parameters to TON nodes. Please await state transition signature confirmation...
+                     </p>
+                   </div>
+                   <div className="flex flex-col gap-1 text-[8px] font-mono text-white/20 uppercase tracking-widest animate-pulse">
+                     <span>&lt; DISPATCHING HEX PAYLOADS &gt;</span>
+                     <span>&lt; SYNCING CRYPTO ENCRYPTORS &gt;</span>
+                   </div>
+                 </div>
+               )}
 
-                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-left space-y-2">
-                    <span className="text-[8px] font-bold text-white/30 uppercase tracking-wide block text-center">AWARDED ASSETS SECURED</span>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {Object.entries(activeTx.pack.reward).map(([k, v]) => {
-                        const isCoins = k === 'coins';
-                        return (
-                          <span key={k} className="bg-black/50 px-2.5 py-1.5 rounded-xl border border-white/5 text-[10px] font-mono font-black text-white/80 uppercase">
-                            +{isCoins ? (v as number).toLocaleString() : v} {isCoins ? "ZP Coins" : k === "baseMaterials" ? "Elements" : k}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
+               {/* STAGE C: SUCCESS */}
+               {activeTx.step === 'success' && (
+                 <div className="py-6 space-y-6">
+                   <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/30 rounded-[1.8rem] flex items-center justify-center text-emerald-400 mx-auto">
+                     <CheckCircle2 size={32} className="animate-bounce" />
+                   </div>
+                   <div>
+                     <h3 className="text-xl font-black uppercase italic tracking-tighter text-emerald-400">Block Confirmed</h3>
+                     <p className="text-[9px] text-white/40 uppercase font-extrabold mt-1">Transaction block signed successfully!</p>
+                   </div>
 
-                  <div className="space-y-1 text-center bg-black/40 p-3 rounded-2xl border border-white/5">
-                    <span className="text-[7.5px] font-bold text-white/25 uppercase tracking-widest block">TELEGRAM EXPLORER LINK</span>
-                    <p className="text-[8px] font-mono text-emerald-500 select-all font-bold break-all">
-                      EQB{activeTx.txHash?.substring(0, 16)}...
-                    </p>
-                  </div>
+                   <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-left space-y-2">
+                     <span className="text-[8px] font-bold text-white/30 uppercase tracking-wide block text-center">AWARDED ASSETS SECURED</span>
+                     <div className="flex flex-wrap gap-2 justify-center">
+                       {Object.entries(activeTx.pack.reward).map(([k, v]) => {
+                         const isCoins = k === 'coins';
+                         return (
+                           <span key={k} className="bg-black/50 px-2.5 py-1.5 rounded-xl border border-white/5 text-[10px] font-mono font-black text-white/80 uppercase">
+                             +{isCoins ? (v as number).toLocaleString() : v} {isCoins ? "ZP Coins" : k === "baseMaterials" ? "Elements" : k}
+                           </span>
+                         );
+                       })}
+                     </div>
+                   </div>
 
-                  <button
-                    onClick={() => setActiveTx(null)}
-                    className="w-full bg-emerald-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
-                  >
-                    Close Session Link
-                  </button>
-                </div>
-              )}
+                   <div className="space-y-1 text-center bg-black/40 p-3 rounded-2xl border border-white/5">
+                     <span className="text-[7.5px] font-bold text-white/25 uppercase tracking-widest block">TELEGRAM EXPLORER LINK</span>
+                     <p className="text-[8px] font-mono text-emerald-500 select-all font-bold break-all">
+                       {activeTx.txHash?.substring(0, 32)}...
+                     </p>
+                   </div>
 
-              {/* STAGE D: FAILED */}
-              {activeTx.step === 'failed' && (
-                <div className="py-6 space-y-6">
-                  <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-[1.8rem] flex items-center justify-center text-red-500 mx-auto">
-                    <AlertTriangle size={32} className="animate-bounce" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-red-500">Signature Blocked</h3>
-                    <p className="text-[9px] text-white/40 uppercase font-extrabold mt-1 leading-relaxed">
-                      Insufficient testnet TON reserves in your wallet.
-                    </p>
-                  </div>
+                   <button
+                     onClick={() => setActiveTx(null)}
+                     className="w-full bg-emerald-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
+                   >
+                     Close Session Link
+                   </button>
+                 </div>
+               )}
 
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-                    <p className="text-[9px] text-white/60 leading-relaxed uppercase font-bold">
-                      Ensure your wallet balance covers the total item price + transaction network gas fee of <span className="text-emerald-400">0.05 TON</span>.
-                    </p>
-                  </div>
+               {/* STAGE D: FAILED */}
+               {activeTx.step === 'failed' && (
+                 <div className="py-6 space-y-6">
+                   <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-[1.8rem] flex items-center justify-center text-red-500 mx-auto">
+                     <AlertTriangle size={32} className="animate-bounce" />
+                   </div>
+                   <div>
+                     <h3 className="text-xl font-black uppercase italic tracking-tighter text-red-500">Signature Blocked</h3>
+                     <p className="text-[9px] text-[#FF4444] uppercase font-extrabold mt-1 leading-relaxed">
+                       {activeTx.errorMessage || "Insufficient TON balance or transaction rejected by client."}
+                     </p>
+                   </div>
 
-                  <div className="flex flex-col gap-3">
-                    <button
-                      onClick={() => setActiveTx(null)}
-                      className="w-full bg-amber-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
-                    >
-                      Return to Acquisitions
-                    </button>
-                  </div>
-                </div>
-              )}
+                   <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+                     <p className="text-[9px] text-white/60 leading-relaxed uppercase font-bold">
+                       Ensure your wallet is connected, and contains sufficient funds to make this payment.
+                     </p>
+                   </div>
+
+                   <div className="flex flex-col gap-3">
+                     <button
+                       onClick={() => setActiveTx(null)}
+                       className="w-full bg-amber-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
+                     >
+                       Return to Acquisitions
+                     </button>
+                   </div>
+                 </div>
+               )}
 
             </motion.div>
           </motion.div>

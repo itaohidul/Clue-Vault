@@ -69,9 +69,10 @@ export default function HomeScreen() {
           <h2 className="text-3xl font-black uppercase italic tracking-tighter leading-none">{user.name || "Agent"}</h2>
         </div>
         <div className="text-right">
-           <div className="text-[10px] font-black uppercase text-amber-500 mb-1">Level {Math.floor(user.level)}</div>
-           <div className="h-1 w-24 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500" style={{ width: `${(user.level % 1) * 100}%` }} />
+           <div className="text-[10px] font-black uppercase text-amber-500 mb-0.5">Level {user.level}</div>
+           <div className="text-[8px] font-black tracking-tight font-mono text-white/40 block mb-1">{(user.exp || 0)}/{(user.maxExp || 100)} EXP</div>
+           <div className="h-1.5 w-24 bg-white/10 rounded-full overflow-hidden ml-auto">
+              <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((user.exp || 0) / (user.maxExp || 100)) * 100))}%` }} />
            </div>
         </div>
       </header>

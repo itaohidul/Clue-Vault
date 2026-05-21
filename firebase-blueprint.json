@@ -14,12 +14,14 @@
           "properties": {
             "name": { "type": "string" },
             "level": { "type": "number" },
+            "exp": { "type": "number" },
+            "maxExp": { "type": "number" },
             "streak": { "type": "number" },
             "completedToday": { "type": "boolean" },
             "avatar": { "type": "string" },
             "onboarded": { "type": "boolean" }
           },
-          "required": ["name", "level", "streak", "completedToday", "avatar", "onboarded"]
+          "required": ["name", "level", "exp", "maxExp", "streak", "completedToday", "avatar", "onboarded"]
         },
         "resources": {
           "type": "object",
@@ -81,13 +83,27 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "purchases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "timestamp": { "type": "number" },
+              "cost": { "type": "number" },
+              "currency": { "type": "string" }
+            },
+            "required": ["id", "name", "timestamp", "cost", "currency"]
+          }
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
           "description": "Timestamp of the last sync."
         }
       },
-      "required": ["userId", "user", "resources", "base", "unlockedTabs"]
+      "required": ["userId", "user", "resources", "base", "unlockedTabs", "purchases"]
     }
   },
   "firestore": {

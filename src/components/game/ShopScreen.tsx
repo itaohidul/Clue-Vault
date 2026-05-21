@@ -1,42 +1,291 @@
+import { useState, useEffect } from "react";
 import { useGame } from "../../App";
-import { ShoppingCart, Zap, Key, Package, Star, Shield, Gift, Sparkles, ChevronRight, Clock } from "lucide-react";
-import { motion } from "motion/react";
+import { 
+  ShoppingCart, 
+  Zap, 
+  Key, 
+  Package, 
+  Star, 
+  Shield, 
+  Gift, 
+  Sparkles, 
+  ChevronRight, 
+  Clock, 
+  Wallet, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Loader2, 
+  ArrowRight,
+  RefreshCw,
+  Cpu,
+  Coins,
+  DollarSign
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 
-export default function ShopScreen() {
-  const { user, resources, buyItem, triggerHaptic } = useGame();
+interface WalletState {
+  connected: boolean;
+  address: string | null;
+  balance: number;
+  provider: 'tonkeeper' | 'telegram_wallet' | 'mytonwallet' | 'tonhub' | null;
+}
 
-  const packs = [
-    { name: "Starter Kit", price: "$2.99", cost: 0, reward: { keys: 10, coins: 5000 }, items: "10 Keys, 5k Coins", highlight: true, icon: Gift },
-    { name: "Agent Bundle", price: "$9.99", cost: 0, reward: { keys: 50, coins: 25000 }, items: "50 Keys, 25k Coins, Rare Skin", highlight: false, icon: Shield },
-    { name: "Global Pass", price: "$19.99", cost: 0, reward: { keys: 100, coins: 100000 }, items: "Unlimited Hints, Season Rewards", highlight: false, icon: Sparkles },
+export default function ShopScreen() {
+  const { user, resources, updateResources, buyItem, triggerHaptic } = useGame();
+
+  // Load TON Wallet State from LocalStorage
+  const [wallet, setWallet] = useState<WalletState>(() => {
+    const saved = localStorage.getItem("cluevault_ton_wallet");
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return {
+      connected: false,
+      address: null,
+      balance: 15.0, // starts with 15.0 practice TON
+      provider: null
+    };
+  });
+
+  const saveWalletState = (newState: WalletState) => {
+    setWallet(newState);
+    localStorage.setItem("cluevault_ton_wallet", JSON.stringify(newState));
+  };
+
+  // UI state managers
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  
+  // Checkout/Transaction flow state
+  const [activeTx, setActiveTx] = useState<{
+    pack: any;
+    costTON: number;
+    feeTON: number;
+    step: 'review' | 'broadcasting' | 'success' | 'failed';
+    txHash?: string;
+  } | null>(null);
+
+  // Success indicator for standard swaps
+  const [swapSuccessItem, setSwapSuccessItem] = useState<any | null>(null);
+
+  // Premium packs priced in TON (1 TON ≈ $5.00 equivalent valuation)
+  const premiumPacks = [
+    { 
+      id: "pack_starter", 
+      name: "Starter Kit", 
+      priceUSD: "$2.99",
+      costTON: 0.6, 
+      reward: { keys: 10, coins: 5000 }, 
+      items: "10 Keys, 5k Coins", 
+      highlight: true, 
+      icon: Gift 
+    },
+    { 
+      id: "pack_agent", 
+      name: "Agent Bundle", 
+      priceUSD: "$9.99",
+      costTON: 2.0, 
+      reward: { keys: 50, coins: 25000 }, 
+      items: "50 Keys, 25k Coins, Rare Skin", 
+      highlight: false, 
+      icon: Shield 
+    },
+    { 
+      id: "pack_pass", 
+      name: "Global Pass", 
+      priceUSD: "$19.99",
+      costTON: 4.0, 
+      reward: { keys: 100, coins: 100000 }, 
+      items: "Unlimited Hints, Season Rewards", 
+      highlight: false, 
+      icon: Sparkles 
+    },
   ];
 
+  // Coin packs swap ZP coins for items
   const coinPacks = [
     { name: "Key Cluster", cost: 1000, reward: { keys: 5 }, items: "5 Decryption Keys", icon: Key },
     { name: "Material Crate", cost: 500, reward: { baseMaterials: 20 }, items: "20 Construction Mats", icon: Package },
   ];
 
-  const handlePurchase = (pack: any) => {
+  // Random TON address generator
+  const generateRandomAddress = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+    let addr = "EQA";
+    for (let i = 0; i < 45; i++) {
+      addr += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return addr;
+  };
+
+  // Connect to a TON Wallet
+  const connectWallet = (provider: 'tonkeeper' | 'telegram_wallet' | 'mytonwallet' | 'tonhub') => {
     if (!user.onboarded) {
       triggerHaptic("error");
       return;
     }
-    if (pack.cost === 0) {
-      // Simulate real money purchase
-      buyItem({ cost: 0, reward: pack.reward });
+    setIsConnecting(provider);
+    triggerHaptic("medium");
+
+    // Simulate blockchain link shaking hands
+    setTimeout(() => {
+      const generatedAddress = generateRandomAddress();
+      const updated = {
+        connected: true,
+        address: generatedAddress,
+        balance: wallet.balance > 0 ? wallet.balance : 15.0, // preserve balance
+        provider: provider
+      };
+      saveWalletState(updated);
+      setIsConnecting(null);
+      setShowConnectModal(false);
+      triggerHaptic("success");
+    }, 1800);
+  };
+
+  // Disconnect Wallet
+  const disconnectWallet = () => {
+    saveWalletState({
+      connected: false,
+      address: null,
+      balance: wallet.balance,
+      provider: null
+    });
+    triggerHaptic("light");
+  };
+
+  // Handle premium buy or exchange click
+  const handlePurchaseAttempt = (pack: any) => {
+    if (!user.onboarded) {
+      triggerHaptic("error");
+      return;
+    }
+
+    // If TON wallet is disconnected, force prompt
+    if (!wallet.connected) {
+      triggerHaptic("error");
+      setShowConnectModal(true);
+      return;
+    }
+
+    // Trigger transaction review overlay
+    const fee = 0.05; // standard TON nano-fee
+    setActiveTx({
+      pack: pack,
+      costTON: pack.costTON,
+      feeTON: fee,
+      step: 'review'
+    });
+    triggerHaptic("medium");
+  };
+
+  // Confirm and Broadast Web3 purchase
+  const confirmWeb3Transaction = () => {
+    if (!activeTx || !wallet.connected) return;
+
+    const totalCost = activeTx.costTON + activeTx.feeTON;
+
+    if (wallet.balance < totalCost) {
+      triggerHaptic("error");
+      setActiveTx(prev => prev ? { ...prev, step: 'failed' } : null);
+      return;
+    }
+
+    // Move to broadcasting state
+    setActiveTx(prev => prev ? { ...prev, step: 'broadcasting' } : null);
+    triggerHaptic("heavy");
+
+    // Simulating block generation of standard ledger
+    setTimeout(() => {
+      // Deduct TON Wallet Balance
+      const nextBalance = Number((wallet.balance - totalCost).toFixed(4));
+      saveWalletState({
+        ...wallet,
+        balance: nextBalance
+      });
+
+      // Award game resources atomically to Zustand store
+      // Starter Kit, Agent Bundle, etc.
+      updateResources(activeTx.pack.reward);
+
+      // Create a mock tx hash
+      const randomHashObj = new Uint8Array(16);
+      window.crypto.getRandomValues(randomHashObj);
+      const hashString = Array.from(randomHashObj).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      setActiveTx(prev => prev ? { 
+        ...prev, 
+        step: 'success',
+        txHash: hashString
+      } : null);
+
+      triggerHaptic("success");
+    }, 2400);
+  };
+
+  // Process standard swaps (coinpacks using ZP Coins)
+  const handleStandardSwap = (pack: any) => {
+    if (!user.onboarded) {
+      triggerHaptic("error");
+      return;
+    }
+
+    // Call userStore's buyItem
+    const success = buyItem(pack);
+    if (success) {
+      setSwapSuccessItem(pack);
+      // Success modal remains briefly for confirmation
     } else {
-      buyItem(pack);
+      triggerHaptic("error");
     }
   };
 
   return (
     <div className="p-5 pb-24 space-y-6">
+      
+      {/* Balances Display Board */}
+      <div className="glass rounded-[2rem] border-white/5 p-4 bg-gradient-to-r from-neutral-900 to-black shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+        <span className="text-[9px] font-black uppercase text-amber-500/80 tracking-widest block mb-1.5 px-0.5">📟 TELEMETRY SYSTEM ASSETS</span>
+        
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ZP COINS</span>
+            <span className="text-xs font-black text-amber-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
+              <Coins size={11} className="text-amber-400" />
+              {resources.coins.toLocaleString()}
+            </span>
+          </div>
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ELEMENTS</span>
+            <span className="text-xs font-black text-emerald-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
+              <Cpu size={11} className="text-emerald-400" />
+              {resources.baseMaterials}
+            </span>
+          </div>
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">KEYS</span>
+            <span className="text-xs font-black text-cyan-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
+              <Key size={11} className="text-cyan-400" />
+              {resources.keys}
+            </span>
+          </div>
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">CLUE TOK</span>
+            <span className="text-xs font-black text-violet-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
+              <Sparkles size={11} className="text-violet-400" />
+              {resources.clue}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {!user.onboarded && (
         <div className="glass rounded-3xl p-5 border-amber-500/50 bg-amber-500/5 flex items-center justify-between gap-4">
            <div>
               <h3 className="text-[10px] font-black uppercase text-amber-500 mb-0.5">Observation Mode</h3>
-              <p className="text-[8px] text-white/40 uppercase font-bold">Log in to interact with the market.</p>
+              <p className="text-[8px] text-white/40 uppercase font-bold">Log in to link wallet and access operations.</p>
            </div>
            <button 
              onClick={() => {
@@ -49,130 +298,457 @@ export default function ShopScreen() {
            </button>
         </div>
       )}
-      <header className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-1">Black Market</h1>
-          <p className="text-sm text-white/50 italic font-medium">Acquire prohibited tech.</p>
+
+      {/* Main Header */}
+      <header className="flex flex-col gap-1 text-left">
+        <div className="flex items-center gap-2">
+           <ShoppingCart size={16} className="text-amber-500" />
+           <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Premium Black Market</span>
         </div>
-        <div className="glass px-3 py-1 rounded-full flex items-center gap-2 border-amber-500/20">
-           <Zap size={14} className="text-amber-500" />
-           <span className="text-xs font-black">{resources.coins}</span>
-        </div>
+        <h1 className="text-3xl font-black uppercase italic tracking-tighter">Acquisitions</h1>
+        <p className="text-sm text-white/50 italic font-medium">Bypass anti-decryption locks with secure TON blockchain checkouts.</p>
       </header>
 
-      {/* Featured Offer */}
+      {/* TON Wallet Integration Area */}
+      <div className={cn(
+        "glass rounded-[2rem] p-5 border relative overflow-hidden transition-all duration-300",
+        wallet.connected ? "border-emerald-500/30 bg-emerald-500/[0.03]" : "border-amber-500/25 bg-amber-500/[0.01]"
+      )}>
+        {wallet.connected ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-emerald-500/20 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400">
+                  <Wallet size={18} />
+                </div>
+                <div>
+                  <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest block">CONNECTED TON WALLET</span>
+                  <p className="text-[11px] font-mono font-bold text-white/95">
+                    {wallet.address?.substring(0, 8)}...{wallet.address?.substring(wallet.address.length - 8)}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={disconnectWallet}
+                className="text-[9px] uppercase font-black tracking-wide text-red-400 bg-red-400/10 border border-red-500/20 px-3 py-1.5 rounded-xl active:scale-95 transition-all"
+              >
+                Disconnect
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between bg-black/40 border border-white/5 rounded-2xl p-4">
+              <div>
+                <span className="text-[8px] font-bold text-white/30 uppercase tracking-wide block">WALLETS BALANCES</span>
+                <p className="text-lg font-black font-mono text-emerald-400 mt-0.5 flex items-center gap-1">
+                  <span>{wallet.balance.toFixed(2)}</span>
+                  <span className="text-xs font-medium text-emerald-500">TON</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center p-3 space-y-4">
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/20 rounded-[1.5rem] flex items-center justify-center text-amber-500 mx-auto">
+              <Wallet size={26} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight">Connect TON Wallet</h3>
+              <p className="text-[10px] text-white/40 uppercase font-black leading-relaxed mt-1">
+                Crypto purchases require active Telegram Open Network coordinates. Connect your TON wallet to begin.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                triggerHaptic("medium");
+                setShowConnectModal(true);
+              }}
+              disabled={!user.onboarded}
+              className="w-full bg-amber-500 text-black py-3.5 rounded-2xl font-black uppercase italic tracking-tight text-xs flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_0_20px_rgba(245,158,11,0.15)] glow-gold"
+            >
+              <Wallet size={14} /> Connect TON Wallet
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Featured Offer Block */}
       <div className="relative overflow-hidden group">
-         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 via-transparent to-transparent z-0" />
-         <div className="glass rounded-[2.5rem] p-8 border-amber-500/30 relative z-10">
+         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent z-0" />
+         <div className="glass rounded-[2.5rem] p-6.5 border-amber-500/20 relative z-10">
             <div className="flex justify-between items-start mb-6">
                <div>
-                  <div className="bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest mb-2 inline-block">Flash Deal</div>
-                  <h2 className="text-2xl font-black uppercase italic tracking-tighter leading-none mb-1">Crypto Key Cluster</h2>
-                  <p className="text-xs text-white/40">20 High-Frequency Decryption Keys</p>
+                  <div className="bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest mb-1.5 inline-block">Flash Deal</div>
+                  <h2 className="text-xl font-black uppercase italic tracking-tighter leading-none mb-1">Master Key Expansion</h2>
+                  <p className="text-[10px] text-white/40 uppercase font-bold">20 Premium High-Decryption Keys</p>
                </div>
-               <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-black glow-gold">
-                  <Key size={24} strokeWidth={2.5} />
+               <div className="w-11 h-11 bg-amber-500 rounded-xl flex items-center justify-center text-black glow-gold">
+                  <Key size={20} strokeWidth={2.5} />
                </div>
             </div>
             <div className="flex items-center justify-between">
-               <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black italic">$4.99</span>
-                  <span className="text-[10px] text-white/20 line-through font-bold">$12.99</span>
+               <div>
+                  <div className="flex items-baseline gap-1">
+                     <span className="text-base font-black italic text-cyan-400">1.0 TON</span>
+                     <span className="text-[9px] text-white/20 line-through font-mono font-bold">$12.99 USD</span>
+                  </div>
+                  <span className="text-[8px] text-white/30 uppercase font-bold block mt-0.5">Approx. $5.00 Valuation</span>
                </div>
                <button 
-                onClick={() => handlePurchase({ cost: 0, reward: { keys: 20 } })}
-                className="bg-white text-black px-6 py-3 rounded-2xl font-black uppercase italic text-xs active:scale-95 transition-all shadow-xl"
+                 onClick={() => handlePurchaseAttempt({ 
+                   id: "deal_flash", 
+                   name: "Master Key Exp.", 
+                   costTON: 1.0, 
+                   reward: { keys: 20 } 
+                 })}
+                 className="bg-white text-black px-5 py-3 rounded-xl font-black uppercase italic text-[10px] active:scale-95 transition-all shadow-xl"
                >
                   Acquire Now
                </button>
             </div>
          </div>
-         <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-amber-500/10 blur-[60px] rounded-full" />
       </div>
 
-      {/* Item Grid */}
+      {/* Operations Premium Section */}
       <div className="space-y-4">
-         <h3 className="text-xs font-black uppercase tracking-widest text-white/30 px-2">Operational Packs</h3>
+         <h3 className="text-[10px] font-black uppercase tracking-widest text-[#E4E3E0]/30 px-1 italic">I. Blockchain Sync Packs</h3>
          <div className="grid grid-cols-1 gap-3">
-            {packs.map((pack, i) => (
+            {premiumPacks.map((pack) => (
               <motion.div 
-                onClick={() => handlePurchase(pack)}
+                key={pack.id}
+                onClick={() => handlePurchaseAttempt(pack)}
                 whileTap={{ scale: 0.98 }}
-                key={i} 
                 className={cn(
-                  "glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer",
-                  pack.highlight && "border-amber-500/20 bg-amber-500/5"
+                  "glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer hover:border-white/10 transition-all",
+                  pack.highlight && "border-amber-500/20 bg-amber-500/[0.03]"
                 )}
               >
-                 <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-3.5">
                     <div className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                        pack.highlight ? "bg-amber-500 text-black" : "bg-white/5 text-white/40"
+                        "w-11 h-11 rounded-xl flex items-center justify-center transition-colors shrink-0",
+                        pack.highlight ? "bg-amber-500 text-black shadow-md" : "bg-white/5 text-white/40"
                     )}>
-                       <pack.icon size={24} />
+                       <pack.icon size={22} />
                     </div>
-                    <div>
-                       <h4 className="text-sm font-black uppercase tracking-tight">{pack.name}</h4>
-                       <p className="text-[10px] text-white/30 font-bold uppercase truncate max-w-[120px]">{pack.items}</p>
+                    <div className="text-left">
+                       <h4 className="text-xs font-black uppercase tracking-tight">{pack.name}</h4>
+                       <span className="text-[9px] text-white/40 font-bold uppercase block">{pack.items}</span>
                     </div>
                  </div>
                  <div className="text-right">
-                    <div className="text-sm font-black italic mb-1">{pack.price}</div>
-                    <div className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Buy</div>
+                    <div className="text-xs font-black italic mb-0.5 text-emerald-400">{pack.costTON} TON</div>
+                    <div className="text-[9px] font-mono text-white/20 tracking-tighter uppercase font-bold">{pack.priceUSD}</div>
                  </div>
               </motion.div>
             ))}
          </div>
       </div>
 
-      {/* Coin Items */}
-       <div className="space-y-4">
-         <h3 className="text-xs font-black uppercase tracking-widest text-white/30 px-2">Resource Exchange</h3>
+      {/* Resource standard Swap Area */}
+      <div className="space-y-4">
+         <h3 className="text-[10px] font-black uppercase tracking-widest text-[#E4E3E0]/30 px-1 italic">II. In-Game Currency Exchange</h3>
          <div className="grid grid-cols-1 gap-3">
             {coinPacks.map((pack, i) => (
               <motion.div 
-                onClick={() => handlePurchase(pack)}
+                key={i}
+                onClick={() => handleStandardSwap(pack)}
                 whileTap={{ scale: 0.98 }}
-                key={i} 
-                className="glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer"
+                className="glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer hover:border-white/10 transition-all"
               >
-                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center text-white/40">
-                       <pack.icon size={24} />
+                 <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 bg-white/5 rounded-xl flex items-center justify-center text-white/45 shrink-0">
+                       <pack.icon size={22} />
                     </div>
-                    <div>
-                       <h4 className="text-sm font-black uppercase tracking-tight">{pack.name}</h4>
-                       <p className="text-[10px] text-white/30 font-bold uppercase">{pack.items}</p>
+                    <div className="text-left">
+                       <h4 className="text-xs font-black uppercase tracking-tight">{pack.name}</h4>
+                       <span className="text-[9px] text-white/40 font-bold uppercase block">{pack.items}</span>
                     </div>
                  </div>
                  <div className="text-right">
-                    <div className="text-sm font-black italic mb-1 text-amber-500">{pack.cost} ZP</div>
-                    <div className="text-[8px] font-black uppercase text-white/40 tracking-widest">Swap</div>
+                    <div className="text-xs font-black italic mb-0.5 text-amber-500">{pack.cost} ZP</div>
+                    <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">Swap</span>
                  </div>
               </motion.div>
             ))}
          </div>
       </div>
 
-      {/* Reward Ads */}
+      {/* Bottom informational guidelines block */}
       <div className="glass rounded-[2rem] p-6 border-blue-500/10 bg-blue-500/5">
-         <div className="flex items-center gap-3 mb-4">
-            <Clock size={18} className="text-blue-400" />
-            <h4 className="text-xs font-black uppercase italic tracking-tighter">Daily Bonus Stream</h4>
+         <div className="flex items-center gap-3 mb-3">
+            <Clock size={16} className="text-blue-400" />
+            <h4 className="text-[10px] font-black uppercase italic tracking-tighter">Blockchain Ledgers Rules</h4>
          </div>
-         <p className="text-[10px] text-white/40 mb-4 leading-relaxed italic">Synchronize with our partner signals for 30 seconds to receive a free Clue Hint or Key Fragment.</p>
-         <button 
-           onClick={() => {
-             triggerHaptic("medium");
-             setTimeout(() => {
-               buyItem({ cost: 0, reward: { keys: 1 } });
-             }, 5000);
-           }}
-           className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-500/20 transition-all"
-         >
-            Watch Signal Uplink
-         </button>
+         <p className="text-[9px] text-white/40 leading-relaxed uppercase font-bold text-left italic">
+           All connected TON operations run on simulated crypto signals under Web3 Sandbox. Ensure your connected wallet has compatible premium coordinates for decryption.
+         </p>
       </div>
+
+      {/* Connect TON Wallet overlay */}
+      <AnimatePresence>
+        {showConnectModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/95 backdrop-blur-xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="glass rounded-[3rem] p-7 max-w-sm w-full text-center border-amber-500/30 bg-black/90 space-y-6"
+            >
+              <div>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter leading-none mb-1">Select Wallet Provider</h3>
+                <p className="text-[9px] text-white/40 uppercase font-black tracking-wide">Secure cryptographic link node</p>
+              </div>
+
+              <div className="space-y-2.5">
+                {[
+                  { id: "tonkeeper", name: "Tonkeeper", desc: "Popular full-featured wallet" },
+                  { id: "telegram_wallet", name: "Telegram Wallet", desc: "Integrated @wallet hub" },
+                  { id: "mytonwallet", name: "MyTonWallet", desc: "Advanced asset manager" },
+                  { id: "tonhub", name: "Tonhub", desc: "High-security validator node" },
+                ].map((prov) => {
+                  const loader = isConnecting === prov.id;
+                  return (
+                    <button
+                      key={prov.id}
+                      onClick={() => connectWallet(prov.id as any)}
+                      disabled={isConnecting !== null}
+                      className="w-full p-4 rounded-2xl border border-white/5 bg-white/[0.01] hover:border-amber-500/35 hover:bg-amber-500/[0.02] flex items-center justify-between text-left transition-all active:scale-[0.98]"
+                    >
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-tight text-white/90">{prov.name}</h4>
+                        <p className="text-[8px] text-white/33 uppercase font-semibold">{prov.desc}</p>
+                      </div>
+                      <div className="text-amber-500">
+                        {loader ? (
+                          <Loader2 className="animate-spin" size={16} />
+                        ) : (
+                          <ChevronRight size={16} />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setShowConnectModal(false)}
+                disabled={isConnecting !== null}
+                className="w-full bg-white/5 hover:bg-white/10 text-white/60 py-3 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
+              >
+                Close Connection Portal
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transaction Review / Signature / Loading / Success Modal Overlay */}
+      <AnimatePresence>
+        {activeTx && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/95 backdrop-blur-xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="glass rounded-[3rem] p-7 max-w-sm w-full text-center border-amber-500/30 bg-gradient-to-b from-neutral-950 to-black space-y-6"
+            >
+              
+              {/* STAGE A: REVIEW */}
+              {activeTx.step === 'review' && (
+                <div className="space-y-5 text-left">
+                  <div className="text-center">
+                    <span className="w-14 h-14 bg-amber-500/10 border border-amber-500/25 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto mb-3 animate-pulse">
+                      <Wallet size={26} />
+                    </span>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Sign Code Payload</h3>
+                    <p className="text-[8px] text-white/40 uppercase font-black">TON blockchain smart contract interaction</p>
+                  </div>
+
+                  <div className="space-y-2 border-t border-b border-dashed border-white/5 py-4">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-white/40 font-bold uppercase">PAYABLE OPTION</span>
+                      <span className="text-white font-black uppercase">{activeTx.pack.name}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-white/40 font-bold uppercase">LEDGER VALUE</span>
+                      <span className="text-emerald-400 font-black font-mono">{activeTx.costTON} TON</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-white/40 font-bold uppercase">BLOCKCHAIN GAS</span>
+                      <span className="text-white/60 font-black font-mono">+{activeTx.feeTON} TON</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] border-t border-dashed border-white/5 pt-2 mt-2">
+                      <span className="text-amber-500 font-extrabold uppercase text-xs">TOTAL COST</span>
+                      <span className="text-emerald-400 font-black font-mono text-xs">{(activeTx.costTON + activeTx.feeTON).toFixed(2)} TON</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                    <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block mb-1">MOCK TARGET OP CODES</span>
+                    <p className="text-[9px] text-white/50 font-mono break-all uppercase">
+                      OP:0x5e2d9b • ADDR:{wallet.address?.substring(0, 10)}...{wallet.address?.substring(wallet.address.length - 10)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={confirmWeb3Transaction}
+                      className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs"
+                    >
+                      Sign & Broadcast Pay
+                    </button>
+                    <button
+                      onClick={() => setActiveTx(null)}
+                      className="w-full bg-white/5 text-white/40 py-3 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all"
+                    >
+                      Reject TX Payload
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE B: BROADCASTING */}
+              {activeTx.step === 'broadcasting' && (
+                <div className="py-8 space-y-6">
+                  <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-[1.8rem] flex items-center justify-center text-amber-500 mx-auto">
+                    <Loader2 className="animate-spin" size={32} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Mining Block Consensus</h3>
+                    <p className="text-[9px] text-white/40 uppercase font-black mt-1 leading-relaxed">
+                      Broadcasting parameters to TON nodes. Please await state transition signature confirmation...
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1 text-[8px] font-mono text-white/20 uppercase tracking-widest animate-pulse">
+                    <span>&lt; DISPATCHING HEX PAYLOADS &gt;</span>
+                    <span>&lt; SYNCING CRYPTO ENCRYPTORS &gt;</span>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE C: SUCCESS */}
+              {activeTx.step === 'success' && (
+                <div className="py-6 space-y-6">
+                  <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/30 rounded-[1.8rem] flex items-center justify-center text-emerald-400 mx-auto">
+                    <CheckCircle2 size={32} className="animate-bounce" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-emerald-400">Block Confirmed</h3>
+                    <p className="text-[9px] text-white/40 uppercase font-extrabold mt-1">Transaction block signed successfully!</p>
+                  </div>
+
+                  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-left space-y-2">
+                    <span className="text-[8px] font-bold text-white/30 uppercase tracking-wide block text-center">AWARDED ASSETS SECURED</span>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {Object.entries(activeTx.pack.reward).map(([k, v]) => {
+                        const isCoins = k === 'coins';
+                        return (
+                          <span key={k} className="bg-black/50 px-2.5 py-1.5 rounded-xl border border-white/5 text-[10px] font-mono font-black text-white/80 uppercase">
+                            +{isCoins ? (v as number).toLocaleString() : v} {isCoins ? "ZP Coins" : k === "baseMaterials" ? "Elements" : k}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-center bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <span className="text-[7.5px] font-bold text-white/25 uppercase tracking-widest block">TELEGRAM EXPLORER LINK</span>
+                    <p className="text-[8px] font-mono text-emerald-500 select-all font-bold break-all">
+                      EQB{activeTx.txHash?.substring(0, 16)}...
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTx(null)}
+                    className="w-full bg-emerald-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
+                  >
+                    Close Session Link
+                  </button>
+                </div>
+              )}
+
+              {/* STAGE D: FAILED */}
+              {activeTx.step === 'failed' && (
+                <div className="py-6 space-y-6">
+                  <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-[1.8rem] flex items-center justify-center text-red-500 mx-auto">
+                    <AlertTriangle size={32} className="animate-bounce" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-red-500">Signature Blocked</h3>
+                    <p className="text-[9px] text-white/40 uppercase font-extrabold mt-1 leading-relaxed">
+                      Insufficient testnet TON reserves in your wallet.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+                    <p className="text-[9px] text-white/60 leading-relaxed uppercase font-bold">
+                      Ensure your wallet balance covers the total item price + transaction network gas fee of <span className="text-emerald-400">0.05 TON</span>.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={() => setActiveTx(null)}
+                      className="w-full bg-amber-500 text-black py-3.5 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95"
+                    >
+                      Return to Acquisitions
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Standard Swap Action Success Overlay */}
+      <AnimatePresence>
+        {swapSuccessItem && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/95 backdrop-blur-md"
+          >
+            <div className="glass rounded-[3.5rem] p-8 max-w-sm w-full text-center border-emerald-500/40 bg-black/90 space-y-6">
+              <div className="w-20 h-20 bg-emerald-500/20 border border-emerald-500/40 rounded-[2.2rem] flex items-center justify-center text-emerald-400 mx-auto shadow-[0_0_35px_rgba(16,185,129,0.15)]">
+                <CheckCircle2 size={40} className="animate-pulse" />
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-emerald-500">Asset Redeemed</h3>
+                <p className="text-[10px] text-white/40 uppercase font-extrabold mt-1">Resource allocation updated instantly!</p>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 text-center">
+                <span className="text-[8.5px] font-bold text-white/30 uppercase tracking-widest block mb-2">SWAPPED ASSET</span>
+                <span className="text-base font-black text-white font-mono flex items-center justify-center gap-1.5 uppercase">
+                  <span>{swapSuccessItem.items}</span>
+                </span>
+                <p className="text-[8px] text-white/35 font-semibold mt-1">Deducted {swapSuccessItem.cost} ZP Coins from telemetry system</p>
+              </div>
+
+              <button
+                onClick={() => setSwapSuccessItem(null)}
+                className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black uppercase italic text-xs tracking-tight active:scale-95 transition-all"
+              >
+                Return to Black Market
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

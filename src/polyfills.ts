@@ -8,6 +8,8 @@ if (typeof window !== 'undefined') {
     env: { NODE_ENV: import.meta.env.MODE },
     version: '',
     nextTick: (cb: any) => setTimeout(cb, 0),
-    browser: true 
+    browser: true,
+    stdout: { write: () => {} },
+    stderr: { write: () => {} }
   };
 }

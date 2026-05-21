@@ -1,9 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { 
   User, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut, 
+  signInAnonymously,
   onAuthStateChanged 
 } from "firebase/auth";
 import { 
@@ -17,8 +15,6 @@ import { useUserStore } from "../store/userStore";
 
 interface FirebaseSyncContextType {
   firebaseUser: User | null;
-  googleSignIn: () => Promise<void>;
-  googleSignOut: () => Promise<void>;
   isSyncing: boolean;
   isCloudLoaded: boolean;
   authError: string | null;
@@ -44,48 +40,25 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
   // Guard to prevent write recursion loops when updating local state from cloud snapshots
   const isSyncingFromCloudRef = useRef(false);
 
-  const googleSignIn = async () => {
-    setIsSyncing(true);
-    setAuthError(null);
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      console.error("Google Authentication failed", err.message);
-      let friendlyMessage = err.message || "Unknown auth error.";
-      if (err.code === "auth/popup-blocked" || err.message?.includes("popup") || err.message?.includes("block")) {
-        friendlyMessage = "Popup blocked! The AI Studio sandbox iframe blocks external authentication popups. Please click the 'Open in New Tab' icon in the upper-right of the preview interface and sign in directly.";
-      } else if (err.code === "auth/cancelled-popup-request") {
-        friendlyMessage = "Authentication cancelled. Please complete the Google Sign-In popup process to secure your user profile.";
-      } else if (err.code === "auth/network-request-failed") {
-        friendlyMessage = "Network error. Please verify your internet connection and try again.";
-      }
-      setAuthError(friendlyMessage);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const googleSignOut = async () => {
-    setIsSyncing(true);
-    setAuthError(null);
-    try {
-      await signOut(auth);
-      setIsCloudLoaded(false);
-    } catch (err: any) {
-      console.error("Sign out failed", err.message);
-      setAuthError("Sign out failed: " + err.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // 1. Auth Listener State Handler
+  // 1. Auth Listener & Auto-Anonymous-Auth
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setFirebaseUser(user);
+        console.log("Firebase User Authenticated:", user.uid);
+      } else {
+        setFirebaseUser(null);
         setIsCloudLoaded(false);
+        // Automatic anonymous sign-in for seamless data storage
+        try {
+          setIsSyncing(true);
+          await signInAnonymously(auth);
+        } catch (err: any) {
+          console.error("Anonymous authentication failed", err.message);
+          setAuthError("Data storage initialization failed. Please reload.");
+        } finally {
+          setIsSyncing(false);
+        }
       }
     });
     return () => unsubscribe();
@@ -203,8 +176,6 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
     <FirebaseSyncContext.Provider
       value={{
         firebaseUser,
-        googleSignIn,
-        googleSignOut,
         isSyncing,
         isCloudLoaded,
         authError,

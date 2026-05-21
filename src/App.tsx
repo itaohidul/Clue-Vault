@@ -288,7 +288,7 @@ function AppContent() {
   }, [location.pathname, navigate]);
 
   // Render Screen Preloader Loader Splash
-  if (isLoading || !initSyncCompleted) {
+  if (!initSyncCompleted) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div 

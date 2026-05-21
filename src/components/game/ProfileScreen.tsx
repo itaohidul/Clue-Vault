@@ -15,7 +15,7 @@ export default function ProfileScreen() {
     triggerHaptic("light");
   };
 
-  const { firebaseUser, googleSignIn, googleSignOut, isSyncing, authError, setAuthError } = useFirebaseSync();
+  const { firebaseUser, isSyncing, authError, setAuthError } = useFirebaseSync();
 
   const achievements = [
     { name: "First Breach", icon: Zap, unlocked: true },
@@ -96,65 +96,30 @@ export default function ProfileScreen() {
       </div>
 
       {/* Cloud Sync Status */}
-      {firebaseUser ? (
-        <div className="glass p-5 rounded-3xl border-emerald-500/15 bg-emerald-500/5 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                <Cloud size={20} className="animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-black uppercase text-emerald-400 block tracking-wider leading-none">Cloud Sync Connected</span>
-                <span className="text-[9px] font-bold text-white/50 block tracking-tight font-mono truncate max-w-[140px] mt-1">{firebaseUser.email}</span>
-              </div>
-            </div>
-            <button 
-              onClick={googleSignOut}
-              disabled={isSyncing}
-              className="bg-white/5 hover:bg-red-500/15 text-red-400 hover:text-red-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all border border-white/5 active:scale-95 disabled:opacity-50 shrink-0"
-            >
-              Disconnect
-            </button>
+      <div className="glass p-5 rounded-3xl border-emerald-500/15 bg-emerald-500/5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            {isSyncing ? <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <Cloud size={20} />}
           </div>
-          <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase">
-            Your codename, coins, keys, upgrades, and terminal progress are automatically synchronized to your secure Google Cloud vault.
-          </p>
-        </div>
-      ) : (
-        <div className="glass p-5 rounded-3xl border-amber-500/15 bg-amber-500/5 space-y-4 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-              <CloudOff size={20} />
-            </div>
-            <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase text-amber-500 block tracking-wider leading-none">Secure Terminal Backup</span>
-              <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase">
-                Your profile is currently running offline. Link a Google Account to secure your assets and prevent data loss.
-              </p>
-            </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-black uppercase text-emerald-400 block tracking-wider leading-none">
+              {isSyncing ? "Synchronizing Vault..." : "Cloud Storage Active"}
+            </span>
+            <span className="text-[9px] font-bold text-white/50 block tracking-tight font-mono truncate max-w-[140px] mt-1">
+              {firebaseUser ? `ID: ${firebaseUser.uid.substring(0, 12)}...` : "Initializing Secure Connection..."}
+            </span>
           </div>
-
-          {authError && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3.5 rounded-2xl text-[9px] font-bold leading-relaxed uppercase relative pr-8">
-              <p>{authError}</p>
-              <button 
-                onClick={() => setAuthError(null)}
-                className="absolute top-2 right-2 text-red-400 hover:text-red-200 text-xs font-black w-5 h-5 flex items-center justify-center rounded bg-red-500/10 transition-all active:scale-90"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          <button 
-            onClick={googleSignIn}
-            disabled={isSyncing}
-            className="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 transition-all text-black py-3.5 rounded-2xl font-black uppercase italic tracking-widest text-xs flex items-center justify-center gap-2 glow-gold disabled:opacity-50"
-          >
-            {isSyncing ? "Syncing Vault..." : "Sync Progress with Google"}
-          </button>
         </div>
-      )}
+        <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase">
+          Your codename, coins, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted vault.
+        </p>
+
+        {authError && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3 rounded-xl text-[8px] font-bold uppercase relative pr-8 mt-2">
+            <p>{authError}</p>
+          </div>
+        )}
+      </div>
 
       {/* Settings List */}
       <div className="space-y-2">

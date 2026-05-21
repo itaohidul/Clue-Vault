@@ -38,7 +38,7 @@ export default function EarnScreen() {
   const [claimedReward, setClaimedReward] = useState<number | null>(null);
 
   // Global pool estimates
-  const DAILY_POOL = 120000; // 120,000 CLUE
+  const DAILY_POOL = 120000; // 120,000 Clue
   const GLOBAL_ACTIVITY_SCORE = 20000000; // 20,000,000
 
   // 1. Get Clearance Rank Bracket and Caps based on User Level
@@ -109,7 +109,7 @@ export default function EarnScreen() {
     { 
       id: 124, 
       title: "Sustainable Reward Pool Expansion Policy", 
-      desc: "Raise daily pool to 135,000 $CLUE funded by transaction buybacks.",
+      desc: "Raise daily pool to 135,000 Clue funded by transaction buybacks.",
       options: ["Approve Plan", "Reject & Keep 120K", "Abstain"],
       votes: 11482 
     },
@@ -258,13 +258,13 @@ export default function EarnScreen() {
         <div>
           <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-1 select-none flex items-center gap-2">
             <Coins className="text-amber-500 shrink-0" size={28} />
-             CLUE ENGINE
+             ZP ENGINE
           </h1>
           <p className="text-xs text-white/50 italic">Sustainable Earning Model & Reward Pools</p>
         </div>
         <div className="glass px-3 py-1.5 rounded-2xl flex flex-col items-end border-amber-500/20 bg-amber-500/5">
            <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none">Your Balance</span>
-           <span className="text-md font-black italic">{resources.clue ? resources.clue.toFixed(1) : "0.0"} $CLUE</span>
+           <span className="text-md font-black italic">{resources.clue ? resources.clue.toFixed(1) : "0.0"} Clue</span>
         </div>
       </div>
 
@@ -318,7 +318,7 @@ export default function EarnScreen() {
         </div>
         <h3 className="text-xs font-black uppercase text-amber-500 tracking-[0.2em] mb-1.5">Ecosystem Policy</h3>
         <p className="text-[10px] uppercase font-bold text-white/40 leading-relaxed mb-1">
-          $CLUE tokens are distributed proportionally through daily activity contributions.
+          Clue tokens are distributed proportionally through daily activity contributions.
         </p>
         <span className="text-[8px] uppercase tracking-wider font-extrabold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md">
           Anti-Bot Protected • Sustainable Rewards
@@ -334,7 +334,7 @@ export default function EarnScreen() {
             </div>
             <div className="text-right">
                <span className="text-[8.5px] font-black uppercase text-white/40 tracking-wider">DAILY CAP EXTREMUM</span>
-               <h4 className="text-sm font-mono font-black text-white">{bracket.cap} CLUE</h4>
+               <h4 className="text-sm font-mono font-black text-white">{bracket.cap} Clue</h4>
             </div>
          </div>
          <div className="grid grid-cols-2 gap-2 text-center">
@@ -367,7 +367,7 @@ export default function EarnScreen() {
                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Live Reward Pool</span>
              </div>
-             <h3 className="text-2xl font-black italic leading-none">{DAILY_POOL.toLocaleString()} $CLUE</h3>
+             <h3 className="text-2xl font-black italic leading-none">{DAILY_POOL.toLocaleString()} Clue</h3>
              <p className="text-[8px] font-bold uppercase tracking-widest text-white/40">Allocated Daily Community Rewards</p>
           </div>
           <button 
@@ -375,7 +375,7 @@ export default function EarnScreen() {
              disabled={finalEarning <= 0.05}
              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-20 text-black px-4 py-3 rounded-2xl font-black uppercase italic text-[10px] flex items-center gap-1.5 glow-gold transition-colors"
           >
-             Claim CLUE <ArrowUpRight size={14} />
+             Claim Clue <ArrowUpRight size={14} />
           </button>
         </div>
 
@@ -398,7 +398,7 @@ export default function EarnScreen() {
              <div className="h-px bg-white/5" />
              <div className="flex justify-between text-xs font-black uppercase italic">
                 <span className="text-white/60 font-medium font-bold">Unboosted Base Share</span>
-                <span className="font-mono text-white tracking-tight">{calculatedShare.toFixed(3)} CLUE</span>
+                <span className="font-mono text-white tracking-tight">{calculatedShare.toFixed(3)} Clue</span>
              </div>
              <div className="flex justify-between text-[11px] font-black uppercase italic text-amber-500">
                 <span className="font-medium">Total Multiplier applied</span>
@@ -412,7 +412,7 @@ export default function EarnScreen() {
                  {finalEarning >= bracket.cap && (
                    <span className="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded mr-1.5 font-bold">CAP REACHED</span>
                  )}
-                 <span className="text-lg font-black font-mono italic text-emerald-400">+{finalEarning.toFixed(2)} CLUE</span>
+                 <span className="text-lg font-black font-mono italic text-emerald-400">+{finalEarning.toFixed(2)} Clue</span>
               </div>
            </div>
         </div>
@@ -430,7 +430,7 @@ export default function EarnScreen() {
                   <Check size={28} strokeWidth={3} />
                </div>
                <h4 className="text-lg font-black uppercase italic tracking-tighter text-emerald-400">DISPATCHING TRANSACTION</h4>
-               <p className="text-xs text-white/60 font-medium px-4 mt-1">Successfully claimed <strong className="text-white">+{claimedReward} $CLUE</strong> into local player hot wallet!</p>
+               <p className="text-xs text-white/60 font-medium px-4 mt-1">Successfully claimed <strong className="text-white">+{claimedReward} Clue</strong> into local player hot wallet!</p>
                <span className="text-[8px] text-white/20 font-bold uppercase tracking-widest font-mono mt-3">TX_HASH: 0x5a1b...{Math.random().toString(16).substring(2, 6).toUpperCase()}</span>
             </motion.div>
           )}
@@ -466,7 +466,7 @@ export default function EarnScreen() {
               <h3 className="text-lg font-black uppercase italic tracking-tighter flex items-center gap-1.5">
                 <Lock size={18} className="text-blue-500" /> STAKING VAULTS
               </h3>
-              <p className="text-[10px] text-white/50 uppercase font-bold">Lock CLUE to secure governance voting and earn scaling multipliers</p>
+              <p className="text-[10px] text-white/50 uppercase font-bold">Lock Clue to secure governance voting and earn scaling multipliers</p>
            </div>
            {resources.stakedClue > 0 && (
              <button 
@@ -482,7 +482,7 @@ export default function EarnScreen() {
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex justify-between items-center">
            <div>
               <span className="text-[8px] font-black uppercase text-white/30 tracking-widest leading-none">Your Locked Staking</span>
-              <h4 className="text-md font-black italic mt-0.5">{resources.stakedClue ? resources.stakedClue.toFixed(1) : "0.0"} $CLUE</h4>
+              <h4 className="text-md font-black italic mt-0.5">{resources.stakedClue ? resources.stakedClue.toFixed(1) : "0.0"} Clue</h4>
            </div>
            <div className="text-right">
               <span className="text-[8px] font-black uppercase text-white/30 tracking-widest leading-none">Active Multiplier Boost</span>
@@ -542,7 +542,7 @@ export default function EarnScreen() {
             <h3 className="text-lg font-black uppercase italic tracking-tighter flex items-center gap-1.5">
               <Vote size={18} className="text-indigo-500" /> GOVERNANCE SYSTEM
             </h3>
-            <p className="text-[10px] text-white/50 uppercase font-bold">1 CLUE = 1 Vote Core Power • Cast ballot to influence theme features</p>
+            <p className="text-[10px] text-white/50 uppercase font-bold">1 Clue = 1 Vote Core Power • Cast ballot to influence theme features</p>
          </div>
 
          {/* Governance proposal cards */}

@@ -43,7 +43,7 @@ const UserSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { strict: false }); // Allow extra fields for flexibility during development
 
-const User = mongoose.model("User", UserSchema);
+const User = mongoose.models.User || mongoose.model("User", UserSchema);
 
 async function connectDb() {
   const uri = process.env.MONGODB_URI;
@@ -73,20 +73,24 @@ async function connectDb() {
 
     await mongoose.connect(uri, {
       dbName: "cluevault",
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 30000, 
+      socketTimeoutMS: 60000,
     });
     
-    console.log("[DB] Successfully connected to cluevault");
+    console.log("[DB] Successfully connected to cluevault (Mongoose)");
   } catch (err: any) {
     let serverIp = "unknown";
     try {
-      const ipRes = await axios.get("https://api.ipify.org?format=json", { timeout: 2000 });
+      const ipRes = await axios.get("https://api.ipify.org?format=json", { timeout: 3000 });
       serverIp = ipRes.data.ip;
     } catch (e) {}
 
-    console.error("[DB] Connection failed:", err.message);
-    throw new Error(`${err.message} (IP: ${serverIp})`);
+    console.error("[DB] Mongoose connection error:", {
+      message: err.message,
+      ip: serverIp,
+      code: err.code
+    });
+    throw new Error(`${err.message} (Server IP: ${serverIp})`);
   }
 }
 
@@ -125,7 +129,7 @@ app.get("/api/db-status", async (req, res) => {
         database: mongoose.connection.db?.databaseName || "cluevault" 
       });
     } else {
-      res.status(503).json({ 
+      res.json({ 
         connected: false, 
         error: "Connection Pending (State: " + mongoose.connection.readyState + ")" 
       });
@@ -142,7 +146,8 @@ app.get("/api/db-status", async (req, res) => {
     res.status(500).json({ 
       connected: false, 
       error: userFriendlyError,
-      details: err.message
+      details: err.message,
+      ip: err.message.match(/\(Server IP: (.*)\)/)?.[1] || "unknown"
     });
   }
 });
@@ -161,24 +166,37 @@ app.get("/api/user/:userId", async (req, res) => {
 });
 
 app.post("/api/user/:userId", async (req, res) => {
+  const { userId } = req.params;
   try {
     await connectDb();
     const payload = {
       ...req.body,
-      userId: req.params.userId,
+      userId,
       updatedAt: new Date(),
     };
     
-    await User.findOneAndUpdate(
-      { userId: req.params.userId },
+    console.log(`[DB] Saving data for user ${userId}. Keys in payload: ${Object.keys(req.body).join(", ")}`);
+    
+    // Explicitly handle fields to ensure they are updated correctly in MongoDB
+    const result = await User.findOneAndUpdate(
+      { userId },
       payload,
-      { upsert: true, new: true }
+      { upsert: true, new: true, runValidators: false }
     );
     
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Save User failed", err);
-    res.status(500).json({ error: "Internal server error" });
+    if (result) {
+      console.log(`[DB] Successfully saved user ${userId}.`);
+      res.json({ success: true });
+    } else {
+      console.warn(`[DB] Save attempt returned no result for ${userId}.`);
+      res.status(500).json({ error: "Failed to persist user data" });
+    }
+  } catch (err: any) {
+    console.error(`[DB] Save User failed for ${userId}:`, err.message);
+    res.status(500).json({ 
+      error: "Internal server error during save",
+      details: err.message
+    });
   }
 });
 
@@ -214,6 +232,11 @@ app.get("/api/crews/:crewName/members", async (req, res) => {
 });
 
 async function startServer() {
+  // Try to connect on startup to warm up
+  connectDb().catch(err => {
+    console.error("[DB] Initial connection attempt failed:", err.message);
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

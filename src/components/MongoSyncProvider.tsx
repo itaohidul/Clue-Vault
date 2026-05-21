@@ -50,22 +50,37 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     localStorage.setItem("cluevault_mongo_id", id);
   }, []);
 
-  // Check MongoDB Connection on startup
-  const checkMongoConn = async () => {
+  // Check MongoDB Connection on startup with retries for "Pending" state
+  const checkMongoConn = async (retryCount = 0) => {
     try {
       const res = await axios.get("/api/db-status");
       if (res.data.connected) {
         setDbConnected(true);
         setError(null);
       } else {
+        const errorMsg = res.data.error || "Database is currently unavailable.";
+        
+        // If pending (readyState 2), retry after a short delay
+        if (errorMsg.includes("Pending") && retryCount < 5) {
+          console.log(`Connection pending, retrying in 2s (Attempt ${retryCount + 1})...`);
+          setTimeout(() => checkMongoConn(retryCount + 1), 2000);
+          return;
+        }
+        
         setDbConnected(false);
-        setError(res.data.error || "Database is currently unavailable.");
+        setError(errorMsg);
       }
     } catch (err: any) {
       setDbConnected(false);
       const serverMsg = err.response?.data?.error || err.message;
       const serverDetails = err.response?.data?.details || "";
-      setError(`Cloud Sync Alert: ${serverMsg} ${serverDetails ? "\nDetails: " + serverDetails : ""}`);
+      const serverIp = err.response?.data?.ip || "";
+      
+      let fullError = `Cloud Sync Alert: ${serverMsg}`;
+      if (serverDetails) fullError += `\nDetails: ${serverDetails}`;
+      if (serverIp) fullError += `\nServer IP: ${serverIp}`;
+      
+      setError(fullError);
       console.error("DB Status check failed", err);
     }
   };
@@ -76,8 +91,19 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
 
   // Map frontend state to MongoDB structure with exact requested names
   const mapStateToMongo = (state: any) => {
+    // ONLY extract data fields, exclude action functions
+    const dataOnly = {
+      user: state.user,
+      resources: state.resources,
+      purchases: state.purchases,
+      crew: state.crew,
+      base: state.base,
+      unlockedTabs: state.unlockedTabs,
+      riddleState: state.riddleState
+    };
+
     return {
-      ...state,
+      ...dataOnly,
       name: state.user?.name,
       avatar: state.user?.avatar,
       Level: state.user?.level,
@@ -148,12 +174,14 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     try {
       const currentState = useUserStore.getState();
       const payload = mapStateToMongo(currentState);
-      await axios.post(`/api/user/${userId}`, payload);
+      await axios.post(`/api/user/${userId}`, payload, { timeout: 15000 });
       console.log("Manual sync success");
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Manual sync failed", err);
-      setError("Failed to sync data to cloud.");
+      const serverMsg = err.response?.data?.error || err.message;
+      const serverDetails = err.response?.data?.details || "";
+      setError(`Cloud Sync Failed: ${serverMsg} ${serverDetails ? "(" + serverDetails + ")" : ""}`);
     } finally {
       setIsSyncing(false);
     }

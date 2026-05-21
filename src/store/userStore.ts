@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { RIDDLES } from '../data/gameConfig';
 
 export interface TelegramUser {
   id: number;
@@ -55,6 +56,10 @@ export interface GameState {
   unlockedTabs: string[];
   isLoading: boolean;
   error: string | null;
+  riddleState: {
+    activeRiddleId: string | null;
+    unlockedParts: number; // 0, 1, 2, 3
+  };
   
   // Actions
   setLoadedState: (state: any) => void;
@@ -72,7 +77,7 @@ export interface GameState {
   updateCrewBadge: (badgeDiff: any) => void;
   joinCrew: (crewName: string) => void;
   leaveCrew: () => void;
-  boostCrew: (points: number) => void;
+  updateRiddleProgression: () => { riddleId: string; part: number; isComplete: boolean };
 }
 
 const getInitialState = () => {
@@ -114,6 +119,10 @@ const getInitialState = () => {
       level: 1,
     },
     unlockedTabs: ["daily"],
+    riddleState: {
+      activeRiddleId: null,
+      unlockedParts: 0
+    }
   };
 
   const saved = localStorage.getItem('cluevault_game_state_zustand');
@@ -497,34 +506,46 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: null,
       base: get().base,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('light');
   },
 
-  boostCrew: (points) => {
-    const { crew, resources } = get();
-    if (!crew) return;
-    const cost = points * 10;
-    if (resources.coins >= cost) {
-      const nextCrew = {
-        ...crew,
-        points: crew.points + points
-      };
-      const nextResources = {
-        ...resources,
-        coins: resources.coins - cost
-      };
-      set({ crew: nextCrew, resources: nextResources });
-      localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
-        user: get().user,
-        resources: nextResources,
-        crew: nextCrew,
-        base: get().base,
-        unlockedTabs: get().unlockedTabs,
-      }));
-      get().triggerHaptic('success');
-    } else {
-      get().triggerHaptic('error');
+  updateRiddleProgression: () => {
+    const { riddleState } = get();
+    let { activeRiddleId, unlockedParts } = riddleState;
+    
+    // If no active riddle, pick a random one
+    if (!activeRiddleId) {
+      const randomIdx = Math.floor(Math.random() * RIDDLES.length);
+      activeRiddleId = RIDDLES[randomIdx].id;
+      unlockedParts = 0;
     }
+
+    const nextParts = unlockedParts + 1;
+    const isComplete = nextParts >= 3;
+    
+    const nextRiddleState = {
+      activeRiddleId: isComplete ? null : activeRiddleId,
+      unlockedParts: isComplete ? 0 : nextParts
+    };
+
+    set({ riddleState: nextRiddleState });
+    
+    // Persist
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: get().user,
+      resources: get().resources,
+      crew: get().crew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+      riddleState: nextRiddleState,
+    }));
+
+    return { 
+      riddleId: activeRiddleId, 
+      part: nextParts, 
+      isComplete 
+    };
   },
 }));

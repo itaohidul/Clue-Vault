@@ -1,32 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useGame } from "../../App";
 import { useUserStore } from "../../store/userStore";
-import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X } from "lucide-react";
+import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X, HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
 
-const VAULTS = [
-  { id: 1, type: "Standard", color: "from-slate-500 to-slate-800", keys: 1 },
-  { id: 2, type: "Gold", color: "from-amber-600 to-amber-900 border-amber-500/30", keys: 3 },
-  { id: 3, type: "Elite", color: "from-blue-600 to-indigo-900 border-blue-500/30", keys: 5 },
-  { id: 4, type: "Mystery", color: "from-purple-600 to-black border-purple-500/30", keys: 10 },
-  
-  // 5 vaults following 20 levels gap to unlock each higher vaults!
-  { id: 5, type: "Omega Node", color: "from-rose-600 to-indigo-950 border-rose-500/30", keys: 2 },
-  { id: 6, type: "Prime Core", color: "from-emerald-600 to-cyan-950 border-emerald-500/30", keys: 4 },
-  { id: 7, type: "Cosmic Matrix", color: "from-violet-600 to-pink-950 border-violet-500/30", keys: 6 },
-  { id: 8, type: "Infinity Singularity", color: "from-amber-600 to-red-950 border-amber-500/30", keys: 8 },
-  { id: 9, type: "Clue Source", color: "from-cyan-500 to-blue-950 border-cyan-500/30", keys: 10 },
-];
+const VAULTS = VAULT_CONFIG.map(v => ({
+  ...v,
+  color: v.difficulty === 4 ? "from-slate-500 to-slate-800" : 
+         v.difficulty === 6 ? "from-amber-600 to-amber-900 border-amber-500/30" : 
+         "from-purple-600 to-black border-purple-500/30"
+}));
 
 interface DecryptionBypassProps {
   vaultName: string;
+  difficulty: number;
   onComplete: () => void;
   onCancel: () => void;
 }
 
-function VaultBypassTerminal({ vaultName, onComplete, onCancel }: DecryptionBypassProps) {
+function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: DecryptionBypassProps) {
   const { triggerHaptic } = useGame();
   const [sequence, setSequence] = useState<number[]>([]);
   const [userSequence, setUserSequence] = useState<number[]>([]);
@@ -42,7 +37,7 @@ function VaultBypassTerminal({ vaultName, onComplete, onCancel }: DecryptionBypa
   ];
 
   const generateSequence = () => {
-    const newSeq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4));
+    const newSeq = Array.from({ length: difficulty }, () => Math.floor(Math.random() * 4));
     setSequence(newSeq);
     setUserSequence([]);
     setStatus("playing");
@@ -155,7 +150,7 @@ function VaultBypassTerminal({ vaultName, onComplete, onCancel }: DecryptionBypa
 
 export default function VaultScreen() {
   const navigate = useNavigate();
-  const { user, resources, updateResources, crew, triggerHaptic } = useGame();
+  const { user, resources, updateResources, crew, triggerHaptic, updateRiddleProgression } = useGame();
   const [opening, setOpening] = useState<number | null>(null);
   const [showReward, setShowReward] = useState<any>(false);
   const [showKeyShortage, setShowKeyShortage] = useState<{ required: number; current: number } | null>(null);
@@ -163,41 +158,19 @@ export default function VaultScreen() {
 
   const getVaultStatus = (vault: any) => {
     if (vault.id === 1) return { isLocked: false, lockReason: "" };
-    if (vault.id === 2) {
-      const locked = user.level < 5;
-      return { isLocked: locked, lockReason: locked ? "LVL 5 REQ" : "" };
-    }
-    if (vault.id === 3) {
-      const locked = !crew && user.level < 10;
-      return { isLocked: locked, lockReason: locked ? "CREW OR Lvl 10" : "" };
-    }
-    if (vault.id === 4) {
-      const locked = user.streak < 14 && user.level < 15;
-      return { isLocked: locked, lockReason: locked ? "STREAK 14D / Lvl 15" : "" };
-    }
-    
-    // Level 20+ dynamic vaults (following 20 levels gap formula)
-    const requiredLevel = 20 + (vault.id - 5) * 20;
+    const requiredLevel = (vault.id - 1) * 3;
     const locked = user.level < requiredLevel;
     return { isLocked: locked, lockReason: locked ? `LVL ${requiredLevel} REQ` : "" };
   };
 
-  const getVaultRewards = (vaultId: number) => {
-    if (vaultId === 1) return { coins: 750, mats: 12, exp: 50 };
-    if (vaultId === 2) return { coins: 2500, mats: 40, exp: 120 };
-    if (vaultId === 3) return { coins: 5000, mats: 80, exp: 200 };
-    if (vaultId === 4) return { coins: 10000, mats: 150, exp: 350 };
-    
-    // High-tier vaults scaled up by multiplier (vaultId 5+)
-    const tier = vaultId - 4; // 1, 2, 3, 4, 5
-    return {
-      coins: Math.round(15000 * Math.pow(2.2, tier - 1)),
-      mats: Math.round(300 * Math.pow(2.0, tier - 1)),
-      exp: Math.round(400 * Math.pow(2.0, tier - 1))
-    };
+  const getVaultRewards = (vault: any) => {
+    const tier = vault.rewardTier;
+    if (tier === "Low") return { coins: 500 * vault.id, mats: 10 + vault.id * 5, exp: 40 + vault.id * 10 };
+    if (tier === "Medium") return { coins: 5000 + vault.id * 1000, mats: 100 + vault.id * 20, exp: 300 + vault.id * 50 };
+    return { coins: 50000 + vault.id * 5000, mats: 1000 + vault.id * 100, exp: 2000 + vault.id * 200 };
   };
 
-  const handleApplyRewards = (rewards: any) => {
+  const handleApplyRewards = (rewards: any, riddleProg: any) => {
     const rewardCoins = rewards.coins;
     const rewardMats = rewards.mats;
     const rewardExp = rewards.exp;
@@ -235,6 +208,7 @@ export default function VaultScreen() {
         crew: state.crew,
         base: state.base,
         unlockedTabs: state.unlockedTabs,
+        riddleState: state.riddleState,
       }));
 
       return {
@@ -243,7 +217,15 @@ export default function VaultScreen() {
       };
     });
 
-    setShowReward({ coins: rewardCoins, mats: rewardMats, exp: rewardExp });
+    const riddleData = RIDDLES.find(r => r.id === riddleProg.riddleId);
+    setShowReward({ 
+      coins: rewardCoins, 
+      mats: rewardMats, 
+      exp: rewardExp, 
+      riddlePart: riddleData?.parts[riddleProg.part - 1],
+      isRiddleComplete: riddleProg.isComplete,
+      riddleAnswer: riddleData?.answer
+    });
   };
 
   const openVault = (vault: any) => {
@@ -257,28 +239,19 @@ export default function VaultScreen() {
       return;
     }
 
-    if (resources.keys >= vault.keys) {
+    if (resources.keys >= vault.cost) {
       setOpening(vault.id);
-      updateResources({ keys: -vault.keys });
+      updateResources({ keys: -vault.cost });
       triggerHaptic("medium");
       
-      if (vault.id >= 5) {
-        // High Rewards level 20+ vault: Must bypass only 1 system-terminal mission to extraction!
-        setTimeout(() => {
-          setOpening(null);
-          setActiveDecryptionVault(vault);
-        }, 2000);
-      } else {
-        // Normal Vault 1-4
-        setTimeout(() => {
-          const rewards = getVaultRewards(vault.id);
-          handleApplyRewards(rewards);
-          setOpening(null);
-        }, 3000);
-      }
+      // All vaults now have a decryption phase as per new requirement
+      setTimeout(() => {
+        setOpening(null);
+        setActiveDecryptionVault(vault);
+      }, 1500);
     } else {
       triggerHaptic("error");
-      setShowKeyShortage({ required: vault.keys, current: resources.keys });
+      setShowKeyShortage({ required: vault.cost, current: resources.keys });
     }
   };
 
@@ -288,14 +261,16 @@ export default function VaultScreen() {
         {activeDecryptionVault && (
           <VaultBypassTerminal
             vaultName={activeDecryptionVault.type}
+            difficulty={activeDecryptionVault.difficulty}
             onComplete={() => {
-              const rewards = getVaultRewards(activeDecryptionVault.id);
-              handleApplyRewards(rewards);
+              const rewards = getVaultRewards(activeDecryptionVault);
+              const riddleProg = updateRiddleProgression();
+              handleApplyRewards(rewards, riddleProg);
               setActiveDecryptionVault(null);
             }}
             onCancel={() => {
               // Cancel closes terminal but refunds the key
-              updateResources({ keys: activeDecryptionVault.keys });
+              updateResources({ keys: activeDecryptionVault.cost });
               setActiveDecryptionVault(null);
               triggerHaptic("error");
             }}
@@ -320,7 +295,7 @@ export default function VaultScreen() {
           const statusCheck = getVaultStatus(vault);
           const isLocked = statusCheck.isLocked;
           const lockText = statusCheck.lockReason;
-          const canAfford = resources.keys >= vault.keys;
+          const canAfford = resources.keys >= vault.cost;
 
           return (
             <motion.div
@@ -344,7 +319,7 @@ export default function VaultScreen() {
                           "text-[9px] font-bold px-2 py-0.5 rounded-full inline-block",
                           canAfford ? "bg-black/40 text-white" : "bg-red-500/20 text-red-500"
                         )}>
-                          COST: {vault.keys} {vault.keys === 1 ? 'KEY' : 'KEYS'}
+                          COST: {vault.cost} {vault.cost === 1 ? 'KEY' : 'KEYS'}
                         </div>
                       </div>
                       <button 
@@ -417,8 +392,20 @@ export default function VaultScreen() {
               <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-2">Vault Cleared</h2>
               <p className="text-white/50 text-sm mb-4">Access granted. Resources extracted and transferred to your inventory.</p>
               
-              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider mb-6 animate-pulse">
-                🔓 NEW SIGNAL DECRYPTED: Another Mystery Game is now playable!
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl mb-6 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <HelpCircle size={14} className="animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Intel Decrypted</span>
+                </div>
+                <p className="text-[11px] font-mono italic text-emerald-200/90 leading-relaxed text-left">
+                  "{showReward.riddlePart}"
+                </p>
+                {showReward.isRiddleComplete && (
+                   <div className="pt-2 border-t border-emerald-500/20 mt-2">
+                     <span className="text-[9px] font-bold text-white/40 uppercase block mb-1">Answer Found:</span>
+                     <span className="text-xl font-black text-white italic tracking-tighter">{showReward.riddleAnswer}</span>
+                   </div>
+                )}
               </div>
               
               <div className="grid grid-cols-3 gap-2 mb-8">

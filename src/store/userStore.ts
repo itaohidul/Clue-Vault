@@ -39,6 +39,7 @@ export interface GameState {
     stakingTier: string;
     activityScore: number;
   };
+  purchases: Array<{ id: string; name: string; timestamp: number; cost: number; currency: string }>;
   crew: {
     name: string;
     badge: { icon: string; color: string; shape: string };
@@ -103,6 +104,7 @@ const getInitialState = () => {
       stakingTier: "none",
       activityScore: 420,
     },
+    purchases: [],
     crew: null,
     base: {
       style: "Cyber Lab",

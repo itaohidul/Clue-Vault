@@ -1,14 +1,29 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
-import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+import { getFirestore } from "firebase/firestore";
+import config from "../../firebase-applet-config.json";
+
+const firebaseConfig = {
+  apiKey: (config as any).apiKey,
+  authDomain: (config as any).authDomain,
+  projectId: (config as any).projectId,
+  storageBucket: (config as any).storageBucket,
+  messagingSenderId: (config as any).messagingSenderId,
+  appId: (config as any).appId,
+  measurementId: (config as any).measurementId
+};
 
 const app = initializeApp(firebaseConfig);
 
-// CRITICAL: The app will break without specifying the custom firestoreDatabaseId in getFirestore
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
+let dbInstance: any = null;
+export const getDb = () => {
+  if (!dbInstance) {
+    dbInstance = getFirestore(app, (config as any).firestoreDatabaseId);
+  }
+  return dbInstance;
+};
 export enum OperationType {
   CREATE = "create",
   UPDATE = "update",
@@ -39,7 +54,7 @@ export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): void {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -58,13 +73,10 @@ export function handleFirestoreError(
     path,
   };
   console.error("Firestore Error: ", JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
-
-// CRITICAL CONSTRAINT: Validate Firestore connection on boot
 export async function testConnection() {
   try {
-    await getDocFromServer(doc(db, "test", "connection"));
+    await getDocFromServer(doc(getDb(), "test", "connection"));
   } catch (error) {
     if (error instanceof Error && error.message.includes("the client is offline")) {
       console.error("Please check your Firebase configuration: client is offline.");

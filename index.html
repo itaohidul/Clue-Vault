@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClueVault — Unlock, Solve, Earn</title>
     <link rel="icon" type="image/png" href="/src/assets/images/cluevault_logo_1779272321887.png" />
-    <!-- 1. Load Telegram WebApp base first -->
+    <!-- 1. Buffer Polyfill for TonConnect/other dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+    <script>window.Buffer = buffer.Buffer;</script>
+    <!-- 2. Load Telegram WebApp base first -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- 2. Set up early CloudStorage polyfills to prevent older WebView/App crashes -->
+    <!-- 3. Set up early CloudStorage polyfills to prevent older WebView/App crashes -->
     <script>
       (function() {
         try {
@@ -17,7 +20,7 @@
             window.Telegram.WebApp = window.Telegram.WebApp || {};
             tg = window.Telegram.WebApp;
           }
-          if (tg) {
+          if (tg && !tg.CloudStorage) {
             var mockCloudStorage = {
               setItem: function(key, value, callback) {
                 localStorage.setItem('tg_cloud_' + key, value);
@@ -66,7 +69,7 @@
         }
       })();
     </script>
-    <!-- 3. Third-party Ad SDK runs after Telegram and its CloudStorage is ready -->
+    <!-- 4. Third-party Ad SDK runs after Telegram and its CloudStorage is ready -->
     <script src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019' async defer></script>
   </head>
   <body>

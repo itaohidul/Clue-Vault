@@ -12,7 +12,7 @@ import {
   onSnapshot, 
   serverTimestamp 
 } from "firebase/firestore";
-import { auth, db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { auth, getDb, handleFirestoreError, OperationType } from "../lib/firebase";
 import { useUserStore } from "../store/userStore";
 
 interface FirebaseSyncContextType {
@@ -95,7 +95,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
   useEffect(() => {
     if (!firebaseUser) return;
 
-    const userDocRef = doc(db, "users", firebaseUser.uid);
+    const userDocRef = doc(getDb(), "users", firebaseUser.uid);
 
     const unsubscribeSnap = onSnapshot(
       userDocRef,
@@ -175,7 +175,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
       // If we are currently populating a cloud snapshot, do not save back to cloud
       if (isSyncingFromCloudRef.current) return;
 
-      const userDocRef = doc(db, "users", firebaseUser.uid);
+      const userDocRef = doc(getDb(), "users", firebaseUser.uid);
       try {
         const payload = {
           userId: firebaseUser.uid,

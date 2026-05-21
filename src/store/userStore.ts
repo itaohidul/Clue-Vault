@@ -15,6 +15,7 @@ export interface GameState {
     id?: number;
     name: string;
     level: number;
+    clearanceCount: number;
     streak: number;
     completedToday: boolean;
     avatar: string;
@@ -63,6 +64,12 @@ export interface GameState {
   triggerHaptic: (style?: 'light' | 'medium' | 'heavy' | 'success' | 'error') => void;
   claimReferralCommission: () => void;
   addMockReferral: () => void;
+  upgradeBaseRoom: (roomId: string, coinCost: number, matCost: number) => boolean;
+  setBaseStyle: (styleName: string) => void;
+  updateCrewBadge: (badgeDiff: any) => void;
+  joinCrew: (crewName: string) => void;
+  leaveCrew: () => void;
+  boostCrew: (points: number) => void;
 }
 
 const getInitialState = () => {
@@ -70,6 +77,7 @@ const getInitialState = () => {
     user: {
       name: "",
       level: 1,
+      clearanceCount: 0,
       streak: 1,
       completedToday: false,
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=agent",
@@ -174,23 +182,26 @@ export const useUserStore = create<GameState>((set, get) => ({
     
     // Reward some random Clue tokens (1 to 20) on every mission completed!
     const randomClueBonus = Math.floor(Math.random() * 20) + 1;
-    const clueReward = (reward.clue || 0) + randomClueBonus;
+    // Earn and convert optimization structure 2:1 - plus some bonus clue tokens as requested (clue+)
+    const clueReward = (reward.clue || 0) + randomClueBonus + 15;
 
     const nextResources = {
       ...resources,
-      coins: resources.coins + (reward.coins || 0),
+      coins: resources.coins + (reward.coins || 0) + 300, // extra ZP on clearance
       keys: resources.keys + (reward.keys || 0),
       fragments: resources.fragments + (reward.fragments || 0),
       baseMaterials: resources.baseMaterials + (reward.baseMaterials || 0),
       clue: resources.clue + clueReward,
-      activityScore: resources.activityScore + (reward.activityScore || 0),
+      activityScore: resources.activityScore + (reward.activityScore || 0) + 50,
     };
 
     const nextUser = {
       ...user,
+      clearanceCount: (user.clearanceCount || 0) + 1,
       // Only lock the decryption game today if isDaily is explicitly passed
       completedToday: reward.isDaily ? true : user.completedToday,
-      level: user.level + (reward.xp ? 0.15 : 0), // boosted slightly to encourage faster level progress
+      // Increment full clearance levels to increase game difficulty dynamically
+      level: user.level + 1,
     };
 
     const nextTabs = Array.from(new Set([...unlockedTabs, 'bonus', 'crew', 'referral']));
@@ -355,6 +366,143 @@ export const useUserStore = create<GameState>((set, get) => ({
       }
     } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(style === 'success' ? [10, 30, 10] : 10);
+    }
+  },
+
+  upgradeBaseRoom: (roomId, coinCost, matCost) => {
+    const { resources, base } = get();
+    if (resources.coins >= coinCost && resources.baseMaterials >= matCost) {
+      const updatedRooms = base.rooms.map((r) => {
+        if (r.id === roomId) {
+          return { ...r, level: r.level + 1 };
+        }
+        return r;
+      });
+      const exists = base.rooms.some((r) => r.id === roomId);
+      if (!exists) {
+        const nameMap: any = {
+          command: "Command Room",
+          clue_lab: "Clue Lab",
+          vault_room: "Vault Room",
+          storage: "Storage Room"
+        };
+        updatedRooms.push({ id: roomId, name: nameMap[roomId] || "Utility Room", level: 1, type: "secondary" });
+      }
+
+      const nextBase = {
+        ...base,
+        rooms: updatedRooms,
+        level: base.level + 1
+      };
+      
+      const nextResources = {
+        ...resources,
+        coins: resources.coins - coinCost,
+        baseMaterials: resources.baseMaterials - matCost
+      };
+
+      set({ base: nextBase, resources: nextResources });
+      localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+        user: get().user,
+        resources: nextResources,
+        crew: get().crew,
+        base: nextBase,
+        unlockedTabs: get().unlockedTabs,
+      }));
+      get().triggerHaptic('success');
+      return true;
+    }
+    get().triggerHaptic('error');
+    return false;
+  },
+
+  setBaseStyle: (styleName) => {
+    const nextBase = { ...get().base, style: styleName };
+    set({ base: nextBase });
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: get().user,
+      resources: get().resources,
+      crew: get().crew,
+      base: nextBase,
+      unlockedTabs: get().unlockedTabs,
+    }));
+    get().triggerHaptic('success');
+  },
+
+  updateCrewBadge: (badgeDiff) => {
+    const currentCrew = get().crew;
+    if (currentCrew) {
+      const nextCrew = {
+        ...currentCrew,
+        badge: { ...currentCrew.badge, ...badgeDiff }
+      };
+      set({ crew: nextCrew });
+      localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+        user: get().user,
+        resources: get().resources,
+        crew: nextCrew,
+        base: get().base,
+        unlockedTabs: get().unlockedTabs,
+      }));
+      get().triggerHaptic('success');
+    }
+  },
+
+  joinCrew: (crewName) => {
+    const defaultBadge = { icon: "Shield", color: "#f59e0b", shape: "Circle" };
+    const newCrew = {
+      name: crewName,
+      badge: defaultBadge,
+      rank: Math.floor(Math.random() * 50) + 11,
+      points: 100
+    };
+    set({ crew: newCrew });
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: get().user,
+      resources: get().resources,
+      crew: newCrew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+    }));
+    get().triggerHaptic('success');
+  },
+
+  leaveCrew: () => {
+    set({ crew: null });
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: get().user,
+      resources: get().resources,
+      crew: null,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+    }));
+    get().triggerHaptic('light');
+  },
+
+  boostCrew: (points) => {
+    const { crew, resources } = get();
+    if (!crew) return;
+    const cost = points * 10;
+    if (resources.coins >= cost) {
+      const nextCrew = {
+        ...crew,
+        points: crew.points + points
+      };
+      const nextResources = {
+        ...resources,
+        coins: resources.coins - cost
+      };
+      set({ crew: nextCrew, resources: nextResources });
+      localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+        user: get().user,
+        resources: nextResources,
+        crew: nextCrew,
+        base: get().base,
+        unlockedTabs: get().unlockedTabs,
+      }));
+      get().triggerHaptic('success');
+    } else {
+      get().triggerHaptic('error');
     }
   },
 }));

@@ -418,22 +418,12 @@ export default function App() {
           buyItem: store.buyItem,
           claimReferralCommission: store.claimReferralCommission,
           addMockReferral: store.addMockReferral,
-          updateCrewBadge: (newBadge: any) => {
-            const currentCrew = store.crew;
-            if (currentCrew) {
-              useUserStore.setState({
-                crew: { ...currentCrew, badge: { ...currentCrew.badge, ...newBadge } }
-              });
-            }
-          },
-          updateCrewHallTheme: (theme: string) => {
-            const currentCrew = store.crew;
-            if (currentCrew) {
-              useUserStore.setState({
-                crew: { ...currentCrew, hallTheme: theme }
-              });
-            }
-          },
+          updateCrewBadge: store.updateCrewBadge,
+          joinCrew: store.joinCrew,
+          leaveCrew: store.leaveCrew,
+          boostCrew: store.boostCrew,
+          upgradeBaseRoom: store.upgradeBaseRoom,
+          setBaseStyle: store.setBaseStyle,
           finalizeOnboarding: store.finalizeOnboarding,
           triggerHaptic: store.triggerHaptic 
         }}>

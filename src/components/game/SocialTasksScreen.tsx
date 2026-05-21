@@ -68,21 +68,41 @@ export default function SocialTasksScreen() {
     localStorage.setItem("cluevault_tasks_batch_state", JSON.stringify(tasks));
   };
 
-  // Cooldown timer (rate limit: 240 seconds/4 minutes) to prevent ad blocks
-  const [cooldownUntil, setCooldownUntil] = useState<number>(() => {
-    const saved = localStorage.getItem("cluevault_task_cooldown_until");
-    return saved ? Number(saved) : 0;
+  // Task specific cooldown state mapped by taskId
+  const [taskCooldowns, setTaskCooldowns] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem("cluevault_task_cooldowns_state");
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return {};
   });
 
-  const [cooldownTimeLeft, setCooldownTimeLeft] = useState<number>(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const diff = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-      setCooldownTimeLeft(diff);
+      setNow(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, [cooldownUntil]);
+  }, []);
+
+  const saveTaskCooldowns = (cooldowns: Record<string, number>) => {
+    setTaskCooldowns(cooldowns);
+    localStorage.setItem("cluevault_task_cooldowns_state", JSON.stringify(cooldowns));
+  };
+
+  const getRemainingCooldown = (taskId: string) => {
+    const until = taskCooldowns[taskId] || 0;
+    return Math.max(0, Math.ceil((until - now) / 1000));
+  };
+
+  const startTaskCooldown = (taskId: string) => {
+    const nextCooldowns = {
+      ...taskCooldowns,
+      [taskId]: Date.now() + 240 * 1000 // 4 minutes
+    };
+    saveTaskCooldowns(nextCooldowns);
+  };
 
   // Loading indicator for active task triggers
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
@@ -106,13 +126,6 @@ export default function SocialTasksScreen() {
   const saveCommunityState = (tasks: typeof communityTasks) => {
     setCommunityTasks(tasks);
     localStorage.setItem("cluevault_oneoff_tasks", JSON.stringify(tasks));
-  };
-
-  // Trigger global rate-limiting cooldown
-  const startCooldown = () => {
-    const target = Date.now() + 240 * 1000; // 4 minutes
-    setCooldownUntil(target);
-    localStorage.setItem("cluevault_task_cooldown_until", String(target));
   };
 
   // Handle Community Tasks
@@ -188,8 +201,9 @@ export default function SocialTasksScreen() {
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
 
-    // Reject if cooldown is active
-    if (Date.now() < cooldownUntil) {
+    // Reject if task specific cooldown is active
+    const remaining = getRemainingCooldown(task.id);
+    if (remaining > 0) {
       triggerHaptic("error");
       return;
     }
@@ -207,11 +221,11 @@ export default function SocialTasksScreen() {
       if (typeof showAd === "function") {
         await executeAdWithTimeout(() => showAd(isPop ? 'pop' : undefined), 4500);
       } else {
-        // Sandboxed premium emulator delay
+        // Sandboxed emulator delay
         await new Promise(r => setTimeout(r, 2000));
       }
 
-      // Complete & Reward (coins, keys, clue, xp)
+      // Complete & Reward
       completeMission({ 
         coins: task.rewardCoins, 
         keys: task.rewardKeys, 
@@ -226,8 +240,8 @@ export default function SocialTasksScreen() {
       setSuccessAnimation({ active: true, clueAwarded: randomClue });
       triggerHaptic("success");
 
-      // Start the telemetry cooldown to prevent ad accounts blocking!
-      startCooldown();
+      // Start task-specific cooling timer!
+      startTaskCooldown(task.id);
 
     } else {
       // Handle Link matching
@@ -255,8 +269,8 @@ export default function SocialTasksScreen() {
             setSuccessAnimation({ active: true, clueAwarded: randomClue });
             triggerHaptic("success");
 
-            // Cooldown starts for links too to protect limits
-            startCooldown();
+            // Cooldown starts for links too
+            startTaskCooldown(task.id);
             return 5;
           }
           return prev - 1;
@@ -281,12 +295,11 @@ export default function SocialTasksScreen() {
       const resetBatch = INITIAL_BATCH.map(t => ({ ...t, completed: false }));
       saveBatchState(resetBatch);
 
-      // Bypass/clear cooldown rate limits
-      setCooldownUntil(0);
-      localStorage.removeItem("cluevault_task_cooldown_until");
+      // Instantly clear all active individual task cooldowns!
+      saveTaskCooldowns({});
 
       triggerHaptic("success");
-      setSuccessAnimation({ active: true, clueAwarded: 0 }); // Triggers a beautiful feedback success screen
+      setSuccessAnimation({ active: true, clueAwarded: 0 }); 
     } else {
       triggerHaptic("error");
     }
@@ -361,20 +374,7 @@ export default function SocialTasksScreen() {
         <p className="text-sm text-white/50 italic font-medium">Bypass anti-bot firewalls to sync secure decryption assets.</p>
       </header>
 
-      {/* Global Rate-Limit Cooldown Overlay and Status Banner */}
-      {cooldownTimeLeft > 0 && (
-        <div className="bg-red-500/10 border border-dashed border-red-500/30 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
-          <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 shrink-0">
-             <Timer size={20} className="animate-spin" />
-          </div>
-          <div>
-             <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider block">TELEMETRY COOLDOWN ENFORCED</span>
-             <p className="text-[10px] text-white/70 uppercase">
-               Next task unlocks in <span className="font-mono text-red-400 font-black text-xs">{(Math.floor(cooldownTimeLeft / 60)).toString().padStart(2, '0')}:{(cooldownTimeLeft % 60).toString().padStart(2, '0')}</span>. Please hold.
-             </p>
-          </div>
-        </div>
-      )}
+
 
       {/* Section 1: Dynamic 10-Task Decryption Batch */}
       <section className="space-y-4">
@@ -397,7 +397,8 @@ export default function SocialTasksScreen() {
         <div className="space-y-3">
           {batchTasks.map((task) => {
             const isLoading = loadingTaskId === task.id;
-            const isCooldownActive = cooldownTimeLeft > 0;
+            const remainingSecs = getRemainingCooldown(task.id);
+            const isCooldownActive = remainingSecs > 0;
             const isAd = task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma';
 
             return (
@@ -465,7 +466,7 @@ export default function SocialTasksScreen() {
                         className={cn(
                           "px-4 py-2.5 rounded-xl font-black uppercase italic tracking-tighter text-[9px] active:scale-95 transition-all text-center min-w-[100px]",
                           isCooldownActive
-                            ? "bg-white/5 border border-white/5 text-white/30 cursor-not-allowed"
+                            ? "bg-white/5 border border-white/10 text-rose-500 cursor-not-allowed font-mono font-bold"
                             : isAd
                               ? "bg-amber-500 text-black hover:bg-amber-400"
                               : "bg-blue-500 text-white hover:bg-blue-400"
@@ -473,9 +474,15 @@ export default function SocialTasksScreen() {
                       >
                         {isLoading 
                           ? (isAd ? "BROADCASTING..." : `SYNCING (${linkCountdown}S)`)
-                          : isAd 
-                            ? "PLAY BROADCAST" 
-                            : "VISIT FREQ"
+                          : isCooldownActive
+                            ? (() => {
+                                const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+                                const secs = (remainingSecs % 60).toString().padStart(2, '0');
+                                return `${mins}:${secs}`;
+                              })()
+                            : isAd 
+                              ? "PLAY BROADCAST" 
+                              : "VISIT FREQ"
                         }
                       </button>
                     )}

@@ -12,15 +12,15 @@ const THEMES = [
 ];
 
 export default function BaseScreen() {
-  const { user, base, resources, updateResources, triggerHaptic } = useGame();
+  const { user, base, resources, upgradeBaseRoom, setBaseStyle, triggerHaptic } = useGame();
   const [isTheming, setIsTheming] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   const ROOM_TYPES = [
-    { id: "command", name: "Command Room", icon: Shield, desc: "Unlock higher level daily mysteries.", cost: 500, mats: 20 },
-    { id: "clue_lab", name: "Clue Lab", icon: Cpu, desc: "Faster story fragment extraction.", cost: 800, mats: 40 },
-    { id: "vault_room", name: "Vault Room", icon: Lock, desc: "Bonus coins from all vaults.", cost: 1200, mats: 60 },
-    { id: "storage", name: "Storage Room", icon: Database, desc: "Increase maximum energy capacity.", cost: 1500, mats: 100 },
+    { id: "command", name: "Command Room", icon: Shield, desc: "Unlock higher level daily mysteries.", cost: 300, mats: 10 },
+    { id: "clue_lab", name: "Clue Lab", icon: Cpu, desc: "Faster story fragment extraction.", cost: 400, mats: 15 },
+    { id: "vault_room", name: "Vault Room", icon: Lock, desc: "Bonus coins from all vaults.", cost: 500, mats: 25 },
+    { id: "storage", name: "Storage Room", icon: Database, desc: "Increase maximum energy capacity.", cost: 600, mats: 30 },
   ];
 
   const currentTheme = THEMES.find(t => t.id === base.style) || THEMES[0];
@@ -38,12 +38,8 @@ export default function BaseScreen() {
       triggerHaptic("medium");
       
       setTimeout(() => {
-        updateResources({ 
-          coins: -coinsCost, 
-          baseMaterials: -matsCost 
-        });
+        upgradeBaseRoom(room.id, coinsCost, matsCost);
         setUpgrading(null);
-        triggerHaptic("success");
       }, 1500);
     } else {
       triggerHaptic("error");
@@ -51,8 +47,7 @@ export default function BaseScreen() {
   };
 
   const handleThemeChange = (themeId: string) => {
-     // In a real app we'd update the state
-     triggerHaptic("light");
+     setBaseStyle(themeId);
   };
 
   return (

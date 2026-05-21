@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { TonConnectUI } from "@tonconnect/ui";
 
 interface WalletState {
   connected: boolean;
@@ -43,15 +44,65 @@ export default function ShopScreen() {
     return {
       connected: false,
       address: null,
-      balance: 15.0, // starts with 15.0 practice TON
+      balance: 15.0, // starts with practice TON
       provider: null
     };
   });
+
+  const [tonConnectUI, setTonConnectUI] = useState<TonConnectUI | null>(null);
 
   const saveWalletState = (newState: WalletState) => {
     setWallet(newState);
     localStorage.setItem("cluevault_ton_wallet", JSON.stringify(newState));
   };
+
+  useEffect(() => {
+    // Initialize Web3 TonConnect interface
+    const tc = new TonConnectUI({
+      manifestUrl: "https://raw.githubusercontent.com/ton-connect/demo-dapp-with-react-ui/master/public/tonconnect-manifest.json",
+      restoreConnection: true
+    });
+
+    setTonConnectUI(tc);
+
+    const unsubscribe = tc.onStatusChange(async (walletInfo) => {
+      if (walletInfo) {
+        const address = walletInfo.account.address;
+        const providerName = walletInfo.device.appName || "tonkeeper";
+        
+        let realBalance = 15.0; // practice fallback
+        try {
+          const res = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${address}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.ok && data?.result?.balance) {
+              realBalance = parseFloat(data.result.balance) / 1000000000;
+            }
+          }
+        } catch (err) {
+          console.warn("Failed fetching chain ledger balance, using default 15.0 TON reserve", err);
+        }
+
+        saveWalletState({
+          connected: true,
+          address: address,
+          balance: realBalance,
+          provider: providerName as any
+        });
+      } else {
+        saveWalletState({
+          connected: false,
+          address: null,
+          balance: 0,
+          provider: null
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // UI state managers
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -109,49 +160,30 @@ export default function ShopScreen() {
     { name: "Material Crate", cost: 500, reward: { baseMaterials: 20 }, items: "20 Construction Mats", icon: Package },
   ];
 
-  // Random TON address generator
-  const generateRandomAddress = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
-    let addr = "EQA";
-    for (let i = 0; i < 45; i++) {
-      addr += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return addr;
-  };
+  // 2:1 swap converters for optimized user-level resource distribution
+  const convertPacks = [
+    { id: "convert_zp", name: "ZP swap Elements", costDesc: "200 ZP Coins", rewardDesc: "100 Elements", ratio: "2:1 Swap Ratio", cost: { coins: 200 }, reward: { baseMaterials: 100 }, icon: Cpu },
+    { id: "convert_mats", name: "Elements swap Clue", costDesc: "20 Elements", rewardDesc: "10 Clue Tokens", ratio: "2:1 Swap Ratio", cost: { baseMaterials: 20 }, reward: { clue: 10 }, icon: Sparkles },
+    { id: "convert_keys", name: "Keys swap Clue", costDesc: "2 Keys", rewardDesc: "1 Clue Token", ratio: "2:1 Swap Ratio", cost: { keys: 2 }, reward: { clue: 1 }, icon: Key },
+  ];
 
-  // Connect to a TON Wallet
-  const connectWallet = (provider: 'tonkeeper' | 'telegram_wallet' | 'mytonwallet' | 'tonhub') => {
+  // Connect to a TON Wallet (using real TON Connect)
+  const connectWallet = async () => {
     if (!user.onboarded) {
       triggerHaptic("error");
       return;
     }
-    setIsConnecting(provider);
-    triggerHaptic("medium");
-
-    // Simulate blockchain link shaking hands
-    setTimeout(() => {
-      const generatedAddress = generateRandomAddress();
-      const updated = {
-        connected: true,
-        address: generatedAddress,
-        balance: wallet.balance > 0 ? wallet.balance : 15.0, // preserve balance
-        provider: provider
-      };
-      saveWalletState(updated);
-      setIsConnecting(null);
-      setShowConnectModal(false);
-      triggerHaptic("success");
-    }, 1800);
+    if (tonConnectUI) {
+      triggerHaptic("medium");
+      await tonConnectUI.openModal();
+    }
   };
 
   // Disconnect Wallet
-  const disconnectWallet = () => {
-    saveWalletState({
-      connected: false,
-      address: null,
-      balance: wallet.balance,
-      provider: null
-    });
+  const disconnectWallet = async () => {
+    if (tonConnectUI) {
+      await tonConnectUI.disconnect();
+    }
     triggerHaptic("light");
   };
 
@@ -165,7 +197,7 @@ export default function ShopScreen() {
     // If TON wallet is disconnected, force prompt
     if (!wallet.connected) {
       triggerHaptic("error");
-      setShowConnectModal(true);
+      connectWallet();
       return;
     }
 
@@ -206,7 +238,6 @@ export default function ShopScreen() {
       });
 
       // Award game resources atomically to Zustand store
-      // Starter Kit, Agent Bundle, etc.
       updateResources(activeTx.pack.reward);
 
       // Create a mock tx hash
@@ -235,7 +266,41 @@ export default function ShopScreen() {
     const success = buyItem(pack);
     if (success) {
       setSwapSuccessItem(pack);
-      // Success modal remains briefly for confirmation
+    } else {
+      triggerHaptic("error");
+    }
+  };
+
+  // Process 2:1 optimized exchange converts
+  const handleConvertSwap = (pack: any) => {
+    if (!user.onboarded) {
+      triggerHaptic("error");
+      return;
+    }
+
+    const currentRes = resources;
+    let hasEnough = true;
+    const deductions: any = {};
+    
+    Object.entries(pack.cost).forEach(([k, v]) => {
+      const field = k as keyof typeof resources;
+      if (currentRes[field] < (v as number)) {
+        hasEnough = false;
+      } else {
+        deductions[field] = -(v as number);
+      }
+    });
+
+    if (hasEnough) {
+      updateResources({
+        ...deductions,
+        ...pack.reward
+      });
+      setSwapSuccessItem({
+        items: pack.rewardDesc,
+        cost: pack.costDesc,
+      });
+      triggerHaptic("success");
     } else {
       triggerHaptic("error");
     }
@@ -472,6 +537,42 @@ export default function ShopScreen() {
          </div>
       </div>
 
+      {/* Balanced 2:1 Conversion Area */}
+      <div className="space-y-4">
+         <div className="flex justify-between items-center px-1">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-400 italic">III. Consensus Convert Hub</h3>
+            <span className="text-[8px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">Optimized 2:1</span>
+         </div>
+         <div className="grid grid-cols-1 gap-3">
+            {convertPacks.map((pack) => (
+              <motion.div 
+                key={pack.id}
+                onClick={() => handleConvertSwap(pack)}
+                whileTap={{ scale: 0.98 }}
+                className="glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer hover:border-emerald-500/15 hover:bg-emerald-500/[0.01] transition-all"
+              >
+                 <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/10">
+                       <pack.icon size={22} />
+                    </div>
+                    <div className="text-left">
+                       <h4 className="text-xs font-black uppercase tracking-tight">{pack.name}</h4>
+                       <span className="text-[9px] text-emerald-400/70 font-bold uppercase block flex items-center gap-1">
+                         <span>{pack.costDesc}</span>
+                         <ArrowRight size={10} />
+                         <span>{pack.rewardDesc}</span>
+                       </span>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <div className="text-xs font-black italic mb-0.5 text-emerald-400 font-mono">{pack.ratio}</div>
+                    <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-widest block">Convert</span>
+                 </div>
+              </motion.div>
+            ))}
+         </div>
+      </div>
+
       {/* Bottom informational guidelines block */}
       <div className="glass rounded-[2rem] p-6 border-blue-500/10 bg-blue-500/5">
          <div className="flex items-center gap-3 mb-3">
@@ -483,68 +584,7 @@ export default function ShopScreen() {
          </p>
       </div>
 
-      {/* Connect TON Wallet overlay */}
-      <AnimatePresence>
-        {showConnectModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/95 backdrop-blur-xl"
-          >
-            <motion.div 
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="glass rounded-[3rem] p-7 max-w-sm w-full text-center border-amber-500/30 bg-black/90 space-y-6"
-            >
-              <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter leading-none mb-1">Select Wallet Provider</h3>
-                <p className="text-[9px] text-white/40 uppercase font-black tracking-wide">Secure cryptographic link node</p>
-              </div>
 
-              <div className="space-y-2.5">
-                {[
-                  { id: "tonkeeper", name: "Tonkeeper", desc: "Popular full-featured wallet" },
-                  { id: "telegram_wallet", name: "Telegram Wallet", desc: "Integrated @wallet hub" },
-                  { id: "mytonwallet", name: "MyTonWallet", desc: "Advanced asset manager" },
-                  { id: "tonhub", name: "Tonhub", desc: "High-security validator node" },
-                ].map((prov) => {
-                  const loader = isConnecting === prov.id;
-                  return (
-                    <button
-                      key={prov.id}
-                      onClick={() => connectWallet(prov.id as any)}
-                      disabled={isConnecting !== null}
-                      className="w-full p-4 rounded-2xl border border-white/5 bg-white/[0.01] hover:border-amber-500/35 hover:bg-amber-500/[0.02] flex items-center justify-between text-left transition-all active:scale-[0.98]"
-                    >
-                      <div>
-                        <h4 className="text-xs font-black uppercase tracking-tight text-white/90">{prov.name}</h4>
-                        <p className="text-[8px] text-white/33 uppercase font-semibold">{prov.desc}</p>
-                      </div>
-                      <div className="text-amber-500">
-                        {loader ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : (
-                          <ChevronRight size={16} />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setShowConnectModal(false)}
-                disabled={isConnecting !== null}
-                className="w-full bg-white/5 hover:bg-white/10 text-white/60 py-3 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
-              >
-                Close Connection Portal
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Transaction Review / Signature / Loading / Success Modal Overlay */}
       <AnimatePresence>

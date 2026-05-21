@@ -112,6 +112,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
               resources: cloudData.resources,
               crew: cloudData.crew,
               base: cloudData.base,
+              purchases: cloudData.purchases || [],
               unlockedTabs: cloudData.unlockedTabs || ["daily"],
             });
 
@@ -123,6 +124,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
                 resources: cloudData.resources,
                 crew: cloudData.crew,
                 base: cloudData.base,
+                purchases: cloudData.purchases || [],
                 unlockedTabs: cloudData.unlockedTabs || ["daily"],
               })
             );
@@ -148,6 +150,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
               resources: currentLocal.resources,
               crew: currentLocal.crew,
               base: currentLocal.base,
+              purchases: currentLocal.purchases || [],
               unlockedTabs: currentLocal.unlockedTabs,
               updatedAt: serverTimestamp(),
             };
@@ -183,6 +186,7 @@ export default function FirebaseSyncProvider({ children }: { children: ReactNode
           resources: state.resources,
           crew: state.crew,
           base: state.base,
+          purchases: state.purchases || [],
           unlockedTabs: state.unlockedTabs,
           updatedAt: serverTimestamp(),
         };

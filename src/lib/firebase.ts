@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import config from "../../firebase-applet-config.json";
 
 const firebaseConfig = {
@@ -13,7 +13,15 @@ const firebaseConfig = {
   measurementId: (config as any).measurementId
 };
 
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log("Firebase initialized successfully");
+} catch (e) {
+  console.error("Firebase initialization failed", e);
+  // Create a dummy app to prevent crashes on export const auth
+  app = { name: "fallback" } as any;
+}
 
 export const auth = getAuth(app);
 
@@ -84,4 +92,4 @@ export async function testConnection() {
   }
 }
 
-testConnection();
+// testConnection(); // Called on demand to prevent start-up blockages if network is flappy

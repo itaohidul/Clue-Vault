@@ -3,8 +3,7 @@ import { useGame } from "../../App";
 import { Users, Star, Trophy, MessageSquare, Shield, ChevronRight, UserPlus, Flame, Palette, Circle, Hexagon, Square, Diamond, Swords, Target, Eye, Crown, Zap, User } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
-import { collection, query, where, getDocs, limit, orderBy } from "firebase/firestore";
-import { getDb } from "../../lib/firebase";
+import axios from "axios";
 
 const ICONS = {
   Shield: Shield,
@@ -48,23 +47,13 @@ export default function CrewScreen() {
   const fetchCrewMembers = async (crewName: string) => {
     setLoadingMembers(true);
     try {
-      const q = query(
-        collection(getDb(), "users"),
-        where("crew.name", "==", crewName),
-        orderBy("user.exp", "desc"),
-        limit(20)
-      );
-      const snapshot = await getDocs(q);
-      const members = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setCrewMembers(members);
+      const response = await axios.get(`/api/crews/${crewName}/members`);
+      setCrewMembers(response.data);
     } catch (e) {
       console.error("Failed to fetch crew members", e);
-      // Fallback with mock if firebase fails for some reason
+      // Fallback with mock if mongo fails for some reason
       setCrewMembers([
-        { user: { name: "Sample Agent", level: 5, avatar: "" }, resources: { activityScore: 100 } }
+        { user: { name: "Agent Echo", level: 5, avatar: "" }, resources: { activityScore: 100 } }
       ]);
     } finally {
       setLoadingMembers(false);

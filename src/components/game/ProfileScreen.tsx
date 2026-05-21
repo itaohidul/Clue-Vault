@@ -2,7 +2,7 @@ import { useGame } from "../../App";
 import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Cloud, CloudOff } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
-import { useFirebaseSync } from "../FirebaseSyncProvider";
+import { useMongoSync } from "../MongoSyncProvider";
 
 export default function ProfileScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
@@ -15,7 +15,7 @@ export default function ProfileScreen() {
     triggerHaptic("light");
   };
 
-  const { firebaseUser, isSyncing, authError, setAuthError } = useFirebaseSync();
+  const { userId, isSyncing, error: syncError, dbConnected, syncLocalToCloud } = useMongoSync();
 
   const achievements = [
     { name: "First Breach", icon: Zap, unlocked: true },
@@ -96,27 +96,78 @@ export default function ProfileScreen() {
       </div>
 
       {/* Cloud Sync Status */}
-      <div className="glass p-5 rounded-3xl border-emerald-500/15 bg-emerald-500/5 space-y-4">
+      <div className={cn(
+        "glass p-5 rounded-3xl border transition-all duration-500",
+        dbConnected === true ? "border-emerald-500/15 bg-emerald-500/5" : 
+        dbConnected === false ? "border-red-500/15 bg-red-500/5" :
+        "border-amber-500/15 bg-amber-500/5"
+      )}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-            {isSyncing ? <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <Cloud size={20} />}
+          <div className={cn(
+            "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0",
+            dbConnected === true ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
+            dbConnected === false ? "bg-red-500/10 border-red-500/20 text-red-400" :
+            "bg-amber-500/10 border-amber-500/20 text-amber-400"
+          )}>
+            {isSyncing ? (
+              <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : dbConnected === false ? (
+              <CloudOff size={20} />
+            ) : (
+              <Cloud size={20} />
+            )}
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] font-black uppercase text-emerald-400 block tracking-wider leading-none">
-              {isSyncing ? "Synchronizing Vault..." : "Cloud Storage Active"}
+            <span className={cn(
+              "text-[10px] font-black uppercase block tracking-wider leading-none",
+              dbConnected === true ? "text-emerald-400" : 
+              dbConnected === false ? "text-red-400" :
+              "text-amber-400"
+            )}>
+              {isSyncing ? "Synchronizing Vault..." : 
+               dbConnected === true ? "Cloud Storage Active" :
+               dbConnected === false ? "Connection Failed" :
+               "Checking Data Link..."}
             </span>
             <span className="text-[9px] font-bold text-white/50 block tracking-tight font-mono truncate max-w-[140px] mt-1">
-              {firebaseUser ? `ID: ${firebaseUser.uid.substring(0, 12)}...` : "Initializing Secure Connection..."}
+              {dbConnected === true ? "MONGODB ATLAS CONNECTED" : 
+               dbConnected === false ? "MONGO OFFLINE" :
+               "SECURE TUNNEL INITIALIZING..."}
             </span>
           </div>
         </div>
-        <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase">
-          Your codename, coins, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted vault.
+        <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase mt-4">
+          Your codename, coins, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted MongoDB Atlas vault.
         </p>
 
-        {authError && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3 rounded-xl text-[8px] font-bold uppercase relative pr-8 mt-2">
-            <p>{authError}</p>
+        <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+          <button 
+            disabled={isSyncing}
+            onClick={() => syncLocalToCloud()}
+            className={cn(
+              "flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all border shrink-0",
+              dbConnected === true 
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20" 
+                : "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+            )}
+          >
+            {isSyncing ? "SYNCING..." : dbConnected === false ? "RETRY SYNC" : "FORCED BACKUP"}
+          </button>
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-12 h-12 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center text-white/40 hover:bg-white/10 transition-all shrink-0"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+
+        {syncError && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3 rounded-xl text-[8px] font-bold uppercase relative pr-8 mt-2 overflow-hidden">
+            <p className="break-words">{syncError}</p>
+            <div className="mt-2 pt-2 border-t border-red-500/10 opacity-50">
+               <p>Please check your Atlas Network Access (IP 0.0.0.0/0) and ensure the password in MONGODB_URI is correct.</p>
+            </div>
           </div>
         )}
       </div>

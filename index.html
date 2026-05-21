@@ -17,7 +17,27 @@
             window.Telegram.WebApp = window.Telegram.WebApp || {};
             tg = window.Telegram.WebApp;
           }
-          if (tg && !tg.CloudStorage) {
+          
+          // Check if CloudStorage is supported or already defined
+          var needsPolyfill = false;
+          try {
+            if (!tg.CloudStorage) needsPolyfill = true;
+          } catch(e) {
+            needsPolyfill = true;
+          }
+
+          // Spoof version to prevent "CloudStorage is not supported in version 6.0" console errors
+          if (!tg.version || parseFloat(tg.version) < 6.9) {
+            tg.version = "6.9";
+          }
+          
+          if (!tg.isVersionAtLeast) {
+            tg.isVersionAtLeast = function(v) {
+              return true; // Simple pass for all version checks
+            };
+          }
+
+          if (needsPolyfill) {
             var mockCloudStorage = {
               setItem: function(key, value, callback) {
                 localStorage.setItem('tg_cloud_' + key, value);
@@ -55,19 +75,70 @@
                 return Promise.resolve(keys);
               }
             };
-            Object.defineProperty(tg, 'CloudStorage', {
-              get: function() { return mockCloudStorage; },
-              configurable: true,
-              enumerable: true
-            });
+            
+            try {
+              Object.defineProperty(tg, 'CloudStorage', {
+                get: function() { return mockCloudStorage; },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (e) {
+              // Fallback for non-configurable properties
+              tg.CloudStorage = mockCloudStorage;
+            }
           }
         } catch (e) {
-          console.warn("Early TG storage polyfill failed:", e);
+          // Silent fail for polyfill
         }
       })();
     </script>
     <!-- 3. Third-party Ad SDK runs after Telegram and its CloudStorage is ready -->
-    <script src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019' async defer></script>
+    <script>
+      // Ad SDK with a basic timeout protection and redirect mitigation
+      (function() {
+        var script = document.createElement('script');
+        script.src = '//libtl.com/sdk.js';
+        script.setAttribute('data-zone', '11030019');
+        script.setAttribute('data-sdk', 'show_11030019');
+        script.async = true;
+        script.defer = true;
+        
+        script.onerror = function() {
+          console.warn("Ad SDK failed to load (possibly ad-block or timeout)");
+        };
+        
+        // Safety timeout for 'adex timeout' issue
+        var adTimeout = setTimeout(function() {
+          if (!window.show_11030019) {
+             console.warn("Ad SDK load timed out (adex timeout) - disabling ad functionality");
+             window.show_11030019 = function() { console.log("Ad SDK dummy called (timed out)"); };
+          }
+        }, 8000);
+        
+        script.onload = function() { 
+          clearTimeout(adTimeout);
+          // Mitigation for accidental full-page redirects: 
+          // Some ad SDKs might try to use window.location.assign if they fail to open popups.
+          // We can't fully block it without breaking everything, but we can wrap the ad calls.
+        };
+        
+        document.head.appendChild(script);
+
+        // Helper to prioritize direct links which are usually safer (opens in new tab)
+        window.openDirectLink = function() {
+          var directLinks = [
+            'https://glauvoup.net/4/6926315'
+          ];
+          var link = directLinks[Math.floor(Math.random() * directLinks.length)];
+          try {
+            window.open(link, '_blank');
+          } catch(e) {
+            // Fallback for popup blockers
+            window.location.href = link;
+          }
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

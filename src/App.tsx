@@ -25,7 +25,7 @@ import EarnScreen from "./components/game/EarnScreen";
 import TelegramProvider from "./providers/TelegramProvider";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
-import FirebaseSyncProvider, { useFirebaseSync } from "./components/FirebaseSyncProvider";
+import MongoSyncProvider, { useMongoSync } from "./components/MongoSyncProvider";
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -170,7 +170,7 @@ function AppContent() {
     isLoading
   } = useUserStore();
 
-  const { firebaseUser } = useFirebaseSync();
+  const { userId, error: syncError, setError: setSyncError } = useMongoSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
@@ -243,7 +243,8 @@ function AppContent() {
     };
   }, [navigate]);
 
-  // Background in-App Interstitial Ad for dynamic page transitions
+  // Background in-App Interstitial Ad - Disabled automatic trigger to prevent unwanted redirects
+  /*
   useEffect(() => {
     const showAd = (window as any).show_11030019;
     if (typeof showAd === "function") {
@@ -263,6 +264,7 @@ function AppContent() {
       }
     }
   }, []);
+  */
 
   // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
   useEffect(() => {
@@ -325,6 +327,40 @@ function AppContent() {
   return (
     <div className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative">
       <AnimatePresence>
+        {syncError && isApp && (
+          <motion.div 
+            initial={{ y: -100 }}
+            animate={{ y: 0 }}
+            className="fixed top-0 inset-x-0 z-[200] bg-zinc-900 border-b border-amber-500/50 p-4 text-white text-xs shadow-2xl"
+          >
+            <div className="flex items-start gap-4 max-w-sm mx-auto">
+               <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+                  <Cpu size={20} />
+               </div>
+               <div className="flex-1 space-y-1">
+                  <h4 className="font-black uppercase italic text-amber-500">Cloud Sync Alert</h4>
+                  <p className="text-[10px] text-white/60 font-bold leading-tight">{syncError}</p>
+                  <div className="flex gap-2 pt-2">
+                     <button 
+                       onClick={() => window.location.reload()}
+                       className="bg-amber-500 text-black px-3 py-2 rounded-lg font-black uppercase italic tracking-tighter text-[9px]"
+                     >
+                        Retry
+                     </button>
+                     <button 
+                       onClick={() => setSyncError(null)}
+                       className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg font-black uppercase tracking-tighter text-[9px] transition-colors"
+                     >
+                        Ignore
+                     </button>
+                  </div>
+               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showOnboarding && <OnboardingWizard onComplete={(data) => {
           finalizeOnboarding(data);
           setShowOnboarding(false);
@@ -354,8 +390,8 @@ function AppContent() {
                   </Link>
                   <Link to="/app/profile" className="relative w-8 h-8 rounded-lg overflow-hidden border border-amber-500/30">
                     <img src={user.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=agent"} alt="Avatar" className="w-full h-full object-cover" />
-                    {firebaseUser && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border border-black rounded-full shadow-[0_0_8px_#10b981] animate-pulse" />
+                    {userId && (
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-amber-500 border border-black rounded-full shadow-[0_0_8px_#f59e0b] animate-pulse" />
                     )}
                   </Link>
                 </div>
@@ -404,7 +440,7 @@ export default function App() {
 
   return (
     <TelegramProvider>
-      <FirebaseSyncProvider>
+      <MongoSyncProvider>
         <GameContext.Provider value={{ 
           user: store.user,
           resources: store.resources,
@@ -421,6 +457,7 @@ export default function App() {
           updateCrewBadge: store.updateCrewBadge,
           joinCrew: store.joinCrew,
           leaveCrew: store.leaveCrew,
+          claimDailyReward: store.claimDailyReward,
           riddleState: store.riddleState,
           updateRiddleProgression: store.updateRiddleProgression,
           upgradeBaseRoom: store.upgradeBaseRoom,
@@ -432,7 +469,7 @@ export default function App() {
             <AppContent />
           </BrowserRouter>
         </GameContext.Provider>
-      </FirebaseSyncProvider>
+      </MongoSyncProvider>
     </TelegramProvider>
   );
 }

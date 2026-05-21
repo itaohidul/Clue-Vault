@@ -144,7 +144,7 @@ export default function BaseScreen() {
 
                 <div className="flex items-center justify-between gap-4">
                    <div className="flex gap-3">
-                      <div className="text-[8px] font-black text-amber-500 uppercase">{coinsCost} Z</div>
+                      <div className="text-[8px] font-black text-amber-500 uppercase">{coinsCost} ZP</div>
                       <div className="text-[8px] font-black text-blue-500 uppercase">{matsCost} M</div>
                    </div>
                    <button 

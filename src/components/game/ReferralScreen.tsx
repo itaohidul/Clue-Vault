@@ -86,8 +86,8 @@ export default function ReferralScreen() {
 
   // Milestones
   const milestones = [
-    { count: 1, reward: "100 Coins Bonus", reached: (user.referCount || 0) >= 1 },
-    { count: 3, reward: "+1 Core Key Key", reached: (user.referCount || 0) >= 3 },
+    { count: 1, reward: "100 ZP Bonus", reached: (user.referCount || 0) >= 1 },
+    { count: 3, reward: "+1 Core key", reached: (user.referCount || 0) >= 3 },
     { count: 5, reward: "Rare Decryption Vault", reached: (user.referCount || 0) >= 5 },
     { count: 10, reward: "Premium Hint Pack", reached: (user.referCount || 0) >= 10 },
   ];
@@ -134,7 +134,7 @@ export default function ReferralScreen() {
         </div>
         <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1.5 rounded-2xl border border-amber-500/15">
           <Coins size={14} className="animate-spin" style={{ animationDuration: '6s' }} />
-          <span className="text-[10px] font-mono font-black">{resources.coins} Z</span>
+          <span className="text-[10px] font-mono font-black">{resources.coins} ZP</span>
         </div>
       </header>
 
@@ -206,7 +206,7 @@ export default function ReferralScreen() {
           <div className="bg-black/20 border border-white/5 rounded-2xl p-4 text-center">
             <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block mb-1">Claimed Bonus</span>
             <span className="text-2xl font-black italic text-emerald-500 font-mono">
-              {Math.round(user.claimedCommission || 0)} <span className="text-xs text-emerald-500/70">Z</span>
+              {Math.round(user.claimedCommission || 0)} <span className="text-xs text-emerald-500/70">ZP</span>
             </span>
           </div>
         </div>
@@ -218,7 +218,7 @@ export default function ReferralScreen() {
               <div className="min-w-0">
                 <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest block font-sans">Unclaimed Commission</span>
                 <span className="text-xl font-black font-mono text-white tracking-tight mt-0.5">
-                  {unclaimed.toFixed(4)} <span className="text-xs text-white/40">Coins (Z)</span>
+                  {unclaimed.toFixed(4)} <span className="text-xs text-white/40">ZP</span>
                 </span>
               </div>
             </div>
@@ -232,7 +232,7 @@ export default function ReferralScreen() {
                   : "bg-white/5 text-white/30 border border-white/5 cursor-not-allowed"
               )}
             >
-              Claim Coins
+              Claim ZP
             </button>
           </div>
         </div>

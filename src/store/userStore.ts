@@ -27,6 +27,7 @@ export interface GameState {
     referCount?: number;
     referralCommission?: number;
     claimedCommission?: number;
+    lastDailyClaim: number;
   };
   resources: {
     coins: number;
@@ -77,6 +78,7 @@ export interface GameState {
   updateCrewBadge: (badgeDiff: any) => void;
   joinCrew: (crewName: string) => void;
   leaveCrew: () => void;
+  claimDailyReward: () => boolean;
   updateRiddleProgression: () => { riddleId: string; part: number; isComplete: boolean };
 }
 
@@ -96,6 +98,7 @@ const getInitialState = () => {
       referCount: 0,
       referralCommission: 0,
       claimedCommission: 0,
+      lastDailyClaim: 0,
     },
     resources: {
       coins: 100,
@@ -178,6 +181,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: get().crew,
       base: get().base,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('light');
   },
@@ -244,6 +248,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: get().crew,
       base: get().base,
       unlockedTabs: nextTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -259,6 +264,7 @@ export const useUserStore = create<GameState>((set, get) => ({
         crew: get().crew,
         base: get().base,
         unlockedTabs: get().unlockedTabs,
+        riddleState: get().riddleState,
       }));
       return;
     }
@@ -283,6 +289,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: nextCrew,
       base: nextBase,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -325,6 +332,7 @@ export const useUserStore = create<GameState>((set, get) => ({
           crew: response.data.crew || currentLocal.crew,
           base: response.data.base || currentLocal.base,
           unlockedTabs: currentLocal.unlockedTabs,
+          riddleState: currentLocal.riddleState,
         };
 
         set(nextState);
@@ -363,6 +371,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: get().crew,
       base: get().base,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -381,6 +390,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: get().crew,
       base: get().base,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -439,6 +449,7 @@ export const useUserStore = create<GameState>((set, get) => ({
         crew: get().crew,
         base: nextBase,
         unlockedTabs: get().unlockedTabs,
+        riddleState: get().riddleState,
       }));
       get().triggerHaptic('success');
       return true;
@@ -456,6 +467,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: get().crew,
       base: nextBase,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -474,6 +486,7 @@ export const useUserStore = create<GameState>((set, get) => ({
         crew: nextCrew,
         base: get().base,
         unlockedTabs: get().unlockedTabs,
+        riddleState: get().riddleState,
       }));
       get().triggerHaptic('success');
     }
@@ -494,6 +507,7 @@ export const useUserStore = create<GameState>((set, get) => ({
       crew: newCrew,
       base: get().base,
       unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
   },
@@ -509,6 +523,64 @@ export const useUserStore = create<GameState>((set, get) => ({
       riddleState: get().riddleState,
     }));
     get().triggerHaptic('light');
+  },
+
+  claimDailyReward: () => {
+    const { user, resources } = get();
+    const now = Date.now();
+    const lastClaim = user.lastDailyClaim || 0;
+    
+    const lastDate = new Date(lastClaim).toDateString();
+    const nowDate = new Date(now).toDateString();
+    
+    if (lastClaim !== 0 && lastDate === nowDate) {
+      get().triggerHaptic('error');
+      return false;
+    }
+    
+    // Streak logic: check if last claim was yesterday
+    const oneDay = 24 * 60 * 60 * 1000;
+    const yesterday = new Date(now - oneDay).toDateString();
+    const wasYesterday = lastDate === yesterday;
+
+    let nextStreak = wasYesterday ? (user.streak || 0) + 1 : 1;
+    if (nextStreak > 30) nextStreak = 1;
+
+    // Define rewards
+    const coinsReward = 250 + (nextStreak * 50);
+    const matsReward = nextStreak % 5 === 0 ? 20 * (nextStreak / 5) : 0;
+    const keysReward = nextStreak % 7 === 0 ? 1 : 0;
+    const scoreReward = 50 + (nextStreak * 10);
+
+    const nextUser = {
+      ...user,
+      streak: nextStreak,
+      lastDailyClaim: now
+    };
+
+    const nextResources = {
+      ...resources,
+      coins: resources.coins + coinsReward,
+      baseMaterials: resources.baseMaterials + matsReward,
+      keys: resources.keys + keysReward,
+      activityScore: resources.activityScore + scoreReward
+    };
+
+    set({ user: nextUser, resources: nextResources });
+    
+    // Save state
+    const stateToSave = {
+      user: nextUser,
+      resources: nextResources,
+      crew: get().crew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
+    };
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify(stateToSave));
+    
+    get().triggerHaptic('success');
+    return true;
   },
 
   updateRiddleProgression: () => {

@@ -4,6 +4,7 @@ import { Zap, Shield, Trophy, Key, Star, ChevronRight, Bell, Share2, Flame, User
 import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import CountdownTimer from "../ui/CountdownTimer";
+import DailyRewards from "./DailyRewards";
 
 export default function HomeScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
@@ -35,6 +36,9 @@ export default function HomeScreen() {
            </button>
         </motion.div>
       )}
+
+      {/* Daily Rewards Calendar */}
+      <DailyRewards />
 
       {/* Top Bar: Energy & Fragments */}
       <div className="flex gap-3">
@@ -77,53 +81,6 @@ export default function HomeScreen() {
         </div>
       </header>
 
-      {/* Streak Milestone Banner - PROMINENT */}
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="relative overflow-hidden bg-gradient-to-br from-amber-500/20 to-black border border-amber-500/30 rounded-3xl p-5"
-      >
-        <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-4">
-             <div className="relative">
-                <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-black shadow-[0_0_20px_rgba(245,158,11,0.4)]">
-                   <Flame size={32} strokeWidth={2.5} className="animate-pulse" />
-                </div>
-                <div className="absolute -top-2 -right-2 bg-black border border-amber-500 text-amber-500 text-[10px] font-black px-2 py-0.5 rounded-full">
-                   {user.streak}D
-                </div>
-             </div>
-             <div>
-                <h3 className="text-lg font-black uppercase italic tracking-tighter leading-none">Streak Bonus</h3>
-                <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest mt-1">
-                   {7 - (user.streak % 7)} Days to next Milestone
-                </p>
-             </div>
-          </div>
-          <div className="text-right">
-             <div className="text-[8px] font-black uppercase text-amber-500/60 mb-1">Weekly Prize</div>
-             <div className="text-xs font-black italic">CLUE FRAGMENT X5</div>
-          </div>
-        </div>
-
-        {/* Milestone Progress Bar */}
-        <div className="mt-4 flex gap-1">
-           {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-             <div 
-               key={day} 
-               className={cn(
-                 "h-1.5 flex-1 rounded-full overflow-hidden",
-                 day <= (user.streak % 7 || (user.streak > 0 ? 7 : 0))
-                  ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" 
-                  : "bg-white/10"
-               )} 
-             />
-           ))}
-        </div>
-        
-        {/* Scanning Line Effect */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(245,158,11,0.05)_1px,transparent_1px)] bg-[size:100%_4px] pointer-events-none opacity-20" />
-      </motion.div>
 
       {/* CLUE REWARD ENGINE HUB LINK */}
       <Link to="/app/earn" onClick={handleTileClick}>

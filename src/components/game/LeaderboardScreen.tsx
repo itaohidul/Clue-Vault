@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Trophy, Shield, Users, Search, ChevronRight, Crown, Medal, Flame, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { getDb } from "../../lib/firebase";
+import axios from "axios";
 
 import { useGame } from "../../App";
 
@@ -16,17 +15,8 @@ export default function LeaderboardScreen() {
   const fetchLeaderboard = async (cat: string) => {
     setLoading(true);
     try {
-      const q = query(
-        collection(getDb(), "users"),
-        orderBy(cat === "referrals" ? "user.referCount" : "resources.activityScore", "desc"),
-        limit(20)
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setLeaderboardData(data);
+      const response = await axios.get(`/api/leaderboard?category=${cat}`);
+      setLeaderboardData(response.data);
     } catch (e) {
       console.error("Failed to fetch leaderboard", e);
     } finally {

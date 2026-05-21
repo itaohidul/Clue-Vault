@@ -319,7 +319,7 @@ export default function VaultScreen() {
                           "text-[9px] font-bold px-2 py-0.5 rounded-full inline-block",
                           canAfford ? "bg-black/40 text-white" : "bg-red-500/20 text-red-500"
                         )}>
-                          COST: {vault.cost} {vault.cost === 1 ? 'KEY' : 'KEYS'}
+                          COST: {vault.cost} {vault.cost === 1 ? 'key' : 'key'}
                         </div>
                       </div>
                       <button 
@@ -357,7 +357,7 @@ export default function VaultScreen() {
          <div className="grid grid-cols-4 gap-4">
             {[
               { icon: Zap, label: "ZP", val: "750 - 150k" },
-              { icon: Star, label: "XP", val: "50 - 6.4k" },
+              { icon: Star, label: "EXP", val: "50 - 6.4k" },
               { icon: Package, label: "MAT", val: "12 - 4.8k" },
               { icon: Eye, label: "INTEL", val: "LEGEND" }
             ].map((d, i) => (
@@ -411,7 +411,7 @@ export default function VaultScreen() {
               <div className="grid grid-cols-3 gap-2 mb-8">
                  <div className="bg-white/5 rounded-2xl p-3 flex flex-col items-center">
                     <span className="text-xs font-black text-amber-500">+{showReward.coins}</span>
-                    <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">Coins</span>
+                    <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">ZP</span>
                  </div>
                  <div className="bg-white/5 rounded-2xl p-3 flex flex-col items-center">
                     <span className="text-xs font-black text-blue-500">+{showReward.mats}</span>
@@ -448,10 +448,12 @@ export default function VaultScreen() {
               <div className="w-20 h-20 bg-red-500/20 border border-red-500/40 rounded-[2.2rem] flex items-center justify-center text-red-500 mx-auto mb-6">
                  <AlertTriangle size={40} className="animate-pulse" />
               </div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-red-500 mb-2">Insufficient Keys</h2>
-              <p className="text-white/80 text-[11px] uppercase font-bold leading-relaxed mb-6">
-                You need <span className="text-red-400">{showKeyShortage.required} Keys</span> to unlock this vault. You currently have <span className="text-amber-500">{showKeyShortage.current} Keys</span>.
-              </p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-red-500 mb-2">Insufficient key</h2>
+            <p className="text-white/80 text-[11px] uppercase font-bold leading-relaxed mb-6">
+              You need <span className="text-red-400">{showKeyShortage.required} key</span> to unlock this vault. You currently have <span className="text-amber-500">{showKeyShortage.current} key</span>.
+            </p>
+          </div>
               
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center mb-6">
                 <p className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wide">💡 CLUE CREDITS NOTATION</p>
@@ -461,15 +463,15 @@ export default function VaultScreen() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <button 
-                  onClick={() => {
-                    setShowKeyShortage(null);
-                    navigate("/app/social-tasks");
-                  }}
-                  className="w-full bg-amber-500 font-sans text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
-                >
-                  <Key size={14} /> Complete Tasks & Get Keys
-                </button>
+                  <button 
+                    onClick={() => {
+                      setShowKeyShortage(null);
+                      navigate("/app/social-tasks");
+                    }}
+                    className="w-full bg-amber-500 font-sans text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
+                  >
+                    <Key size={14} /> Complete Tasks & Get key
+                  </button>
                 <button 
                   onClick={() => setShowKeyShortage(null)}
                   className="w-full bg-white/10 text-white/60 py-3 rounded-xl font-black uppercase text-[10px] hover:text-white transition-all"

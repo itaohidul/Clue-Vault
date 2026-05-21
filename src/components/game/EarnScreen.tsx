@@ -199,6 +199,35 @@ export default function EarnScreen() {
     setCalibrationActive(true);
   };
 
+  const handleWatchAd = (type: 'interstitial' | 'direct') => {
+    triggerHaptic("medium");
+    if (type === 'direct') {
+      if ((window as any).openDirectLink) {
+        (window as any).openDirectLink();
+        updateResources({ activityScore: 100 }); // High reward for priority link
+      }
+    } else {
+      const showAd = (window as any).show_11030019;
+      if (typeof showAd === "function") {
+        try {
+          showAd({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 1,
+              capping: 1,
+              interval: 0,
+              timeout: 1,
+              everyPage: true
+            }
+          });
+          updateResources({ activityScore: 50 }); // Reward for standard ad
+        } catch (e) {
+          console.warn("Ad call failed:", e);
+        }
+      }
+    }
+  };
+
   const clickCalibrationCircle = (id: number) => {
     if (id === calibrationTarget) {
       triggerHaptic("success");
@@ -236,6 +265,49 @@ export default function EarnScreen() {
         <div className="glass px-3 py-1.5 rounded-2xl flex flex-col items-end border-amber-500/20 bg-amber-500/5">
            <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none">Your Balance</span>
            <span className="text-md font-black italic">{resources.clue ? resources.clue.toFixed(1) : "0.0"} $CLUE</span>
+        </div>
+      </div>
+
+      {/* EXCLUSIVE EARNING OPERATIONS */}
+      <div className="glass border border-amber-500/10 bg-amber-500/[0.01] p-5 rounded-3xl space-y-4">
+        <div>
+          <h3 className="text-lg font-black uppercase italic tracking-tighter flex items-center gap-1.5">
+            <Zap size={18} className="text-amber-500" /> BOOSTER OPERATIONS
+          </h3>
+          <p className="text-[10px] text-white/50 uppercase font-bold">Fast-track activity score through external network signal verification</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3">
+           <button 
+             onClick={() => handleWatchAd('direct')}
+             className="group relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-600 p-4 rounded-2xl transition-transform active:scale-95"
+           >
+              <div className="flex justify-between items-center relative z-10">
+                 <div className="text-left">
+                    <span className="text-[8px] font-black uppercase text-black/60 tracking-widest bg-white/30 px-1.5 py-0.5 rounded">Priority Earn</span>
+                    <h4 className="text-lg font-black uppercase italic text-white leading-none mt-1">DIRECT SIGNAL</h4>
+                    <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">Instant +100 Activity Score</p>
+                 </div>
+                 <ArrowUpRight className="text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" size={24} />
+              </div>
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none" />
+           </button>
+
+           <button 
+             onClick={() => handleWatchAd('interstitial')}
+             className="bg-white/5 hover:bg-white/10 border border-white/5 p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95"
+           >
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
+                    <Activity size={24} />
+                 </div>
+                 <div className="text-left">
+                    <h4 className="text-sm font-black uppercase italic leading-none">OVERLAY SIGNAL</h4>
+                    <span className="text-[10px] font-bold text-white/30 tracking-tight">+50 Activity Score</span>
+                 </div>
+              </div>
+              <ChevronRight className="text-white/20" size={20} />
+           </button>
         </div>
       </div>
 

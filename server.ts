@@ -56,22 +56,27 @@ async function connectDb() {
   
   try {
     const maskedUri = uri.replace(/\/\/(.*):(.*)@/, "//***:***@");
-    console.log(`[DB] Attempting connection to MongoDB Atlas with Mongoose...`);
-    console.log(`[DB] Using Connection String: ${maskedUri}`);
+    console.log(`[DB] Attempting connection...`);
 
+    // Add a race or a pre-check for IP to help debugging if it times out
     await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
     });
     
-    console.log("[DB] Successfully connected to MongoDB Atlas (Mongoose)");
+    console.log("[DB] Successfully connected to MongoDB Atlas");
   } catch (err: any) {
-    console.error("[DB] Mongoose connection error details:", {
+    let serverIp = "unknown";
+    try {
+      const ipRes = await axios.get("https://api.ipify.org?format=json", { timeout: 2000 });
+      serverIp = ipRes.data.ip;
+    } catch (e) {}
+
+    console.error("[DB] Mongoose connection error:", {
       message: err.message,
-      code: err.code,
-      name: err.name
+      ip: serverIp
     });
-    throw err;
+    throw new Error(`${err.message} (Server IP: ${serverIp})`);
   }
 }
 
@@ -95,12 +100,31 @@ app.get("/api/db-status", async (req, res) => {
   try {
     await connectDb();
     const isConnected = mongoose.connection.readyState === 1;
-    res.json({ 
-      connected: isConnected, 
-      database: mongoose.connection.db?.databaseName || "unknown" 
-    });
+    if (isConnected) {
+      res.json({ 
+        connected: true, 
+        database: mongoose.connection.db?.databaseName || "cluevault" 
+      });
+    } else {
+      res.json({ 
+        connected: false, 
+        error: "Mongoose state: " + mongoose.connection.readyState 
+      });
+    }
   } catch (err: any) {
-    res.status(500).json({ connected: false, error: "Database offline" });
+    console.error("[API] db-status error:", err.message);
+    const isTimeout = err.message.includes("timeout") || err.message.includes("ETIMEDOUT");
+    const isAuth = err.message.includes("Authentication failed") || err.message.includes("auth failed");
+    
+    let userFriendlyError = "Database offline";
+    if (isTimeout) userFriendlyError = "Connection Timeout. Is IP 0.0.0.0/0 whitelisted in Atlas?";
+    if (isAuth) userFriendlyError = "Authentication Failed. Check username/password in MONGODB_URI.";
+    
+    res.status(500).json({ 
+      connected: false, 
+      error: userFriendlyError,
+      details: err.message
+    });
   }
 });
 

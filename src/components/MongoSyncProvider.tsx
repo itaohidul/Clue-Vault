@@ -59,12 +59,13 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
         setError(null);
       } else {
         setDbConnected(false);
-        setError(`DB Connection Error: ${res.data.error || "Unknown Error"}`);
+        setError(`Database Error: ${res.data.error || "Connection test failed"}`);
       }
     } catch (err: any) {
       setDbConnected(false);
       const serverMsg = err.response?.data?.error || err.message;
-      setError(`Backend Sync Error: ${serverMsg}`);
+      const serverDetails = err.response?.data?.details || "";
+      setError(`Cloud Sync Alert: ${serverMsg} ${serverDetails ? "(" + serverDetails + ")" : ""}`);
     }
   };
 
@@ -126,14 +127,16 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
           setError(null);
         } else {
           setDbConnected(false);
-          setError(`DB Connection Error: ${res.data.error || "Unknown Error"}`);
+          setError(`Cloud Error: ${res.data.error || "Connection failed balance check"}`);
+          if (res.data.details) console.log("DB Details:", res.data.details);
           setIsSyncing(false);
-          return; // Still no luck
+          return; 
         }
       } catch (err: any) {
         setDbConnected(false);
         const serverMsg = err.response?.data?.error || err.message;
-        setError(`Backend Sync Error: ${serverMsg}`);
+        const serverDetails = err.response?.data?.details || "";
+        setError(`Backend Error: ${serverMsg} ${serverDetails ? "(" + serverDetails + ")" : ""}`);
         setIsSyncing(false);
         return;
       }

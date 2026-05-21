@@ -46,25 +46,38 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model("User", UserSchema);
 
 async function connectDb() {
-  if (mongoose.connection.readyState >= 1) return;
-  
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.error("CRITICAL: MONGODB_URI is missing from environment variables.");
-    throw new Error("MONGODB_URI is not defined");
+    console.error("CRITICAL: MONGODB_URI is missing.");
+    throw new Error("MONGODB_URI not found in environment");
+  }
+
+  if (mongoose.connection.readyState === 1) return;
+  
+  if (mongoose.connection.readyState === 2) {
+    console.log("[DB] Connection already in progress, waiting...");
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (mongoose.connection.readyState !== 2) {
+          clearInterval(check);
+          resolve(null);
+        }
+      }, 500);
+    });
+    if (mongoose.connection.readyState === 1) return;
   }
   
   try {
     const maskedUri = uri.replace(/\/\/(.*):(.*)@/, "//***:***@");
-    console.log(`[DB] Attempting connection...`);
+    console.log(`[DB] Connecting to MongoDB Atlas...`);
 
-    // Add a race or a pre-check for IP to help debugging if it times out
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 15000,
+      dbName: "cluevault",
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
     });
     
-    console.log("[DB] Successfully connected to MongoDB Atlas");
+    console.log("[DB] Successfully connected to cluevault");
   } catch (err: any) {
     let serverIp = "unknown";
     try {
@@ -72,17 +85,23 @@ async function connectDb() {
       serverIp = ipRes.data.ip;
     } catch (e) {}
 
-    console.error("[DB] Mongoose connection error:", {
-      message: err.message,
-      ip: serverIp
-    });
-    throw new Error(`${err.message} (Server IP: ${serverIp})`);
+    console.error("[DB] Connection failed:", err.message);
+    throw new Error(`${err.message} (IP: ${serverIp})`);
   }
 }
 
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/db-verify", (req, res) => {
+  const uri = process.env.MONGODB_URI;
+  res.json({
+    hasUri: !!uri,
+    readyState: mongoose.connection.readyState,
+    dbName: mongoose.connection.db?.databaseName || "none"
+  });
 });
 
 app.post("/api/auth/telegram", (req, res) => {
@@ -106,19 +125,19 @@ app.get("/api/db-status", async (req, res) => {
         database: mongoose.connection.db?.databaseName || "cluevault" 
       });
     } else {
-      res.json({ 
+      res.status(503).json({ 
         connected: false, 
-        error: "Mongoose state: " + mongoose.connection.readyState 
+        error: "Connection Pending (State: " + mongoose.connection.readyState + ")" 
       });
     }
   } catch (err: any) {
     console.error("[API] db-status error:", err.message);
     const isTimeout = err.message.includes("timeout") || err.message.includes("ETIMEDOUT");
-    const isAuth = err.message.includes("Authentication failed") || err.message.includes("auth failed");
+    const isAuth = err.message.includes("Authentication failed") || err.message.includes("auth failed") || err.message.includes("bad auth");
     
-    let userFriendlyError = "Database offline";
-    if (isTimeout) userFriendlyError = "Connection Timeout. Is IP 0.0.0.0/0 whitelisted in Atlas?";
-    if (isAuth) userFriendlyError = "Authentication Failed. Check username/password in MONGODB_URI.";
+    let userFriendlyError = "Database Offline";
+    if (isTimeout) userFriendlyError = "Connection Timed Out. Check Atlas Network Access (0.0.0.0/0).";
+    if (isAuth) userFriendlyError = "Authentication Failed. Verify password in MONGODB_URI.";
     
     res.status(500).json({ 
       connected: false, 

@@ -137,7 +137,7 @@ export default function ProfileScreen() {
           </div>
         </div>
         <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase mt-4">
-          Your codename, coins, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted MongoDB Atlas vault.
+          Your codename, ZP, key, upgrades, and terminal progress are automatically synchronized to your secure encrypted MongoDB Atlas vault.
         </p>
 
         <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">

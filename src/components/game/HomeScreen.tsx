@@ -168,7 +168,7 @@ export default function HomeScreen() {
             <div className="text-sm font-black italic">
               Ready In <CountdownTimer hours={2} minutes={15} showSeconds={false} className="font-mono" />
             </div>
-            <div className="text-[10px] font-bold text-amber-500 uppercase">Requires 1 Key</div>
+            <div className="text-[10px] font-bold text-amber-500 uppercase">Requires 1 key</div>
           </div>
         </Link>
       </div>
@@ -206,7 +206,7 @@ export default function HomeScreen() {
              <div className="h-full bg-amber-500 w-[65%] rounded-full glow-gold" />
           </div>
           <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-white/20">
-             <span>650 / 1000 XP</span>
+             <span>650 / 1000 EXP</span>
              <span>5 Rooms Unlocked</span>
           </div>
         </motion.div>

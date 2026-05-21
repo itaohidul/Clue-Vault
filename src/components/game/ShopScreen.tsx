@@ -199,7 +199,7 @@ export default function ShopScreen() {
       costTON: 0.6, 
       costUSDT: 2.99,
       reward: { keys: 10, coins: 5000 }, 
-      items: "10 Keys, 5k Coins", 
+      items: "10 key, 5k ZP", 
       highlight: true, 
       icon: Gift 
     },
@@ -210,7 +210,7 @@ export default function ShopScreen() {
       costTON: 2.0, 
       costUSDT: 9.99,
       reward: { keys: 50, coins: 25000 }, 
-      items: "50 Keys, 25k Coins, Rare Skin", 
+      items: "50 key, 25k ZP, Rare Skin", 
       highlight: false, 
       icon: Shield 
     },
@@ -229,15 +229,15 @@ export default function ShopScreen() {
 
   // Coin packs swap ZP coins for items
   const coinPacks = [
-    { name: "Key Cluster", cost: 1000, reward: { keys: 5 }, items: "5 Decryption Keys", icon: Key },
+    { name: "Key Cluster", cost: 1000, reward: { keys: 5 }, items: "5 Decryption key", icon: Key },
     { name: "Material Crate", cost: 500, reward: { baseMaterials: 20 }, items: "20 Construction Mats", icon: Package },
   ];
 
   // 2:1 swap converters for optimized user-level resource distribution
   const convertPacks = [
-    { id: "convert_zp", name: "ZP swap Elements", costDesc: "200 ZP Coins", rewardDesc: "100 Elements", ratio: "2:1 Swap Ratio", cost: { coins: 200 }, reward: { baseMaterials: 100 }, icon: Cpu },
-    { id: "convert_mats", name: "Elements swap Clue", costDesc: "20 Elements", rewardDesc: "10 Clue Tokens", ratio: "2:1 Swap Ratio", cost: { baseMaterials: 20 }, reward: { clue: 10 }, icon: Sparkles },
-    { id: "convert_keys", name: "Keys swap Clue", costDesc: "2 Keys", rewardDesc: "1 Clue Token", ratio: "2:1 Swap Ratio", cost: { keys: 2 }, reward: { clue: 1 }, icon: Key },
+    { id: "convert_zp", name: "ZP swap Elements", costDesc: "200 ZP", rewardDesc: "100 Elements", ratio: "2:1 Swap Ratio", cost: { coins: 200 }, reward: { baseMaterials: 100 }, icon: Cpu },
+    { id: "convert_mats", name: "Elements swap Clue", costDesc: "20 Elements", rewardDesc: "10 Clue", ratio: "2:1 Swap Ratio", cost: { baseMaterials: 20 }, reward: { clue: 10 }, icon: Sparkles },
+    { id: "convert_keys", name: "key swap Clue", costDesc: "2 key", rewardDesc: "1 Clue", ratio: "2:1 Swap Ratio", cost: { keys: 2 }, reward: { clue: 1 }, icon: Key },
   ];
 
   // Connect to a TON Wallet (using real TON Connect)
@@ -372,7 +372,7 @@ export default function ShopScreen() {
     }
   };
 
-  // Process standard swaps (coinpacks using ZP Coins)
+  // Process standard swaps (coinpacks using ZP)
   const handleStandardSwap = (pack: any) => {
     if (!user.onboarded) {
       triggerHaptic("error");
@@ -433,7 +433,7 @@ export default function ShopScreen() {
         
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ZP COINS</span>
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ZP</span>
             <span className="text-xs font-black text-amber-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
               <Coins size={11} className="text-amber-400" />
               {resources.coins.toLocaleString()}
@@ -447,14 +447,14 @@ export default function ShopScreen() {
             </span>
           </div>
           <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">KEYS</span>
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">key</span>
             <span className="text-xs font-black text-cyan-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
               <Key size={11} className="text-cyan-400" />
               {resources.keys}
             </span>
           </div>
           <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">CLUE TOK</span>
+            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">Clue</span>
             <span className="text-xs font-black text-violet-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
               <Sparkles size={11} className="text-violet-400" />
               {resources.clue}
@@ -598,8 +598,8 @@ export default function ShopScreen() {
             <div className="flex justify-between items-start mb-6">
                <div>
                   <div className="bg-amber-500 text-black px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest mb-1.5 inline-block">Flash Deal</div>
-                  <h2 className="text-xl font-black uppercase italic tracking-tighter leading-none mb-1">Master Key Expansion</h2>
-                  <p className="text-[10px] text-white/40 uppercase font-bold">20 Premium High-Decryption Keys</p>
+                  <h2 className="text-xl font-black uppercase italic tracking-tighter leading-none mb-1">Master key Expansion</h2>
+                  <p className="text-[10px] text-white/40 uppercase font-bold">20 Premium High-Decryption key</p>
                </div>
                <div className="w-11 h-11 bg-amber-500 rounded-xl flex items-center justify-center text-black glow-gold">
                   <Key size={20} strokeWidth={2.5} />
@@ -887,7 +887,7 @@ export default function ShopScreen() {
                          const isCoins = k === 'coins';
                          return (
                            <span key={k} className="bg-black/50 px-2.5 py-1.5 rounded-xl border border-white/5 text-[10px] font-mono font-black text-white/80 uppercase">
-                             +{isCoins ? (v as number).toLocaleString() : v} {isCoins ? "ZP Coins" : k === "baseMaterials" ? "Elements" : k}
+                             +{isCoins ? (v as number).toLocaleString() : v} {isCoins ? "ZP" : k === "baseMaterials" ? "Elements" : k === "keys" ? "key" : k}
                            </span>
                          );
                        })}
@@ -969,7 +969,7 @@ export default function ShopScreen() {
                 <span className="text-base font-black text-white font-mono flex items-center justify-center gap-1.5 uppercase">
                   <span>{swapSuccessItem.items}</span>
                 </span>
-                <p className="text-[8px] text-white/35 font-semibold mt-1">Deducted {swapSuccessItem.cost} ZP Coins from telemetry system</p>
+                <p className="text-[8px] text-white/35 font-semibold mt-1">Deducted {swapSuccessItem.cost} ZP from telemetry system</p>
               </div>
 
               <button

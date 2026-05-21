@@ -54,18 +54,19 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
   const checkMongoConn = async () => {
     try {
       const res = await axios.get("/api/db-status");
-      setDbConnected(res.data.connected);
       if (res.data.connected) {
+        setDbConnected(true);
         setError(null);
       } else {
         setDbConnected(false);
-        setError(`Database Error: ${res.data.error || "Connection test failed"}`);
+        setError(res.data.error || "Database is currently unavailable.");
       }
     } catch (err: any) {
       setDbConnected(false);
       const serverMsg = err.response?.data?.error || err.message;
       const serverDetails = err.response?.data?.details || "";
-      setError(`Cloud Sync Alert: ${serverMsg} ${serverDetails ? "(" + serverDetails + ")" : ""}`);
+      setError(`Cloud Sync Alert: ${serverMsg} ${serverDetails ? "\nDetails: " + serverDetails : ""}`);
+      console.error("DB Status check failed", err);
     }
   };
 

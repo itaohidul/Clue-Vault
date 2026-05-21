@@ -122,7 +122,7 @@ export default function LeaderboardScreen() {
                      </h4>
                      <div className="flex items-center gap-2">
                        <span className="text-[8px] font-black text-white/30 truncate">
-                         {category === "referrals" ? `${item.user?.referCount || 0} REFS` : `${(item.resources?.activityScore || 0).toLocaleString()} POINTS`}
+                         {category === "referrals" ? `${item.user?.referCount || 0} REFS` : `${(item.ZP || item.resources?.activityScore || 0).toLocaleString()} ZP`}
                        </span>
                        <div className="w-1 h-1 rounded-full bg-white/10" />
                        <span className="text-[8px] font-bold text-white/20 uppercase truncate">
@@ -132,7 +132,7 @@ export default function LeaderboardScreen() {
                   </div>
                   <div className="text-right">
                      <div className="text-[10px] font-bold uppercase text-white/20">
-                        {category === "referrals" ? "REFS" : "SCORE"}
+                        {category === "referrals" ? "REFS" : "ZP"}
                      </div>
                   </div>
                </motion.div>

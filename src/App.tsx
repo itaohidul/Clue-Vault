@@ -174,6 +174,7 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
+  const [dismissedSyncError, setDismissedSyncError] = useState(false);
 
   // Sync state with Telegram WebApp Backend on load
   useEffect(() => {
@@ -327,31 +328,34 @@ function AppContent() {
   return (
     <div className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative">
       <AnimatePresence>
-        {syncError && isApp && (
+        {syncError && isApp && !dismissedSyncError && (
           <motion.div 
             initial={{ y: -100 }}
             animate={{ y: 0 }}
-            className="fixed top-0 inset-x-0 z-[200] bg-zinc-900 border-b border-amber-500/50 p-4 text-white text-xs shadow-2xl"
+            className="fixed top-0 inset-x-0 z-[200] bg-zinc-950/95 border-b border-amber-500/30 p-4 text-white text-xs shadow-2xl backdrop-blur-md"
           >
             <div className="flex items-start gap-4 max-w-sm mx-auto">
                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
-                  <Cpu size={20} />
+                  <Cpu size={20} className="animate-pulse" />
                </div>
                <div className="flex-1 space-y-1">
-                  <h4 className="font-black uppercase italic text-amber-500">Cloud Sync Alert</h4>
-                  <p className="text-[10px] text-white/60 font-bold leading-tight">{syncError}</p>
+                  <h4 className="font-black uppercase italic text-amber-500">Offline Backup Active</h4>
+                  <p className="text-[10px] text-white/70 font-bold leading-tight">
+                    Could not sync with the cloud cluster. All progress is fully secure and automatically saved to your device cache!
+                  </p>
+                  <p className="text-[8px] text-amber-500/40 uppercase tracking-tight">Signal: {syncError}</p>
                   <div className="flex gap-2 pt-2">
                      <button 
                        onClick={() => window.location.reload()}
-                       className="bg-amber-500 text-black px-3 py-2 rounded-lg font-black uppercase italic tracking-tighter text-[9px]"
+                       className="bg-amber-500 text-black px-3 py-1.5 rounded-lg font-black uppercase italic tracking-tighter text-[9px] active:scale-95 transition-all"
                      >
-                        Retry
+                        Retry Connection
                      </button>
                      <button 
-                       onClick={() => setSyncError(null)}
-                       className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg font-black uppercase tracking-tighter text-[9px] transition-colors"
+                       onClick={() => setDismissedSyncError(true)}
+                       className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-black uppercase tracking-tighter text-[9px] active:scale-95 transition-all"
                      >
-                        Ignore
+                        Play Offline
                      </button>
                   </div>
                </div>

@@ -59,19 +59,20 @@ async function connectDb() {
   }
 
   // If already connected or connecting, don't try again
-  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
-    if (mongoose.connection.readyState === 1) return;
+  const state = mongoose.connection.readyState as number;
+  if (state === 1 || state === 2) {
+    if (state === 1) return;
     
     console.log("[DB] Connection in progress, waiting...");
     await new Promise((resolve) => {
       const check = setInterval(() => {
-        if (mongoose.connection.readyState !== 2) {
+        if ((mongoose.connection.readyState as number) !== 2) {
           clearInterval(check);
           resolve(null);
         }
       }, 200);
     });
-    if (mongoose.connection.readyState === 1) return;
+    if ((mongoose.connection.readyState as number) === 1) return;
   }
   
   try {
@@ -79,6 +80,7 @@ async function connectDb() {
     console.log(`[DB] Connecting to MongoDB Atlas...`);
 
     await mongoose.connect(uri, {
+      dbName: "Cluevault",
       serverSelectionTimeoutMS: 5000, // Faster failure for better UX
       socketTimeoutMS: 30000,
     });
@@ -274,9 +276,21 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  // Standalone server start: only listen when not running as a Vercel Serverless Function
+  const isVercel = !!process.env.VERCEL;
+  if (!isVercel) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } else {
+    console.log("[Server] Server running in Vercel serverless mode");
+  }
 }
 
-startServer().catch(console.error);
+// Start server locally / in container preview
+const isVercel = !!process.env.VERCEL;
+if (!isVercel) {
+  startServer().catch(console.error);
+}
+
+export default app;

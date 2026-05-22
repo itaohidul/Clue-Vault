@@ -2,6 +2,10 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { useUserStore } from "../store/userStore";
 import axios from "axios";
 
+// Helper for Base API URL (useful for production/vercel deployments)
+const API_BASE = import.meta.env.VITE_API_URL || "";
+const api = axios.create({ baseURL: API_BASE });
+
 interface MongoSyncContextType {
   userId: string | null;
   isSyncing: boolean;
@@ -50,19 +54,19 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     localStorage.setItem("cluevault_mongo_id", id);
   }, []);
 
-  // Check MongoDB Connection on startup with retries for "Pending" state
   const checkMongoConn = async (retryCount = 0) => {
     try {
-      const res = await axios.get("/api/db-status");
+      setDbConnected(null); // Reset to loading
+      const res = await api.get("/api/db-status", { timeout: 8000 });
       if (res.data.connected) {
         setDbConnected(true);
         setError(null);
       } else {
-        const errorMsg = res.data.error || "Database is currently unavailable.";
+        const errorMsg = res.data.error || "Database Offline";
         
-        // If pending (readyState 2), retry after a short delay
+        // If pending, retry
         if (errorMsg.includes("Pending") && retryCount < 5) {
-          console.log(`Connection pending, retrying in 2s (Attempt ${retryCount + 1})...`);
+          console.log(`Connection pending... retry ${retryCount}`);
           setTimeout(() => checkMongoConn(retryCount + 1), 2000);
           return;
         }
@@ -77,7 +81,11 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
       const serverIp = err.response?.data?.ip || "";
       
       let fullError = `${serverMsg}`;
-      if (serverDetails && !serverMsg.includes(serverDetails)) {
+      if (serverMsg.includes("Whitelist") || serverMsg.includes("0.0.0.0/0")) {
+         fullError = "Fix Required: Whitelist 0.0.0.0/0 in MongoDB Atlas Network Access.";
+      }
+
+      if (serverDetails && !fullError.includes(serverDetails)) {
         fullError += `\n(${serverDetails})`;
       }
       if (serverIp && !fullError.includes(serverIp)) {
@@ -85,7 +93,7 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
       }
       
       setError(fullError);
-      console.error("DB Status check failed", err);
+      console.error("Connectivity check failed", err);
     }
   };
 
@@ -152,7 +160,7 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     if (dbConnected === false || dbConnected === null) {
       setIsSyncing(true);
       try {
-        const res = await axios.get("/api/db-status");
+        const res = await api.get("/api/db-status");
         if (res.data.connected) {
           setDbConnected(true);
           setError(null);
@@ -178,7 +186,7 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     try {
       const currentState = useUserStore.getState();
       const payload = mapStateToMongo(currentState);
-      await axios.post(`/api/user/${userId}`, payload, { timeout: 15000 });
+      await api.post(`/api/user/${userId}`, payload, { timeout: 15000 });
       console.log("Manual sync success");
       setError(null);
     } catch (err: any) {
@@ -198,7 +206,7 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     const fetchUser = async () => {
       setIsSyncing(true);
       try {
-        const response = await axios.get(`/api/user/${userId}`);
+        const response = await api.get(`/api/user/${userId}`);
         const cloudData = response.data;
         
         if (cloudData) {
@@ -254,7 +262,7 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
     if (!userId || !dbConnected) return;
     try {
       const payload = mapStateToMongo(state);
-      await axios.post(`/api/user/${userId}`, payload);
+      await api.post(`/api/user/${userId}`, payload);
     } catch (err) {
       console.error("Auto-sync push failed", err);
     }

@@ -79,7 +79,6 @@ async function connectDb() {
     console.log(`[DB] Connecting to MongoDB Atlas...`);
 
     await mongoose.connect(uri, {
-      dbName: "Cluevault",
       serverSelectionTimeoutMS: 5000, // Faster failure for better UX
       socketTimeoutMS: 30000,
     });

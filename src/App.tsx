@@ -170,7 +170,7 @@ function AppContent() {
     isLoading
   } = useUserStore();
 
-  const { userId, error: syncError, setError: setSyncError } = useSupabaseSync();
+  const { userId, error: syncError, setError: setSyncError, syncLocalToCloud } = useSupabaseSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
@@ -244,8 +244,7 @@ function AppContent() {
     };
   }, [navigate]);
 
-  // Background in-App Interstitial Ad - Disabled automatic trigger to prevent unwanted redirects
-  /*
+  // Priority in-App Interstitial Ad - run on every route transition to maximize ad views / yield
   useEffect(() => {
     const showAd = (window as any).show_11030019;
     if (typeof showAd === "function") {
@@ -253,19 +252,18 @@ function AppContent() {
         showAd({
           type: 'inApp',
           inAppSettings: {
-            frequency: 2,
-            capping: 0.1,
-            interval: 30,
-            timeout: 5,
-            everyPage: false
+            frequency: 1,      // Deliver ad aggressively
+            capping: 0,        // No capping limit
+            interval: 0,       // No waiting interval
+            timeout: 0,        // Instantly display
+            everyPage: true    // Deliver on every screen transition
           }
         });
       } catch (e) {
-        console.warn("In-App Interstitial failed to show:", e);
+        console.warn("Priority integration Interstitial ad fetch failed:", e);
       }
     }
-  }, []);
-  */
+  }, [location.pathname]); // Triggered on every screen transition
 
   // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
   useEffect(() => {
@@ -329,9 +327,15 @@ function AppContent() {
     <div className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative">
 
       <AnimatePresence>
-        {showOnboarding && <OnboardingWizard onComplete={(data) => {
+        {showOnboarding && <OnboardingWizard onComplete={async (data) => {
           finalizeOnboarding(data);
           setShowOnboarding(false);
+          // Instantly sync the user state to Supabase so that they aren't reverted to Observation Mode
+          try {
+            await syncLocalToCloud();
+          } catch (err) {
+            console.warn("Immediate state synchronization failed:", err);
+          }
         }} />}
       </AnimatePresence>
 

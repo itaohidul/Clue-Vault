@@ -104,17 +104,17 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         ...(cloudData.user || {}),
         name: cloudData.name || cloudData.user?.name || "Agent",
         avatar: cloudData.avatar || cloudData.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=agent`,
-        level: cloudData.Level ?? cloudData.user?.level ?? 1,
-        exp: cloudData.EXP ?? cloudData.user?.exp ?? 0,
+        level: cloudData.level ?? cloudData.Level ?? cloudData.user?.level ?? 1,
+        exp: cloudData.exp ?? cloudData.EXP ?? cloudData.user?.exp ?? 0,
         referCount: cloudData.referCount ?? cloudData.user?.referCount ?? 0,
         referralCode: cloudData.referralCode || cloudData.user?.referralCode,
-        onboarded: cloudData.user?.onboarded ?? false,
+        onboarded: cloudData.onboarded ?? cloudData.user?.onboarded ?? false,
       },
       resources: {
         ...(cloudData.resources || {}),
-        coins: cloudData.ZP ?? cloudData.resources?.coins ?? 1000,
-        keys: cloudData.key ?? cloudData.resources?.keys ?? 5,
-        clue: cloudData.Clue ?? cloudData.resources?.clue ?? 0,
+        coins: cloudData.coins ?? cloudData.ZP ?? cloudData.resources?.coins ?? 1000,
+        keys: cloudData.keys ?? cloudData.key ?? cloudData.resources?.keys ?? 5,
+        clue: cloudData.clue ?? cloudData.Clue ?? cloudData.resources?.clue ?? 0,
       },
       crew: cloudData.crew || null,
       base: cloudData.base || { level: 1, energy: 100 },
@@ -245,7 +245,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       
       syncTimeoutRef.current = setTimeout(() => {
         pushUpdateInternal(state);
-      }, 5000);
+      }, 1000);
     });
 
     return () => {

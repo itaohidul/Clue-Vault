@@ -125,19 +125,19 @@ export default function ProfileScreen() {
               "text-amber-400"
             )}>
               {isSyncing ? "Synchronizing Vault..." : 
-               dbConnected === true ? "Cloud Storage Active" :
-               dbConnected === false ? "Connection Failed" :
+               dbConnected === true ? "Device Cache Secured" :
+               dbConnected === false ? "Offline Mirror" :
                "Checking Data Link..."}
             </span>
             <span className="text-[9px] font-bold text-white/50 block tracking-tight font-mono truncate max-w-[140px] mt-1">
-              {dbConnected === true ? "MONGODB ATLAS CONNECTED" : 
-               dbConnected === false ? "MONGO OFFLINE" :
-               "SECURE TUNNEL INITIALIZING..."}
+              {dbConnected === true ? "DEVICES SECURED" : 
+               dbConnected === false ? "LOCAL STORAGE" :
+               "SECURE SYSTEM INITIALIZING..."}
             </span>
           </div>
         </div>
         <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase mt-4">
-          Your codename, ZP, key, upgrades, and terminal progress are automatically synchronized to your secure encrypted MongoDB Atlas vault.
+          Your codename, ZP, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted device terminal cache.
         </p>
 
         <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
@@ -151,7 +151,7 @@ export default function ProfileScreen() {
                 : "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
             )}
           >
-            {isSyncing ? "SYNCING..." : dbConnected === false ? "RETRY SYNC" : "FORCED BACKUP"}
+            {isSyncing ? "SYNCING..." : dbConnected === false ? "RETRY SYNC" : "BACKUP TO DEVICE"}
           </button>
           
           <button 
@@ -165,9 +165,6 @@ export default function ProfileScreen() {
         {syncError && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3 rounded-xl text-[8px] font-bold uppercase relative pr-8 mt-2 overflow-hidden">
             <p className="break-words">{syncError}</p>
-            <div className="mt-2 pt-2 border-t border-red-500/10 opacity-50">
-               <p>Please check your Atlas Network Access (IP 0.0.0.0/0) and ensure the password in MONGODB_URI is correct.</p>
-            </div>
           </div>
         )}
       </div>

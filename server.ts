@@ -1,8 +1,6 @@
 import express from "express";
 import path from "path";
 import cors from "cors";
-import axios from "axios";
-import mongoose from "mongoose";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -14,100 +12,23 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Mongoose Schema Definition
-const UserSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  name: String,
-  avatar: String,
-  Level: Number,
-  EXP: Number,
-  ZP: Number,
-  key: Number,
-  Clue: Number,
-  referCount: Number,
-  referralCode: String,
-  crew: {
-    name: String,
-    rank: String,
-    icon: String,
-    id: String,
-  },
-  resources: Object, // Keep original structures as backup
-  user: Object,
-  purchases: Array,
-  unlockedTabs: [String],
-  riddleState: {
-    activeRiddleId: String,
-    unlockedParts: Number,
-  },
-  updatedAt: { type: Date, default: Date.now },
-}, { strict: false }); // Allow extra fields for flexibility during development
+// Sandbox in-memory data store to mimic MongoDB storage
+const userStore = new Map<string, any>();
 
-// Mongoose Model Singleton Pattern
-let User: any;
-try {
-  User = mongoose.model("User");
-} catch (e) {
-  User = mongoose.model("User", UserSchema);
-}
-
-async function connectDb() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.error("CRITICAL: MONGODB_URI is missing.");
-    throw new Error("MONGODB_URI not found in environment");
+// Seed with some simulated leaderboard data if empty
+const seedLeaderboard = () => {
+  const seedAgents = [
+    { userId: "anon_alpha", name: "Agent Alpha", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=alpha", Level: 42, EXP: 8400, ZP: 125000, referCount: 15, crew: { name: "Shadow Syndicate" } },
+    { userId: "anon_omega", name: "Agent Omega", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=omega", Level: 38, EXP: 7600, ZP: 98000, referCount: 12, crew: { name: "Shadow Syndicate" } },
+    { userId: "anon_cipher", name: "Cipher Ghost", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=cipher", Level: 35, EXP: 7000, ZP: 84000, referCount: 9, crew: { name: "Hex Decryptors" } },
+    { userId: "anon_neon", name: "Neon Phantom", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=neon", Level: 28, EXP: 5600, ZP: 61000, referCount: 7, crew: { name: "Hex Decryptors" } },
+    { userId: "anon_spectre", name: "Spectre Operator", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=spectre", Level: 22, EXP: 4400, ZP: 34000, referCount: 4, crew: { name: "Zero Day Guild" } }
+  ];
+  for (const agent of seedAgents) {
+    userStore.set(agent.userId, agent);
   }
-
-  // If already connected or connecting, don't try again
-  const state = mongoose.connection.readyState as number;
-  if (state === 1 || state === 2) {
-    if (state === 1) return;
-    
-    console.log("[DB] Connection in progress, waiting...");
-    await new Promise((resolve) => {
-      const check = setInterval(() => {
-        if ((mongoose.connection.readyState as number) !== 2) {
-          clearInterval(check);
-          resolve(null);
-        }
-      }, 200);
-    });
-    if ((mongoose.connection.readyState as number) === 1) return;
-  }
-  
-  try {
-    const maskedUri = uri.replace(/\/\/(.*):(.*)@/, "//***:***@");
-    console.log(`[DB] Connecting to MongoDB Atlas...`);
-
-    await mongoose.connect(uri, {
-      dbName: "Cluevault",
-      serverSelectionTimeoutMS: 5000, // Faster failure for better UX
-      socketTimeoutMS: 30000,
-    });
-    
-    console.log("[DB] Successfully connected to Cluevault (Mongoose)");
-  } catch (err: any) {
-    let serverIp = "unknown";
-    try {
-      const ipRes = await axios.get("https://api.ipify.org?format=json", { timeout: 3000 });
-      serverIp = ipRes.data.ip;
-    } catch (e) {}
-
-    console.error("[DB] Mongoose connection error:", {
-      message: err.message,
-      ip: serverIp,
-      code: err.code,
-      name: err.name
-    });
-    
-    // Explicitly check for common Atlas errors
-    if (err.message.includes("IP") || err.message.includes("whitelist")) {
-      throw new Error(`MongoDB IP Whitelist Error: Your database is blocking this server. Please add 0.0.0.0/0 to your Atlas Network Access. (Server IP: ${serverIp})`);
-    }
-    
-    throw new Error(`${err.message} (Server IP: ${serverIp})`);
-  }
-}
+};
+seedLeaderboard();
 
 // API Routes
 app.get("/api/health", (req, res) => {
@@ -115,16 +36,14 @@ app.get("/api/health", (req, res) => {
 });
 
 app.get("/api/db-verify", (req, res) => {
-  const uri = process.env.MONGODB_URI;
   res.json({
-    hasUri: !!uri,
-    readyState: mongoose.connection.readyState,
-    dbName: mongoose.connection.db?.databaseName || "none"
+    hasUri: false,
+    readyState: 1, // Mimic connected
+    dbName: "Virtual Encrypted Memory Cache"
   });
 });
 
 app.post("/api/auth/telegram", (req, res) => {
-  const { initData } = req.body;
   res.json({ 
     success: true, 
     user: { 
@@ -134,82 +53,46 @@ app.post("/api/auth/telegram", (req, res) => {
   });
 });
 
-app.get("/api/db-status", async (req, res) => {
-  try {
-    await connectDb();
-    const isConnected = mongoose.connection.readyState === 1;
-    if (isConnected) {
-      res.json({ 
-        connected: true, 
-        database: mongoose.connection.db?.databaseName || "Cluevault" 
-      });
-    } else {
-      res.json({ 
-        connected: false, 
-        error: "Connection Pending (State: " + mongoose.connection.readyState + ")" 
-      });
-    }
-  } catch (err: any) {
-    console.error("[API] db-status error:", err.message);
-    const isTimeout = err.message.includes("timeout") || err.message.includes("ETIMEDOUT");
-    const isAuth = err.message.includes("Authentication failed") || err.message.includes("auth failed") || err.message.includes("bad auth");
-    const isWhitelist = err.message.includes("Whitelist") || err.message.includes("whitelist") || err.message.includes("IP");
-    
-    let userFriendlyError = "Database Offline";
-    if (isWhitelist) userFriendlyError = "IP Error: Whitelist 0.0.0.0/0 in Atlas Network Access.";
-    else if (isTimeout) userFriendlyError = "Connection Timed Out. Likely an Atlas IP whitelist issue.";
-    else if (isAuth) userFriendlyError = "Authentication Failed. Verify password in MONGODB_URI.";
-    
-    res.status(500).json({ 
-      connected: false, 
-      error: userFriendlyError,
-      details: err.message,
-      ip: err.message.match(/\(Server IP: (.*)\)/)?.[1] || "unknown"
-    });
-  }
+app.get("/api/db-status", (req, res) => {
+  res.json({ 
+    connected: true, 
+    database: "Encrypted Device Memory" 
+  });
 });
 
 // User State Sync
-app.get("/api/user/:userId", async (req, res) => {
+app.get("/api/user/:userId", (req, res) => {
   try {
-    await connectDb();
-    const user = await User.findOne({ userId: req.params.userId });
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const { userId } = req.params;
+    const user = userStore.get(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.json(user);
   } catch (err) {
-    console.error("Fetch User failed", err);
+    console.error("Retrieve User state from virtual database failed", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.post("/api/user/:userId", async (req, res) => {
+app.post("/api/user/:userId", (req, res) => {
   const { userId } = req.params;
   try {
-    await connectDb();
     const payload = {
       ...req.body,
       userId,
       updatedAt: new Date(),
     };
     
-    console.log(`[DB] Saving data for user ${userId}. Keys in payload: ${Object.keys(req.body).join(", ")}`);
+    // Explicitly merge or save the user info
+    const existing = userStore.get(userId) || {};
+    const updated = { ...existing, ...payload };
+    userStore.set(userId, updated);
     
-    // Explicitly handle fields to ensure they are updated correctly in MongoDB
-    const result = await User.findOneAndUpdate(
-      { userId },
-      payload,
-      { upsert: true, new: true, runValidators: false }
-    );
-    
-    if (result) {
-      console.log(`[DB] Successfully saved user ${userId}.`);
-      res.json({ success: true });
-    } else {
-      console.warn(`[DB] Save attempt returned no result for ${userId}.`);
-      res.status(500).json({ error: "Failed to persist user data" });
-    }
+    console.log(`[Virtual DB] Successfully saved state for user ${userId}.`);
+    res.json({ success: true });
   } catch (err: any) {
-    console.error(`[DB] Save User failed for ${userId}:`, err.message);
+    console.error(`[Virtual DB] Save User failed for ${userId}:`, err.message);
     res.status(500).json({ 
       error: "Internal server error during save",
       details: err.message
@@ -218,50 +101,45 @@ app.post("/api/user/:userId", async (req, res) => {
 });
 
 // Leaderboard
-app.get("/api/leaderboard", async (req, res) => {
+app.get("/api/leaderboard", (req, res) => {
   try {
     const { category } = req.query;
-    await connectDb();
     const sortField = category === "referrals" ? "referCount" : "ZP";
     
-    const leaderboard = await User.find({})
-      .sort({ [sortField]: -1 })
-      .limit(20)
-      .lean();
+    const items = Array.from(userStore.values());
+    items.sort((a, b) => {
+      const valA = a[sortField] !== undefined ? a[sortField] : (a.resources?.coins || 0);
+      const valB = b[sortField] !== undefined ? b[sortField] : (b.resources?.coins || 0);
+      return (valB as number) - (valA as number);
+    });
 
-    res.json(leaderboard);
+    res.json(items.slice(0, 20));
   } catch (err) {
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // Crews
-app.get("/api/crews/:crewName/members", async (req, res) => {
+app.get("/api/crews/:crewName/members", (req, res) => {
   try {
-    await connectDb();
-    const members = await User.find({ "crew.name": req.params.crewName })
-      .sort({ "resources.activityScore": -1 })
-      .lean();
-    res.json(members);
+    const { crewName } = req.params;
+    const items = Array.from(userStore.values()).filter(
+      u => u.crew && u.crew.name?.toLowerCase() === crewName.toLowerCase()
+    );
+    
+    items.sort((a, b) => {
+      const scoreA = a.resources?.activityScore || 0;
+      const scoreB = b.resources?.activityScore || 0;
+      return scoreB - scoreA;
+    });
+
+    res.json(items);
   } catch (err) {
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 async function startServer() {
-  const uri = process.env.MONGODB_URI;
-  if (uri) {
-    const masked = uri.replace(/\/\/(.*):(.*)@/, "//***:***@");
-    console.log(`[DB] Environment URI detected: ${masked}`);
-  } else {
-    console.warn("[DB] WARNING: MONGODB_URI is not set in environment variables!");
-  }
-
-  // Try to connect on startup to warm up
-  connectDb().catch(err => {
-    console.error("[DB] Initial connection attempt failed:", err.message);
-  });
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

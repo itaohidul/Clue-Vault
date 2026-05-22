@@ -91,12 +91,66 @@ export default function SocialTasksScreen() {
 
   const [now, setNow] = useState(Date.now());
 
+  // On mount safety sweep to release any expired task cooldowns immediately
+  useEffect(() => {
+    const currentTime = Date.now();
+    let stateChanged = false;
+    const updatedTasks = batchTasks.map(t => {
+      if (t.completed) {
+        const cooldownUntil = taskCooldowns[t.id] || 0;
+        if (currentTime >= cooldownUntil) {
+          stateChanged = true;
+          return { ...t, completed: false };
+        }
+      }
+      return t;
+    });
+
+    if (stateChanged) {
+      saveBatchState(updatedTasks);
+      const nextCooldowns = { ...taskCooldowns };
+      updatedTasks.forEach(t => {
+        if (!t.completed) {
+          delete nextCooldowns[t.id];
+        }
+      });
+      saveTaskCooldowns(nextCooldowns);
+    }
+  }, []);
+
+  // Set up repeating interval to update 'now' and dynamically release completed tasks when cooldown expires
   useEffect(() => {
     const timer = setInterval(() => {
-      setNow(Date.now());
+      const currentTime = Date.now();
+      setNow(currentTime);
+
+      let stateChanged = false;
+      const updatedTasks = batchTasks.map(t => {
+        if (t.completed) {
+          const cooldownUntil = taskCooldowns[t.id] || 0;
+          if (cooldownUntil > 0 && currentTime >= cooldownUntil) {
+            stateChanged = true;
+            return { ...t, completed: false };
+          }
+        }
+        return t;
+      });
+
+      if (stateChanged) {
+        saveBatchState(updatedTasks);
+        
+        // Also clear out the cooled down task ids from taskCooldowns to keep it clean
+        const nextCooldowns = { ...taskCooldowns };
+        updatedTasks.forEach(t => {
+          if (!t.completed) {
+            delete nextCooldowns[t.id];
+          }
+        });
+        saveTaskCooldowns(nextCooldowns);
+      }
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [batchTasks, taskCooldowns]);
 
   const saveTaskCooldowns = (cooldowns: Record<string, number>) => {
     setTaskCooldowns(cooldowns);
@@ -535,9 +589,33 @@ export default function SocialTasksScreen() {
                 key={task.id}
                 className={cn(
                   "relative block w-full glass rounded-3xl p-5 border-white/5 overflow-hidden transition-all duration-300",
-                  task.completed ? "opacity-35" : "hover:border-white/10"
+                  task.completed && !isCooldownActive ? "opacity-35" : "hover:border-white/10"
                 )}
               >
+                {/* Blurring Canvas Overlay for active cooldowns */}
+                {isCooldownActive && (
+                  <div className="absolute inset-0 bg-neutral-950/75 backdrop-blur-[8px] z-10 flex items-center justify-between p-5 border border-rose-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 animate-pulse">
+                        <Timer size={18} />
+                      </div>
+                      <div className="text-left">
+                        <span className="text-[9px] font-black uppercase text-rose-500 block tracking-widest leading-none">TELEMETRY LOCKOUT</span>
+                        <span className="text-[10px] text-white/50 uppercase font-bold block mt-1 tracking-tight">STABILIZING FREQUENCY FEED</span>
+                      </div>
+                    </div>
+                    <div className="bg-rose-500/10 border border-rose-500/20 px-3.5 py-1.5 rounded-xl text-center shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                      <span className="text-xs font-mono font-black text-rose-500 tracking-wider">
+                        {(() => {
+                          const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+                          const secs = (remainingSecs % 60).toString().padStart(2, '0');
+                          return `${mins}:${secs}`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 text-left">
                     <div className={cn(

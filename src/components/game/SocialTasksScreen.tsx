@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
 
 interface TaskState {
   id: string;
@@ -281,22 +282,17 @@ export default function SocialTasksScreen() {
 
   // Helper to rate-limit auto popup ad delivery safely to maintain safe medium mode
   const throttleAdTrigger = (): boolean => {
-    const now = Date.now();
-    const lastAdTime = localStorage.getItem("cluevault_last_ad_trigger");
-    if (lastAdTime) {
-      const elapsed = now - parseInt(lastAdTime, 10);
-      if (elapsed < 45000) { // 45 seconds cooldown between invasive ad loads
-        console.log("Ad popup suppressed of high-frequency trigger limits. Last shown was " + Math.round(elapsed / 1000) + "s ago.");
-        return false;
-      }
-    }
-    localStorage.setItem("cluevault_last_ad_trigger", now.toString());
-    return true;
+    const result = checkAdEligibility();
+    console.log("Ad Eligibility check:", result.reason);
+    return result.allowed;
   };
 
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
+
+    // Track user rapid-tapping frequency to dynamically adjust ad intervals!
+    recordUserTap();
 
     const randomClue = Math.floor(Math.random() * 20) + 1;
 

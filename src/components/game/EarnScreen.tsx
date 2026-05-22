@@ -23,6 +23,7 @@ import {
   Award
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
 
 export default function EarnScreen() {
   const { user, resources, updateResources, crew, triggerHaptic } = useGame();
@@ -202,21 +203,12 @@ export default function EarnScreen() {
   const handleWatchAd = (type: 'interstitial' | 'direct') => {
     triggerHaptic("medium");
     
-    // Check global ad cooldown to ensure we don't spam the user's Monetag script
-    const now = Date.now();
-    const lastAdTime = localStorage.getItem("cluevault_last_ad_trigger");
-    let adAllowed = true;
-    if (lastAdTime) {
-      const elapsed = now - parseInt(lastAdTime, 10);
-      if (elapsed < 45000) {
-        adAllowed = false;
-        console.log("Earn ad delivery throttled to safe medium mode.");
-      }
-    }
+    // Record action tap to track engagement dynamics
+    recordUserTap();
 
-    if (adAllowed) {
-      localStorage.setItem("cluevault_last_ad_trigger", now.toString());
-    }
+    const adCheck = checkAdEligibility();
+    const adAllowed = adCheck.allowed;
+    console.log("Earn Screen eligibility check:", adCheck.reason);
     
     if (type === 'direct') {
       // ONLY trigger the direct link popup when selected

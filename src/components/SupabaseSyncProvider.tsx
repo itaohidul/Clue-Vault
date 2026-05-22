@@ -213,13 +213,29 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         const cloudData = response.data;
         
         if (cloudData) {
-          isSyncingFromCloudRef.current = true;
           const nextState = mapSupabaseToState(cloudData);
+          const localState = useUserStore.getState();
 
-          useUserStore.setState(nextState);
-          localStorage.setItem("cluevault_game_state_zustand", JSON.stringify(nextState));
+          // Elevate security check: if local storage holds completed progress or higher assets than cloud state,
+          // preserve local data and write it back up rather than reverting back to start/level 1.
+          const localIsNewer = 
+            (localState?.user?.onboarded && !nextState?.user?.onboarded) ||
+            ((localState?.user?.level || 1) > (nextState?.user?.level || 1)) ||
+            ((localState?.resources?.coins || 0) > (nextState?.resources?.coins || 0)) ||
+            ((localState?.resources?.clue || 0) > (nextState?.resources?.clue || 0));
 
-          isSyncingFromCloudRef.current = false;
+          if (localIsNewer) {
+            console.log("Local progress is more advanced than cloud data. Preserving local progress and pushing updates...");
+            // Upload current advanced client data back to align cloud database
+            const payload = mapStateToSupabasePayload(localState);
+            await api.post(`/api/user/${userId}`, payload);
+          } else {
+            console.log("Cloud data is up-to-date or newer. Restoring state from cloud node.");
+            isSyncingFromCloudRef.current = true;
+            useUserStore.setState(nextState);
+            localStorage.setItem("cluevault_game_state_zustand", JSON.stringify(nextState));
+            isSyncingFromCloudRef.current = false;
+          }
         }
         setIsCloudLoaded(true);
       } catch (err: any) {

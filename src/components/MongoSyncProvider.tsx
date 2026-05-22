@@ -76,9 +76,13 @@ export default function MongoSyncProvider({ children }: { children: ReactNode })
       const serverDetails = err.response?.data?.details || "";
       const serverIp = err.response?.data?.ip || "";
       
-      let fullError = `Cloud Sync Alert: ${serverMsg}`;
-      if (serverDetails) fullError += `\nDetails: ${serverDetails}`;
-      if (serverIp) fullError += `\nServer IP: ${serverIp}`;
+      let fullError = `${serverMsg}`;
+      if (serverDetails && !serverMsg.includes(serverDetails)) {
+        fullError += `\n(${serverDetails})`;
+      }
+      if (serverIp && !fullError.includes(serverIp)) {
+        fullError += `\nServer IP: ${serverIp}`;
+      }
       
       setError(fullError);
       console.error("DB Status check failed", err);

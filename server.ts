@@ -80,8 +80,8 @@ async function connectDb() {
 
     await mongoose.connect(uri, {
       dbName: "Cluevault",
-      serverSelectionTimeoutMS: 30000, 
-      socketTimeoutMS: 60000,
+      serverSelectionTimeoutMS: 5000, // Faster failure for better UX
+      socketTimeoutMS: 30000,
     });
     
     console.log("[DB] Successfully connected to Cluevault (Mongoose)");
@@ -95,8 +95,15 @@ async function connectDb() {
     console.error("[DB] Mongoose connection error:", {
       message: err.message,
       ip: serverIp,
-      code: err.code
+      code: err.code,
+      name: err.name
     });
+    
+    // Explicitly check for common Atlas errors
+    if (err.message.includes("IP") || err.message.includes("whitelist")) {
+      throw new Error(`MongoDB IP Whitelist Error: Your database is blocking this server. Please add 0.0.0.0/0 to your Atlas Network Access. (Server IP: ${serverIp})`);
+    }
+    
     throw new Error(`${err.message} (Server IP: ${serverIp})`);
   }
 }
@@ -145,10 +152,12 @@ app.get("/api/db-status", async (req, res) => {
     console.error("[API] db-status error:", err.message);
     const isTimeout = err.message.includes("timeout") || err.message.includes("ETIMEDOUT");
     const isAuth = err.message.includes("Authentication failed") || err.message.includes("auth failed") || err.message.includes("bad auth");
+    const isWhitelist = err.message.includes("Whitelist") || err.message.includes("whitelist") || err.message.includes("IP");
     
     let userFriendlyError = "Database Offline";
-    if (isTimeout) userFriendlyError = "Connection Timed Out. Check Atlas Network Access (0.0.0.0/0).";
-    if (isAuth) userFriendlyError = "Authentication Failed. Verify password in MONGODB_URI.";
+    if (isWhitelist) userFriendlyError = "IP Error: Whitelist 0.0.0.0/0 in Atlas Network Access.";
+    else if (isTimeout) userFriendlyError = "Connection Timed Out. Likely an Atlas IP whitelist issue.";
+    else if (isAuth) userFriendlyError = "Authentication Failed. Verify password in MONGODB_URI.";
     
     res.status(500).json({ 
       connected: false, 
@@ -239,6 +248,14 @@ app.get("/api/crews/:crewName/members", async (req, res) => {
 });
 
 async function startServer() {
+  const uri = process.env.MONGODB_URI;
+  if (uri) {
+    const masked = uri.replace(/\/\/(.*):(.*)@/, "//***:***@");
+    console.log(`[DB] Environment URI detected: ${masked}`);
+  } else {
+    console.warn("[DB] WARNING: MONGODB_URI is not set in environment variables!");
+  }
+
   // Try to connect on startup to warm up
   connectDb().catch(err => {
     console.error("[DB] Initial connection attempt failed:", err.message);

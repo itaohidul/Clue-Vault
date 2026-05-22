@@ -28,6 +28,7 @@ export default function HomeScreen() {
            <button 
              onClick={() => {
                localStorage.removeItem("cluevault_onboarding_skipped");
+               localStorage.removeItem("cluevault_onboarding_hidden");
                window.location.reload();
              }}
              className="w-full bg-amber-500 text-black py-4 rounded-2xl font-black uppercase italic text-[10px] glow-gold"

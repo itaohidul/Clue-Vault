@@ -108,6 +108,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         exp: cloudData.EXP ?? cloudData.user?.exp ?? 0,
         referCount: cloudData.referCount ?? cloudData.user?.referCount ?? 0,
         referralCode: cloudData.referralCode || cloudData.user?.referralCode,
+        onboarded: cloudData.user?.onboarded ?? false,
       },
       resources: {
         ...(cloudData.resources || {}),

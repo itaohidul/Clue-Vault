@@ -33,6 +33,7 @@ export default function ProfileScreen() {
              <button 
                onClick={() => {
                  localStorage.removeItem("cluevault_onboarding_skipped");
+                 localStorage.removeItem("cluevault_onboarding_hidden");
                  window.location.reload();
                }}
                className="bg-amber-500 text-black px-6 py-2 rounded-xl font-black uppercase italic text-[10px] glow-gold"

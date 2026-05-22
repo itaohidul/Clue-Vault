@@ -102,6 +102,7 @@ app.get("/api/user/:userId", async (req, res) => {
         referCount: 0,
         referralCode,
         referredBy: referredByCode || null,
+        onboarded: false,
       },
       resources: {
         coins: initialBalance,

@@ -244,27 +244,6 @@ function AppContent() {
     };
   }, [navigate]);
 
-  // Priority in-App Interstitial Ad - run on every route transition to maximize ad views / yield
-  useEffect(() => {
-    const showAd = (window as any).show_11030019;
-    if (typeof showAd === "function") {
-      try {
-        showAd({
-          type: 'inApp',
-          inAppSettings: {
-            frequency: 1,      // Deliver ad aggressively
-            capping: 0,        // No capping limit
-            interval: 0,       // No waiting interval
-            timeout: 0,        // Instantly display
-            everyPage: true    // Deliver on every screen transition
-          }
-        });
-      } catch (e) {
-        console.warn("Priority integration Interstitial ad fetch failed:", e);
-      }
-    }
-  }, [location.pathname]); // Triggered on every screen transition
-
   // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
   useEffect(() => {
     const tg = window.Telegram?.WebApp;

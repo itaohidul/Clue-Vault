@@ -273,46 +273,17 @@ export default function SocialTasksScreen() {
     // Start task-specific cooling timer!
     startTaskCooldown(task.id);
 
-    // Call ad SDK and trigger frequent pop-ups
-    const showAd = (window as any).show_11030019;
-    if (typeof showAd === "function") {
-      try {
-        showAd({
-          type: 'inApp',
-          inAppSettings: {
-            frequency: 1,
-            capping: 1,
-            interval: 0,
-            timeout: 1,
-            everyPage: true
-          }
-        });
-      } catch (e) {
-        console.warn("Telemetry SDK error during close active ad:", e);
-      }
-    }
-
     if (isTap) {
-      if (typeof (window as any).openDirectLink === "function") {
-        try {
-          (window as any).openDirectLink();
-        } catch (e) {}
-      }
-      // open link in a new window/tab as requested when tapping on ads
+      // ONLY open target link when they purposefully click/tap
       window.open(task.link || "https://omg10.com/4/11030019", "_blank");
-    } else {
-      // Back button click also triggers frequent popups
-      if (typeof (window as any).openDirectLink === "function") {
-        try {
-          (window as any).openDirectLink();
-        } catch (e) {}
-      }
     }
   };
 
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
+
+    const randomClue = Math.floor(Math.random() * 20) + 1;
 
     // Reject if task specific cooldown is active
     const remaining = getRemainingCooldown(task.id);
@@ -326,38 +297,66 @@ export default function SocialTasksScreen() {
 
     // Handle ads format with immersive custom activeAd frame
     if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
-      // Prioritize interstitial ad
-      const showAd = (window as any).show_11030019;
-      if (typeof showAd === "function") {
-        try {
-          showAd({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 1,
-              capping: 1,
-              interval: 0,
-              timeout: 1,
-              everyPage: true
-            }
-          });
-        } catch (e) {
-          console.warn("Telemetry SDK error during batch task action:", e);
+      if (task.type === 'ad_pop') {
+        // Trigger direct link format
+        if (typeof (window as any).openDirectLink === "function") {
+          try {
+            (window as any).openDirectLink();
+          } catch (e) {}
+        } else {
+          window.open(task.link || "https://omg10.com/4/11030019", "_blank");
         }
+        // Instantly complete ad_pop tasks to avoid blocking the user
+        completeMission({
+          coins: task.rewardCoins,
+          baseMaterials: task.rewardMats,
+          clue: randomClue,
+          xp: true
+        });
+        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+        saveBatchState(nextTasks);
+        setSuccessAnimation({ active: true, clueAwarded: randomClue });
+        triggerHaptic("success");
+        startTaskCooldown(task.id);
+        setLoadingTaskId(null);
+      } else if (task.type === 'ad_interstitial') {
+        // Trigger clean Interstitial format
+        const showAd = (window as any).show_11030019;
+        if (typeof showAd === "function") {
+          try {
+            showAd({
+              type: 'inApp',
+              inAppSettings: {
+                frequency: 1,
+                capping: 3,
+                interval: 20,
+                timeout: 1,
+                everyPage: false
+              }
+            });
+          } catch (e) {
+            console.warn("Telemetry SDK error during batch task action:", e);
+          }
+        }
+        completeMission({
+          coins: task.rewardCoins,
+          baseMaterials: task.rewardMats,
+          clue: randomClue,
+          xp: true
+        });
+        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+        saveBatchState(nextTasks);
+        setSuccessAnimation({ active: true, clueAwarded: randomClue });
+        triggerHaptic("success");
+        startTaskCooldown(task.id);
+        setLoadingTaskId(null);
+      } else {
+        // ad_gamma: Open safe interactive activeAd frame nicely
+        setActiveAd(task);
+        setLoadingTaskId(null);
       }
-
-      // Popups should be frequent: open direct link popup automatically
-      if (typeof (window as any).openDirectLink === "function") {
-        try {
-          (window as any).openDirectLink();
-        } catch (e) {}
-      }
-
-      setActiveAd(task);
-      setLoadingTaskId(null);
       return;
     }
-
-    const randomClue = Math.floor(Math.random() * 20) + 1;
 
     // Handle Link matching
       if (task.link) {

@@ -202,38 +202,37 @@ export default function EarnScreen() {
   const handleWatchAd = (type: 'interstitial' | 'direct') => {
     triggerHaptic("medium");
     
-    // Prioritize Interstitial SDK invocation on both signals
-    const showAd = (window as any).show_11030019;
-    if (typeof showAd === "function") {
-      try {
-        showAd({
-          type: 'inApp',
-          inAppSettings: {
-            frequency: 1,
-            capping: 1,
-            interval: 0,
-            timeout: 1,
-            everyPage: true
-          }
-        });
-      } catch (e) {
-        console.warn("Telemetry SDK watch ad trigger failed:", e);
-      }
-    }
-
-    // Direct link popups are highly frequent
-    if (typeof (window as any).openDirectLink === "function") {
-      try {
-        (window as any).openDirectLink();
-      } catch (e) {
-        console.warn("Direct popup failed in EarnScreen:", e);
-      }
-    }
-
-    // Award corresponding score rewards
     if (type === 'direct') {
+      // ONLY trigger the direct link popup when selected
+      if (typeof (window as any).openDirectLink === "function") {
+        try {
+          (window as any).openDirectLink();
+        } catch (e) {
+          console.warn("Direct popup failed in EarnScreen:", e);
+        }
+      } else {
+        window.open("https://omg10.com/4/11030019", "_blank");
+      }
       updateResources({ activityScore: 100 }); // High reward for priority link
     } else {
+      // ONLY trigger the standard Interstitial Ad SDK invocation when selected
+      const showAd = (window as any).show_11030019;
+      if (typeof showAd === "function") {
+        try {
+          showAd({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 2,         // Delivery interval is smooth (every 2 calls)
+              capping: 1,           // Balanced daily cap to maintain high CPC without blocking
+              interval: 30,         // Cooldown of 30 seconds
+              timeout: 1,
+              everyPage: false      // Prevent automatic spam
+            }
+          });
+        } catch (e) {
+          console.warn("Telemetry SDK watch ad trigger failed:", e);
+        }
+      }
       updateResources({ activityScore: 50 }); // Reward for standard telemetry
     }
   };

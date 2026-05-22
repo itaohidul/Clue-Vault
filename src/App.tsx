@@ -25,7 +25,7 @@ import EarnScreen from "./components/game/EarnScreen";
 import TelegramProvider from "./providers/TelegramProvider";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
-import MongoSyncProvider, { useMongoSync } from "./components/MongoSyncProvider";
+import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -170,7 +170,7 @@ function AppContent() {
     isLoading
   } = useUserStore();
 
-  const { userId, error: syncError, setError: setSyncError } = useMongoSync();
+  const { userId, error: syncError, setError: setSyncError } = useSupabaseSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
@@ -378,6 +378,7 @@ function AppContent() {
                 <Route path="events" element={<EventHubScreen />} />
                 <Route path="social-tasks" element={<SocialTasksScreen />} />
                 <Route path="earn" element={<EarnScreen />} />
+                <Route path="vaults" element={<Navigate to="/app/vault" replace />} />
                 <Route path="*" element={<Navigate to="/app/home" />} />
               </Routes>
               <AppNavbar />
@@ -408,7 +409,7 @@ export default function App() {
 
   return (
     <TelegramProvider>
-      <MongoSyncProvider>
+      <SupabaseSyncProvider>
         <GameContext.Provider value={{ 
           user: store.user,
           resources: store.resources,
@@ -437,7 +438,7 @@ export default function App() {
             <AppContent />
           </BrowserRouter>
         </GameContext.Provider>
-      </MongoSyncProvider>
+      </SupabaseSyncProvider>
     </TelegramProvider>
   );
 }

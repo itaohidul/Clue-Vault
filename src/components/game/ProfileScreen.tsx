@@ -2,7 +2,7 @@ import { useGame } from "../../App";
 import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Cloud, CloudOff } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
-import { useMongoSync } from "../MongoSyncProvider";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
 
 export default function ProfileScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
@@ -15,7 +15,7 @@ export default function ProfileScreen() {
     triggerHaptic("light");
   };
 
-  const { userId, isSyncing, error: syncError, dbConnected, syncLocalToCloud } = useMongoSync();
+  const { userId, isSyncing, error: syncError, dbConnected, syncLocalToCloud } = useSupabaseSync();
 
   const achievements = [
     { name: "First Breach", icon: Zap, unlocked: true },
@@ -125,19 +125,19 @@ export default function ProfileScreen() {
               "text-amber-400"
             )}>
               {isSyncing ? "Synchronizing Vault..." : 
-               dbConnected === true ? "Device Cache Secured" :
-               dbConnected === false ? "Offline Mirror" :
+               dbConnected === true ? "Supabase Storage Active" :
+               dbConnected === false ? "Local Sandbox Mirror" :
                "Checking Data Link..."}
             </span>
             <span className="text-[9px] font-bold text-white/50 block tracking-tight font-mono truncate max-w-[140px] mt-1">
-              {dbConnected === true ? "DEVICES SECURED" : 
-               dbConnected === false ? "LOCAL STORAGE" :
+              {dbConnected === true ? "SUPABASE CONNECTED" : 
+               dbConnected === false ? "FALLBACK MEMORY" :
                "SECURE SYSTEM INITIALIZING..."}
             </span>
           </div>
         </div>
         <p className="text-[9px] text-white/40 leading-relaxed font-semibold uppercase mt-4">
-          Your codename, ZP, keys, upgrades, and terminal progress are automatically synchronized to your secure encrypted device terminal cache.
+          Your codename, ZP balance, secret keys, base upgrades, and task achievements are synchronized in real-time to your secure Vercel-hosted Supabase PostgreSQL cloud nodes.
         </p>
 
         <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
@@ -148,10 +148,10 @@ export default function ProfileScreen() {
               "flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all border shrink-0",
               dbConnected === true 
                 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20" 
-                : "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                : "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
             )}
           >
-            {isSyncing ? "SYNCING..." : dbConnected === false ? "RETRY SYNC" : "BACKUP TO DEVICE"}
+            {isSyncing ? "SYNCING..." : dbConnected === false ? "RETRY SYNC" : "SYNC TO CLOUD"}
           </button>
           
           <button 

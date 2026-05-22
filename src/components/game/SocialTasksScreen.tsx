@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../../App";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { 
   MessageSquare, 
   Bell, 
@@ -48,6 +49,16 @@ const INITIAL_BATCH: TaskState[] = [
 
 export default function SocialTasksScreen() {
   const { user, resources, updateResources, completeMission, triggerHaptic } = useGame();
+  const { 
+    tasks: supabaseTasks, 
+    completedTaskIds, 
+    claimSupabaseTask, 
+    transactions,
+    loadTransactions,
+    loadTasksAndCompletions
+  } = useSupabaseSync();
+
+  const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
 
   // Load or initialize persistent batch list (10 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
@@ -128,6 +139,43 @@ export default function SocialTasksScreen() {
   const saveCommunityState = (tasks: typeof communityTasks) => {
     setCommunityTasks(tasks);
     localStorage.setItem("cluevault_oneoff_tasks", JSON.stringify(tasks));
+  };
+
+  // Handle claiming in Supabase database
+  const handleClaimSupabaseTask = async (task: any) => {
+    if (completedTaskIds.includes(task.id) || !user.onboarded) return;
+
+    setClaimingTaskId(task.id);
+    triggerHaptic("medium");
+
+    if (task.link) {
+      window.open(task.link, "_blank");
+    }
+
+    setLinkCountdown(5);
+    const interval = setInterval(async () => {
+      setLinkCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          
+          claimSupabaseTask(task.id).then((verified) => {
+            setClaimingTaskId(null);
+            if (verified) {
+              setSuccessAnimation({ active: true, clueAwarded: Math.floor(Math.random() * 20) + 1 });
+              triggerHaptic("success");
+              // reload listings
+              loadTasksAndCompletions();
+              loadTransactions();
+            } else {
+              triggerHaptic("error");
+            }
+          });
+
+          return 5;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   // Handle Community Tasks
@@ -225,9 +273,40 @@ export default function SocialTasksScreen() {
     // Start task-specific cooling timer!
     startTaskCooldown(task.id);
 
+    // Call ad SDK and trigger frequent pop-ups
+    const showAd = (window as any).show_11030019;
+    if (typeof showAd === "function") {
+      try {
+        showAd({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 1,
+            capping: 1,
+            interval: 0,
+            timeout: 1,
+            everyPage: true
+          }
+        });
+      } catch (e) {
+        console.warn("Telemetry SDK error during close active ad:", e);
+      }
+    }
+
     if (isTap) {
+      if (typeof (window as any).openDirectLink === "function") {
+        try {
+          (window as any).openDirectLink();
+        } catch (e) {}
+      }
       // open link in a new window/tab as requested when tapping on ads
       window.open(task.link || "https://omg10.com/4/11030019", "_blank");
+    } else {
+      // Back button click also triggers frequent popups
+      if (typeof (window as any).openDirectLink === "function") {
+        try {
+          (window as any).openDirectLink();
+        } catch (e) {}
+      }
     }
   };
 
@@ -247,6 +326,32 @@ export default function SocialTasksScreen() {
 
     // Handle ads format with immersive custom activeAd frame
     if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
+      // Prioritize interstitial ad
+      const showAd = (window as any).show_11030019;
+      if (typeof showAd === "function") {
+        try {
+          showAd({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 1,
+              capping: 1,
+              interval: 0,
+              timeout: 1,
+              everyPage: true
+            }
+          });
+        } catch (e) {
+          console.warn("Telemetry SDK error during batch task action:", e);
+        }
+      }
+
+      // Popups should be frequent: open direct link popup automatically
+      if (typeof (window as any).openDirectLink === "function") {
+        try {
+          (window as any).openDirectLink();
+        } catch (e) {}
+      }
+
       setActiveAd(task);
       setLoadingTaskId(null);
       return;
@@ -585,6 +690,130 @@ export default function SocialTasksScreen() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Section 4: Live Supabase PostgreSQL Quest Cores */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.15em]">III. Supabase Cloud Database Quests</h3>
+          <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
+            {supabaseTasks.filter(t => completedTaskIds.includes(t.id)).length} / {supabaseTasks.length} DECRYPTED
+          </span>
+        </div>
+
+        <div className="bg-emerald-500/5 border border-dashed border-emerald-500/20 rounded-2xl p-4 text-center">
+          <p className="text-[9px] text-emerald-400 font-black uppercase tracking-widest leading-none mb-1">
+            ⚡ REAL-TIME SUPABASE POSTGRES CORES
+          </p>
+          <p className="text-[8px] text-white/40 uppercase font-bold">
+            All balance changes are saved in real-time to your secure public schema Users and Transactions tables on Vercel.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {supabaseTasks.map((task) => {
+            const isCompleted = completedTaskIds.includes(task.id);
+            const isClaiming = claimingTaskId === task.id;
+
+            return (
+              <div
+                key={task.id}
+                className={cn(
+                  "relative block w-full glass rounded-3xl p-5 border-white/5 overflow-hidden transition-all duration-300",
+                  isCompleted ? "opacity-35" : "hover:border-white/10"
+                )}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 text-left">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all",
+                      isCompleted 
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/35"
+                        : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                    )}>
+                      {isCompleted ? (
+                        <CheckCircle2 size={24} />
+                      ) : isClaiming ? (
+                        <RefreshCw className="animate-spin" size={20} />
+                      ) : (
+                        <Sparkles size={20} />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-tight text-white/95">
+                        {task.title}
+                      </h4>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[9px] font-black font-mono text-amber-400">
+                          +{Number(task.reward).toLocaleString()} ZP
+                        </span>
+                        <span className="text-[9px] font-black font-mono text-violet-400 block sm:inline">
+                          • +Welcome Bonus Decryption
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {isCompleted ? (
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1.5 rounded-xl block text-center min-w-[100px]">
+                        RESOLVED
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleClaimSupabaseTask(task)}
+                        disabled={isClaiming || claimingTaskId !== null || !user.onboarded}
+                        className={cn(
+                          "px-4 py-2.5 rounded-xl font-black uppercase italic tracking-tighter text-[9px] active:scale-[0.95] transition-all text-center min-w-[100px] bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                        )}
+                      >
+                        {isClaiming 
+                          ? `SYNCING (${linkCountdown}S)`
+                          : "DECRYPT KEY"
+                        }
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Section 5: Real-Time Transaction Ledger */}
+      <section className="space-y-3">
+         <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] px-1">IV. Secure Transaction Log Ledger</h3>
+         <div className="glass rounded-[2rem] border-white/5 p-5 bg-gradient-to-b from-neutral-950 to-black space-y-4 max-h-[250px] overflow-y-auto">
+           {transactions.length === 0 ? (
+             <div className="py-6 text-center">
+                <Database size={24} className="text-white/10 mx-auto mb-2" />
+                <p className="text-[9px] text-white/30 uppercase font-bold">No transactions found on Supabase. Set up missions to log records.</p>
+             </div>
+           ) : (
+             <div className="space-y-3.5">
+               {transactions.map((tx) => (
+                 <div key={tx.id} className="flex justify-between items-center text-left py-1 border-b border-white/[0.02]">
+                    <div>
+                      <span className="text-[10px] font-black text-white/90 block uppercase">
+                         {tx.type === "welcome_package" ? "WELCOME IDENTITY DEPOSIT" : 
+                          tx.type === "referral_bonus" ? "AGENT COMPATRIOT BONUS" : 
+                          "TACTICAL TASK CRITICAL PAYOUT"}
+                      </span>
+                      <span className="text-[8px] font-mono text-white/45 block mt-0.5">
+                         DATE: {new Date(tx.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-black text-emerald-400">
+                         +{Number(tx.amount).toLocaleString()} ZP
+                      </span>
+                    </div>
+                 </div>
+               ))}
+             </div>
+           )}
+         </div>
       </section>
 
       {/* Animation Success Overlay for clue tokens */}

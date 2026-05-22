@@ -51,7 +51,7 @@ export default function CrewScreen() {
       setCrewMembers(response.data);
     } catch (e) {
       console.error("Failed to fetch crew members", e);
-      // Fallback with mock if mongo fails for some reason
+      // Fallback with mock if supabase fails for some reason
       setCrewMembers([
         { user: { name: "Agent Echo", level: 5, avatar: "" }, resources: { activityScore: 100 } }
       ]);

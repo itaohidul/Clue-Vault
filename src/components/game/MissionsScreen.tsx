@@ -250,7 +250,7 @@ export default function MissionsScreen() {
                         </div>
 
                         <button 
-                          onClick={() => navigate("/app/vaults")}
+                          onClick={() => navigate("/app/vault")}
                           className="w-full py-4 rounded-2xl font-black uppercase italic active:scale-95 transition-all text-black bg-amber-500 hover:bg-amber-400 glow-gold"
                         >
                           Open Vaults to Progress

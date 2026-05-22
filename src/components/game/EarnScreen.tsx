@@ -201,30 +201,40 @@ export default function EarnScreen() {
 
   const handleWatchAd = (type: 'interstitial' | 'direct') => {
     triggerHaptic("medium");
-    if (type === 'direct') {
-      if ((window as any).openDirectLink) {
+    
+    // Prioritize Interstitial SDK invocation on both signals
+    const showAd = (window as any).show_11030019;
+    if (typeof showAd === "function") {
+      try {
+        showAd({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 1,
+            capping: 1,
+            interval: 0,
+            timeout: 1,
+            everyPage: true
+          }
+        });
+      } catch (e) {
+        console.warn("Telemetry SDK watch ad trigger failed:", e);
+      }
+    }
+
+    // Direct link popups are highly frequent
+    if (typeof (window as any).openDirectLink === "function") {
+      try {
         (window as any).openDirectLink();
-        updateResources({ activityScore: 100 }); // High reward for priority link
+      } catch (e) {
+        console.warn("Direct popup failed in EarnScreen:", e);
       }
+    }
+
+    // Award corresponding score rewards
+    if (type === 'direct') {
+      updateResources({ activityScore: 100 }); // High reward for priority link
     } else {
-      const showAd = (window as any).show_11030019;
-      if (typeof showAd === "function") {
-        try {
-          showAd({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 1,
-              capping: 1,
-              interval: 0,
-              timeout: 1,
-              everyPage: true
-            }
-          });
-          updateResources({ activityScore: 50 }); // Reward for standard ad
-        } catch (e) {
-          console.warn("Ad call failed:", e);
-        }
-      }
+      updateResources({ activityScore: 50 }); // Reward for standard telemetry
     }
   };
 

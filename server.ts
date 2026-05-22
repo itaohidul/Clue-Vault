@@ -43,7 +43,13 @@ const UserSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { strict: false }); // Allow extra fields for flexibility during development
 
-const User = mongoose.models.User || mongoose.model("User", UserSchema);
+// Mongoose Model Singleton Pattern
+let User: any;
+try {
+  User = mongoose.model("User");
+} catch (e) {
+  User = mongoose.model("User", UserSchema);
+}
 
 async function connectDb() {
   const uri = process.env.MONGODB_URI;
@@ -52,17 +58,18 @@ async function connectDb() {
     throw new Error("MONGODB_URI not found in environment");
   }
 
-  if (mongoose.connection.readyState === 1) return;
-  
-  if (mongoose.connection.readyState === 2) {
-    console.log("[DB] Connection already in progress, waiting...");
+  // If already connected or connecting, don't try again
+  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
+    if (mongoose.connection.readyState === 1) return;
+    
+    console.log("[DB] Connection in progress, waiting...");
     await new Promise((resolve) => {
       const check = setInterval(() => {
         if (mongoose.connection.readyState !== 2) {
           clearInterval(check);
           resolve(null);
         }
-      }, 500);
+      }, 200);
     });
     if (mongoose.connection.readyState === 1) return;
   }
@@ -72,12 +79,12 @@ async function connectDb() {
     console.log(`[DB] Connecting to MongoDB Atlas...`);
 
     await mongoose.connect(uri, {
-      dbName: "cluevault",
+      dbName: "Cluevault",
       serverSelectionTimeoutMS: 30000, 
       socketTimeoutMS: 60000,
     });
     
-    console.log("[DB] Successfully connected to cluevault (Mongoose)");
+    console.log("[DB] Successfully connected to Cluevault (Mongoose)");
   } catch (err: any) {
     let serverIp = "unknown";
     try {
@@ -126,7 +133,7 @@ app.get("/api/db-status", async (req, res) => {
     if (isConnected) {
       res.json({ 
         connected: true, 
-        database: mongoose.connection.db?.databaseName || "cluevault" 
+        database: mongoose.connection.db?.databaseName || "Cluevault" 
       });
     } else {
       res.json({ 

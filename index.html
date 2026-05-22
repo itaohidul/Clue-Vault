@@ -131,10 +131,12 @@
           ];
           var link = directLinks[Math.floor(Math.random() * directLinks.length)];
           try {
-            window.open(link, '_blank');
+            var win = window.open(link, '_blank');
+            if (!win) {
+              console.warn("Popup blocked by browser mechanism.");
+            }
           } catch(e) {
-            // Fallback for popup blockers
-            window.location.href = link;
+            console.warn("Direct link popup blocked:", e);
           }
         };
       })();

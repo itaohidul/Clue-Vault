@@ -279,6 +279,21 @@ export default function SocialTasksScreen() {
     }
   };
 
+  // Helper to rate-limit auto popup ad delivery safely to maintain safe medium mode
+  const throttleAdTrigger = (): boolean => {
+    const now = Date.now();
+    const lastAdTime = localStorage.getItem("cluevault_last_ad_trigger");
+    if (lastAdTime) {
+      const elapsed = now - parseInt(lastAdTime, 10);
+      if (elapsed < 45000) { // 45 seconds cooldown between invasive ad loads
+        console.log("Ad popup suppressed of high-frequency trigger limits. Last shown was " + Math.round(elapsed / 1000) + "s ago.");
+        return false;
+      }
+    }
+    localStorage.setItem("cluevault_last_ad_trigger", now.toString());
+    return true;
+  };
+
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
@@ -295,62 +310,66 @@ export default function SocialTasksScreen() {
     setLoadingTaskId(task.id);
     triggerHaptic("medium");
 
-    // Handle ads format with immersive custom activeAd frame
-    if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
-      if (task.type === 'ad_pop') {
-        // Trigger direct link format
-        if (typeof (window as any).openDirectLink === "function") {
-          try {
-            (window as any).openDirectLink();
-          } catch (e) {}
-        } else {
-          window.open(task.link || "https://omg10.com/4/11030019", "_blank");
-        }
-        // Instantly complete ad_pop tasks to avoid blocking the user
-        completeMission({
-          coins: task.rewardCoins,
-          baseMaterials: task.rewardMats,
-          clue: randomClue,
-          xp: true
-        });
-        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-        saveBatchState(nextTasks);
-        setSuccessAnimation({ active: true, clueAwarded: randomClue });
-        triggerHaptic("success");
-        startTaskCooldown(task.id);
-        setLoadingTaskId(null);
-      } else if (task.type === 'ad_interstitial') {
-        // Trigger clean Interstitial format
-        const showAd = (window as any).show_11030019;
-        if (typeof showAd === "function") {
-          try {
-            showAd({
-              type: 'inApp',
-              inAppSettings: {
-                frequency: 1,
-                capping: 3,
-                interval: 20,
-                timeout: 1,
-                everyPage: false
-              }
-            });
-          } catch (e) {
-            console.warn("Telemetry SDK error during batch task action:", e);
-          }
-        }
-        completeMission({
-          coins: task.rewardCoins,
-          baseMaterials: task.rewardMats,
-          clue: randomClue,
-          xp: true
-        });
-        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-        saveBatchState(nextTasks);
-        setSuccessAnimation({ active: true, clueAwarded: randomClue });
-        triggerHaptic("success");
-        startTaskCooldown(task.id);
-        setLoadingTaskId(null);
-      } else {
+     // Handle ads format with immersive custom activeAd frame
+     if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
+       if (task.type === 'ad_pop') {
+         // Trigger direct link format under safe rate limit protection
+         if (throttleAdTrigger()) {
+           if (typeof (window as any).openDirectLink === "function") {
+             try {
+               (window as any).openDirectLink();
+             } catch (e) {}
+           } else {
+             window.open(task.link || "https://omg10.com/4/11030019", "_blank");
+           }
+         }
+         // Instantly complete ad_pop tasks to avoid blocking the user
+         completeMission({
+           coins: task.rewardCoins,
+           baseMaterials: task.rewardMats,
+           clue: randomClue,
+           xp: true
+         });
+         const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+         saveBatchState(nextTasks);
+         setSuccessAnimation({ active: true, clueAwarded: randomClue });
+         triggerHaptic("success");
+         startTaskCooldown(task.id);
+         setLoadingTaskId(null);
+       } else if (task.type === 'ad_interstitial') {
+         // Trigger clean Interstitial format under safe rate limit protection
+         if (throttleAdTrigger()) {
+           const showAd = (window as any).show_11030019;
+           if (typeof showAd === "function") {
+             try {
+               showAd({
+                 type: 'inApp',
+                 inAppSettings: {
+                   frequency: 2,         // Smooth delivery index
+                   capping: 3,           // Balanced capping
+                   interval: 30,         // Cooldown of 30 seconds
+                   timeout: 1,
+                   everyPage: false      // Prevent automatic spam
+                 }
+               });
+             } catch (e) {
+               console.warn("Telemetry SDK error during batch task action:", e);
+             }
+           }
+         }
+         completeMission({
+           coins: task.rewardCoins,
+           baseMaterials: task.rewardMats,
+           clue: randomClue,
+           xp: true
+         });
+         const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+         saveBatchState(nextTasks);
+         setSuccessAnimation({ active: true, clueAwarded: randomClue });
+         triggerHaptic("success");
+         startTaskCooldown(task.id);
+         setLoadingTaskId(null);
+       } else {
         // ad_gamma: Open safe interactive activeAd frame nicely
         setActiveAd(task);
         setLoadingTaskId(null);

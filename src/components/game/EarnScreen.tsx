@@ -202,35 +202,55 @@ export default function EarnScreen() {
   const handleWatchAd = (type: 'interstitial' | 'direct') => {
     triggerHaptic("medium");
     
+    // Check global ad cooldown to ensure we don't spam the user's Monetag script
+    const now = Date.now();
+    const lastAdTime = localStorage.getItem("cluevault_last_ad_trigger");
+    let adAllowed = true;
+    if (lastAdTime) {
+      const elapsed = now - parseInt(lastAdTime, 10);
+      if (elapsed < 45000) {
+        adAllowed = false;
+        console.log("Earn ad delivery throttled to safe medium mode.");
+      }
+    }
+
+    if (adAllowed) {
+      localStorage.setItem("cluevault_last_ad_trigger", now.toString());
+    }
+    
     if (type === 'direct') {
       // ONLY trigger the direct link popup when selected
-      if (typeof (window as any).openDirectLink === "function") {
-        try {
-          (window as any).openDirectLink();
-        } catch (e) {
-          console.warn("Direct popup failed in EarnScreen:", e);
+      if (adAllowed) {
+        if (typeof (window as any).openDirectLink === "function") {
+          try {
+            (window as any).openDirectLink();
+          } catch (e) {
+            console.warn("Direct popup failed in EarnScreen:", e);
+          }
+        } else {
+          window.open("https://omg10.com/4/11030019", "_blank");
         }
-      } else {
-        window.open("https://omg10.com/4/11030019", "_blank");
       }
       updateResources({ activityScore: 100 }); // High reward for priority link
     } else {
       // ONLY trigger the standard Interstitial Ad SDK invocation when selected
-      const showAd = (window as any).show_11030019;
-      if (typeof showAd === "function") {
-        try {
-          showAd({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 2,         // Delivery interval is smooth (every 2 calls)
-              capping: 1,           // Balanced daily cap to maintain high CPC without blocking
-              interval: 30,         // Cooldown of 30 seconds
-              timeout: 1,
-              everyPage: false      // Prevent automatic spam
-            }
-          });
-        } catch (e) {
-          console.warn("Telemetry SDK watch ad trigger failed:", e);
+      if (adAllowed) {
+        const showAd = (window as any).show_11030019;
+        if (typeof showAd === "function") {
+          try {
+            showAd({
+              type: 'inApp',
+              inAppSettings: {
+                frequency: 2,         // Delivery interval is smooth (every 2 calls)
+                capping: 1,           // Balanced daily cap to maintain high CPC without blocking
+                interval: 30,         // Cooldown of 30 seconds
+                timeout: 1,
+                everyPage: false      // Prevent automatic spam
+              }
+            });
+          } catch (e) {
+            console.warn("Telemetry SDK watch ad trigger failed:", e);
+          }
         }
       }
       updateResources({ activityScore: 50 }); // Reward for standard telemetry

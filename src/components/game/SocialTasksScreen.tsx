@@ -21,7 +21,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { cn } from "../../lib/utils";
+import { cn, safeOpenLink } from "../../lib/utils";
 import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
 
 interface TaskState {
@@ -179,6 +179,63 @@ export default function SocialTasksScreen() {
 
   const [activeAd, setActiveAd] = useState<TaskState | null>(null);
 
+  // Ad watch state validation structure to avoid instant rewarded exploits
+  const [adWatchState, setAdWatchState] = useState<{
+    active: boolean;
+    task: TaskState | null;
+    countdown: number;
+    error: string | null;
+  }>({ active: false, task: null, countdown: 0, error: null });
+
+  // Add countdown timer effect for SocialTasks ad verification
+  useEffect(() => {
+    if (!adWatchState.active || adWatchState.countdown <= 0) {
+      if (adWatchState.error) {
+        const timer = setTimeout(() => {
+          setAdWatchState(prev => ({ ...prev, error: null, active: false }));
+        }, 5000);
+        return () => clearTimeout(timer);
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (adWatchState.countdown === 1) {
+        // Successful watch validation!
+        const task = adWatchState.task;
+        if (task) {
+          const randomClue = Math.floor(Math.random() * 20) + 1;
+          completeMission({
+            coins: task.rewardCoins,
+            baseMaterials: task.rewardMats,
+            clue: randomClue,
+            xp: true
+          });
+
+          const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+          saveBatchState(nextTasks);
+          setSuccessAnimation({ active: true, clueAwarded: randomClue });
+          triggerHaptic("success");
+          startTaskCooldown(task.id);
+        }
+        setAdWatchState(prev => ({
+          ...prev,
+          active: false,
+          task: null,
+          countdown: 0
+        }));
+        setLoadingTaskId(null);
+      } else {
+        setAdWatchState(prev => ({
+          ...prev,
+          countdown: prev.countdown - 1
+        }));
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [adWatchState.active, adWatchState.countdown, adWatchState.task, adWatchState.error, batchTasks, completeMission, triggerHaptic]);
+
   // One-time telegram community links
   const [communityTasks, setCommunityTasks] = useState(() => {
     const saved = localStorage.getItem("cluevault_oneoff_tasks");
@@ -204,7 +261,7 @@ export default function SocialTasksScreen() {
     triggerHaptic("medium");
 
     if (task.link) {
-      window.open(task.link, "_blank");
+      safeOpenLink(task.link);
     }
 
     setLinkCountdown(5);
@@ -237,7 +294,7 @@ export default function SocialTasksScreen() {
   const handleCommunityAction = (task: any) => {
     if (task.completed || !user.onboarded) return;
 
-    window.open(task.link, "_blank");
+    safeOpenLink(task.link);
     triggerHaptic("medium");
 
     setTimeout(() => {
@@ -330,7 +387,7 @@ export default function SocialTasksScreen() {
 
     if (isTap) {
       // ONLY open target link when they purposefully click/tap
-      window.open(task.link || "https://omg10.com/4/11030019", "_blank");
+      safeOpenLink(task.link || "https://omg10.com/4/11030019");
     }
   };
 
@@ -362,33 +419,45 @@ export default function SocialTasksScreen() {
 
      // Handle ads format with immersive custom activeAd frame
      if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
-       if (task.type === 'ad_pop') {
-         // Trigger direct link format under safe rate limit protection
-         if (throttleAdTrigger()) {
+       if (task.type === 'ad_gamma') {
+         // ad_gamma: Open safe interactive activeAd frame nicely
+         setActiveAd(task);
+         setLoadingTaskId(null);
+       } else {
+         // Validate ad throttle / eligibility first!
+         const allowed = throttleAdTrigger();
+         if (!allowed) {
+           triggerHaptic("error");
+           setAdWatchState({
+             active: true,
+             task: null,
+             countdown: 0,
+             error: "COMMUNICATION FLUX LIMITER POWERED — RETRYING BUFFER COOLDOWN"
+           });
+           setLoadingTaskId(null);
+           return;
+         }
+
+         // Ad is eligible and allowed! Start a 5-sec simulation countdown to enforce actual viewing and block raw button rapping.
+         setAdWatchState({
+           active: true,
+           task,
+           countdown: 5,
+           error: null
+         });
+         // We DON'T set LoadingTaskId to null yet, keep it active during verification
+         // setLoadingTaskId(null);
+
+         // Actually fire the ad scripts/links as usual
+         if (task.type === 'ad_pop') {
            if (typeof (window as any).openDirectLink === "function") {
              try {
                (window as any).openDirectLink();
              } catch (e) {}
            } else {
-             window.open(task.link || "https://omg10.com/4/11030019", "_blank");
+             safeOpenLink(task.link || "https://omg10.com/4/11030019");
            }
-         }
-         // Instantly complete ad_pop tasks to avoid blocking the user
-         completeMission({
-           coins: task.rewardCoins,
-           baseMaterials: task.rewardMats,
-           clue: randomClue,
-           xp: true
-         });
-         const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-         saveBatchState(nextTasks);
-         setSuccessAnimation({ active: true, clueAwarded: randomClue });
-         triggerHaptic("success");
-         startTaskCooldown(task.id);
-         setLoadingTaskId(null);
-       } else if (task.type === 'ad_interstitial') {
-         // Trigger clean Interstitial format under safe rate limit protection
-         if (throttleAdTrigger()) {
+         } else if (task.type === 'ad_interstitial') {
            const showAd = (window as any).show_11030019;
            if (typeof showAd === "function") {
              try {
@@ -407,29 +476,13 @@ export default function SocialTasksScreen() {
              }
            }
          }
-         completeMission({
-           coins: task.rewardCoins,
-           baseMaterials: task.rewardMats,
-           clue: randomClue,
-           xp: true
-         });
-         const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-         saveBatchState(nextTasks);
-         setSuccessAnimation({ active: true, clueAwarded: randomClue });
-         triggerHaptic("success");
-         startTaskCooldown(task.id);
-         setLoadingTaskId(null);
-       } else {
-        // ad_gamma: Open safe interactive activeAd frame nicely
-        setActiveAd(task);
-        setLoadingTaskId(null);
-      }
-      return;
-    }
+       }
+       return;
+     }
 
     // Handle Link matching
       if (task.link) {
-        window.open(task.link, "_blank");
+        safeOpenLink(task.link);
       }
 
       setLinkCountdown(5);
@@ -577,6 +630,25 @@ export default function SocialTasksScreen() {
           </p>
         </div>
 
+        <AnimatePresence>
+          {adWatchState.error && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-rose-500/10 border border-rose-500/20 text-rose-200 p-4 rounded-2xl flex items-start gap-3 overflow-hidden mb-4"
+            >
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400">
+                <AlertTriangle size={18} className="animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase text-rose-400 block tracking-wider leading-none">COMMUNICATION LIMITER</span>
+                <span className="text-[9px] uppercase font-bold text-white/50 block mt-1 tracking-tight">{adWatchState.error}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="space-y-3">
           {batchTasks.map((task) => {
             const isLoading = loadingTaskId === task.id;
@@ -680,7 +752,11 @@ export default function SocialTasksScreen() {
                         )}
                       >
                         {isLoading 
-                          ? (isAd ? "BROADCASTING..." : `SYNCING (${linkCountdown}S)`)
+                          ? (isAd 
+                              ? (adWatchState.active && adWatchState.task?.id === task.id 
+                                  ? `VERIFYING (${adWatchState.countdown}S)` 
+                                  : "BROADCASTING...")
+                              : `SYNCING (${linkCountdown}S)`)
                           : isCooldownActive
                             ? (() => {
                                 const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');

@@ -20,9 +20,10 @@ import {
   ArrowUpRight,
   Sparkles,
   RefreshCw,
-  Award
+  Award,
+  AlertTriangle
 } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, safeOpenLink } from "../../lib/utils";
 import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
 
 export default function EarnScreen() {
@@ -37,6 +38,11 @@ export default function EarnScreen() {
   const [calibrationStep, setCalibrationStep] = useState<number>(0);
   const [calibrationTarget, setCalibrationTarget] = useState<number>(0);
   const [claimedReward, setClaimedReward] = useState<number | null>(null);
+
+  // Ad Pacing & Verification states
+  const [pacerAlert, setPacerAlert] = useState<{ title: string; desc: string } | null>(null);
+  const [adVerifying, setAdVerifying] = useState<'direct' | 'interstitial' | null>(null);
+  const [pacerCountdown, setPacerCountdown] = useState<number>(0);
 
   // Global pool estimates
   const DAILY_POOL = 120000; // 120,000 Clue
@@ -201,52 +207,77 @@ export default function EarnScreen() {
   };
 
   const handleWatchAd = (type: 'interstitial' | 'direct') => {
+    if (adVerifying) return;
     triggerHaptic("medium");
     
+    const adCheck = checkAdEligibility();
+    if (!adCheck.allowed) {
+      setPacerAlert({
+        title: "Ad Feed Synchronizing",
+        desc: adCheck.reason
+      });
+      triggerHaptic("error");
+      setTimeout(() => setPacerAlert(null), 5000);
+      return;
+    }
+
     // Record action tap to track engagement dynamics
     recordUserTap();
 
-    const adCheck = checkAdEligibility();
-    const adAllowed = adCheck.allowed;
     console.log("Earn Screen eligibility check:", adCheck.reason);
     
     if (type === 'direct') {
       // ONLY trigger the direct link popup when selected
-      if (adAllowed) {
-        if (typeof (window as any).openDirectLink === "function") {
-          try {
-            (window as any).openDirectLink();
-          } catch (e) {
-            console.warn("Direct popup failed in EarnScreen:", e);
-          }
-        } else {
-          window.open("https://omg10.com/4/11030019", "_blank");
+      if (typeof (window as any).openDirectLink === "function") {
+        try {
+          (window as any).openDirectLink();
+        } catch (e) {
+          console.warn("Direct popup failed in EarnScreen:", e);
+          safeOpenLink("https://omg10.com/4/11030019");
         }
+      } else {
+        safeOpenLink("https://omg10.com/4/11030019");
       }
-      updateResources({ activityScore: 100 }); // High reward for priority link
     } else {
       // ONLY trigger the standard Interstitial Ad SDK invocation when selected
-      if (adAllowed) {
-        const showAd = (window as any).show_11030019;
-        if (typeof showAd === "function") {
-          try {
-            showAd({
-              type: 'inApp',
-              inAppSettings: {
-                frequency: 2,         // Delivery interval is smooth (every 2 calls)
-                capping: 1,           // Balanced daily cap to maintain high CPC without blocking
-                interval: 30,         // Cooldown of 30 seconds
-                timeout: 1,
-                everyPage: false      // Prevent automatic spam
-              }
-            });
-          } catch (e) {
-            console.warn("Telemetry SDK watch ad trigger failed:", e);
-          }
+      const showAd = (window as any).show_11030019;
+      if (typeof showAd === "function") {
+        try {
+          showAd({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 2,         // Delivery interval is smooth (every 2 calls)
+              capping: 1,           // Balanced daily cap to maintain high CPC without blocking
+              interval: 30,         // Cooldown of 30 seconds
+              timeout: 1,
+              everyPage: false      // Prevent automatic spam
+            }
+          });
+        } catch (e) {
+          console.warn("Telemetry SDK watch ad trigger failed:", e);
         }
       }
-      updateResources({ activityScore: 50 }); // Reward for standard telemetry
     }
+
+    // Set ad verifying countdown
+    setAdVerifying(type);
+    setPacerCountdown(5);
+
+    const interval = setInterval(() => {
+      setPacerCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setAdVerifying(null);
+
+          // ONLY reward the score now when the verification finishes!
+          const rewardAmount = type === 'direct' ? 100 : 50;
+          updateResources({ activityScore: rewardAmount });
+          triggerHaptic("success");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const clickCalibrationCircle = (id: number) => {
@@ -298,36 +329,92 @@ export default function EarnScreen() {
           <p className="text-[10px] text-white/50 uppercase font-bold">Fast-track activity score through external network signal verification</p>
         </div>
 
+        <AnimatePresence>
+          {pacerAlert && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-rose-500/10 border border-rose-500/20 text-rose-200 p-4 rounded-2xl flex items-start gap-3 overflow-hidden"
+            >
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400">
+                <AlertTriangle size={18} className="animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase text-rose-400 block tracking-wider leading-none">{pacerAlert.title}</span>
+                <span className="text-[9px] uppercase font-bold text-white/50 block mt-1 tracking-tight">{pacerAlert.desc}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid grid-cols-1 gap-3">
            <button 
              onClick={() => handleWatchAd('direct')}
-             className="group relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-600 p-4 rounded-2xl transition-transform active:scale-95"
+             disabled={!!adVerifying}
+             className={cn(
+               "group relative overflow-hidden p-4 rounded-2xl transition-all duration-300",
+               adVerifying === 'direct'
+                 ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
+                 : adVerifying
+                   ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
+                   : "bg-gradient-to-r from-amber-500 to-orange-600 hover:scale-[1.01] active:scale-95"
+             )}
            >
               <div className="flex justify-between items-center relative z-10">
                  <div className="text-left">
-                    <span className="text-[8px] font-black uppercase text-black/60 tracking-widest bg-white/30 px-1.5 py-0.5 rounded">Priority Earn</span>
-                    <h4 className="text-lg font-black uppercase italic text-white leading-none mt-1">DIRECT SIGNAL</h4>
-                    <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">Instant +100 Activity Score</p>
+                    <span className="text-[8px] font-black uppercase text-black/60 tracking-widest bg-white/30 px-1.5 py-0.5 rounded">
+                      {adVerifying === 'direct' ? "Verifying..." : "Priority Earn"}
+                    </span>
+                    <h4 className="text-lg font-black uppercase italic text-white leading-none mt-1">
+                      {adVerifying === 'direct' ? `VERIFYING (${pacerCountdown}S)` : "DIRECT SIGNAL"}
+                    </h4>
+                    <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">
+                      {adVerifying === 'direct' ? "Checking signal telemetry load" : "Instant +100 Activity Score"}
+                    </p>
                  </div>
-                 <ArrowUpRight className="text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" size={24} />
+                 {adVerifying === 'direct' ? (
+                   <RefreshCw className="text-amber-500 animate-spin" size={24} />
+                 ) : (
+                   <ArrowUpRight className="text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" size={24} />
+                 )}
               </div>
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none" />
            </button>
 
            <button 
              onClick={() => handleWatchAd('interstitial')}
-             className="bg-white/5 hover:bg-white/10 border border-white/5 p-4 rounded-2xl flex items-center justify-between transition-all active:scale-95"
+             disabled={!!adVerifying}
+             className={cn(
+               "p-4 rounded-2xl flex items-center justify-between transition-all duration-300",
+               adVerifying === 'interstitial'
+                 ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
+                 : adVerifying
+                   ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
+                   : "bg-white/5 hover:bg-white/10 hover:scale-[1.01] border border-white/5 active:scale-95"
+             )}
            >
               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
-                    <Activity size={24} />
+                 <div className={cn(
+                   "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                   adVerifying === 'interstitial' ? "bg-amber-500/25 text-amber-400" : "bg-amber-500/10 text-amber-500"
+                 )}>
+                    {adVerifying === 'interstitial' ? (
+                      <RefreshCw className="animate-spin" size={24} />
+                    ) : (
+                      <Activity size={24} />
+                    )}
                  </div>
                  <div className="text-left">
-                    <h4 className="text-sm font-black uppercase italic leading-none">OVERLAY SIGNAL</h4>
-                    <span className="text-[10px] font-bold text-white/30 tracking-tight">+50 Activity Score</span>
+                    <h4 className="text-sm font-black uppercase italic leading-none">
+                      {adVerifying === 'interstitial' ? `VERIFYING OVERLAY (${pacerCountdown}S)` : "OVERLAY SIGNAL"}
+                    </h4>
+                    <span className="text-[10px] font-bold text-white/30 tracking-tight">
+                      {adVerifying === 'interstitial' ? "Authorizing transmission packet..." : "+50 Activity Score"}
+                    </span>
                  </div>
               </div>
-              <ChevronRight className="text-white/20" size={20} />
+              {adVerifying === 'interstitial' ? null : <ChevronRight className="text-white/20" size={20} />}
            </button>
         </div>
       </div>

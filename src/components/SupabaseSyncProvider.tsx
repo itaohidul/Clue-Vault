@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Base API URL configuration
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const api = axios.create({ baseURL: API_BASE, timeout: 4000 }); // Add global 4s timeout protective layer to prevent mobile carrier data handshakes from hanging the thread
+const api = axios.create({ baseURL: API_BASE, timeout: 20000 }); // Safe, relaxed 20s timeout for mobile data and slower connections
 
 interface SupabaseTask {
   id: number;
@@ -71,20 +71,43 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
 
   // Initialize unique identity (Telegram context preferred)
   useEffect(() => {
-    let id = localStorage.getItem("cluevault_supabase_id");
-    
-    // Check if we are connected to Telegram WebApp framework
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.initDataUnsafe?.user?.id) {
-       id = tg.initDataUnsafe.user.id.toString();
-    }
+    const resolveIdentity = () => {
+      let id = localStorage.getItem("cluevault_supabase_id");
+      const tg = (window as any).Telegram?.WebApp;
+      
+      if (tg?.initDataUnsafe?.user?.id) {
+        id = tg.initDataUnsafe.user.id.toString();
+        if (id) {
+          setUserId(id);
+          localStorage.setItem("cluevault_supabase_id", id);
+          return true;
+        }
+      }
+      
+      if (!id) {
+        id = "anon_" + Math.random().toString(36).substring(2, 11);
+      }
+      
+      setUserId(id);
+      localStorage.setItem("cluevault_supabase_id", id);
+      return false;
+    };
 
-    if (!id) {
-      id = "anon_" + Math.random().toString(36).substring(2, 11);
-    }
-    
-    setUserId(id);
-    localStorage.setItem("cluevault_supabase_id", id);
+    // Run immediately
+    const resolvedNatively = resolveIdentity();
+    if (resolvedNatively) return;
+
+    // Set up polling fallback for asynchronous Telegram SDK load
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      const success = resolveIdentity();
+      if (success || attempts >= 15) {
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Map state converters
@@ -214,7 +237,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     const fetchUserAndAssets = async () => {
       setIsSyncing(true);
       const controller = new AbortController();
-      const handshakeTimeout = setTimeout(() => controller.abort(), 5000); // Strict 5s mobile data handshake
+      const handshakeTimeout = setTimeout(() => controller.abort(), 25000); // 25s mobile-friendly resilient fallback handshake
 
       try {
         // Query server db state verify with restricted timeout
@@ -222,7 +245,15 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         setDbConnected(verifyRes.data?.readyState === 1);
 
         // Telegram user loader
-        const response = await api.get(`/api/user/${userId}`, { signal: controller.signal });
+        const tg = (window as any).Telegram?.WebApp;
+        let queryParams = "";
+        if (tg?.initDataUnsafe) {
+          const username = tg.initDataUnsafe.user?.username || tg.initDataUnsafe.user?.first_name || "";
+          const startParam = tg.initDataUnsafe.start_param || "";
+          queryParams = `?username=${encodeURIComponent(username)}&referredBy=${encodeURIComponent(startParam)}`;
+        }
+
+        const response = await api.get(`/api/user/${userId}${queryParams}`, { signal: controller.signal });
         const cloudData = response.data;
         
         clearTimeout(handshakeTimeout);

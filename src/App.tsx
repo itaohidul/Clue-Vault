@@ -187,10 +187,10 @@ function AppContent() {
     }, 2500);
 
     if (tg && tg.initData) {
-      // Extended failsafe for mobile data: 4 seconds
+      // Extended failsafe for mobile data: 10 seconds
       const failSafeTimer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 4000);
+      }, 10000);
 
       syncWithBackend(tg.initData).then(() => {
         clearTimeout(failSafeTimer);

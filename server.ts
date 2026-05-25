@@ -59,31 +59,47 @@ app.post("/api/auth/telegram", async (req, res) => {
 });
 
 app.get("/api/db-verify", async (req, res) => {
+  const url_configured = !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL);
   try {
     const { data, error } = await supabase.from("users").select("id").limit(1);
     if (error) throw error;
     res.json({
       hasUri: true,
       readyState: 1,
-      dbName: "Supabase Active Cluster"
+      dbName: "Supabase Active Cluster",
+      urlConfigured: url_configured
     });
   } catch (err: any) {
     res.json({
       hasUri: false,
       readyState: 0,
       dbName: "Supabase Connection Pending",
+      urlConfigured: url_configured,
+      errorDetail: err.message || err.details || String(err),
+      hint: err.hint || "Make sure you ran the SQL setup script to create the 'users' table in your Supabase DB, and that Row Level Security (RLS) is configured correctly.",
       warning: "Using secure serverless memory cache (local sandbox fallback). Please supply NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to sync to live database."
     });
   }
 });
 
 app.get("/api/db-status", async (req, res) => {
+  const url_configured = !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL);
   try {
     const { error } = await supabase.from("users").select("id").limit(1);
     if (error) throw error;
-    res.json({ connected: true, database: "Supabase PostgreSQL Database" });
+    res.json({ 
+      connected: true, 
+      database: "Supabase PostgreSQL Database", 
+      urlConfigured: url_configured 
+    });
   } catch (err: any) {
-    res.json({ connected: false, database: "Encrypted Cloud Memory Fallback" });
+    res.json({ 
+      connected: false, 
+      database: "Encrypted Cloud Memory Fallback", 
+      urlConfigured: url_configured,
+      errorDetail: err.message || err.details || String(err),
+      hint: err.hint || "Make sure the 'users' table is created and RLS is disabled or allowed for public anon requests."
+    });
   }
 });
 

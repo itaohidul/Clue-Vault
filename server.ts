@@ -216,12 +216,16 @@ app.get("/api/user/:userId", async (req, res) => {
     return res.json(newUser?.state_json || seedState);
 
   } catch (err: any) {
-    if (err.message?.includes("public.users")) {
-      console.log(`[DB Status] Supabase User Table Syncing... (Local Cache Active for ${userId})`);
-    } else {
-      console.warn(`[DB Status] Connection latency for ${userId}:`, err.message);
+    console.error(`[Supabase Error] Critical error during user state fetch/registration for user ${userId}:`, {
+      message: err.message,
+      details: err.details,
+      hint: err.hint,
+      code: err.code
+    });
+    if (err.message?.includes("row-level security") || err.code === "42501" || String(err.message).includes("permission denied")) {
+      console.warn(`[Supabase RLS Alert] Row Level Security (RLS) is blocking the transaction. Please disable RLS on the 'users', 'tasks', 'user_tasks', and 'transactions' tables, or use the SUPABASE_SERVICE_ROLE_KEY to bypass RLS.`);
     }
-    
+
     // In-memory fallback check
     let cachedUser = localCache.users.get(userId);
     if (!cachedUser) {
@@ -314,8 +318,14 @@ app.post("/api/user/:userId", async (req, res) => {
     res.json({ success: true, message: "Saved to Supabase database" });
 
   } catch (err: any) {
-    if (!err.message?.includes("public.users")) {
-      console.warn(`[DB status] State synchronization latency:`, err.message);
+    console.error(`[Supabase Error] Error during saving state for user ${userId}:`, {
+      message: err.message,
+      details: err.details,
+      hint: err.hint,
+      code: err.code
+    });
+    if (err.message?.includes("row-level security") || err.code === "42501" || String(err.message).includes("permission denied")) {
+      console.warn(`[Supabase RLS Alert] Row Level Security (RLS) is blocking state save. Please run the provided SQL script to block RLS constraints, or setup SUPABASE_SERVICE_ROLE_KEY.`);
     }
     
     const cachedUser = localCache.users.get(userId) || {};

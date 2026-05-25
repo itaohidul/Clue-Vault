@@ -240,9 +240,16 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       const handshakeTimeout = setTimeout(() => controller.abort(), 25000); // 25s mobile-friendly resilient fallback handshake
 
       try {
-        // Query server db state verify with restricted timeout
-        const verifyRes = await api.get<any>("/api/db-verify", { signal: controller.signal });
-        setDbConnected(verifyRes.data?.readyState === 1);
+        // Query server db state verify asynchronously in the background so it is completely non-blocking
+        api.get<any>("/api/db-verify", { timeout: 8000 })
+          .then((verifyRes) => {
+            setDbConnected(verifyRes.data?.readyState === 1);
+          })
+          .catch((e) => {
+            console.warn("Non-blocking DB verification check failed:", e.message);
+            // Don't crash loading, we are still connected to fallback database if necessary
+            setDbConnected(false);
+          });
 
         // Telegram user loader
         const tg = (window as any).Telegram?.WebApp;
@@ -280,7 +287,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         }
         setIsCloudLoaded(true);
       } catch (err: any) {
-        console.warn("Mobile signal handshake deferred. Proceeding with local cache.");
+        console.warn("Mobile signal handshake deferred. Proceeding with local cache:", err.message);
         setIsCloudLoaded(true); // Failsafe: unlock app even on network failure
       } finally {
         setIsSyncing(false);

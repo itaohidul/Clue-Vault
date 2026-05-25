@@ -210,74 +210,48 @@ export default function EarnScreen() {
     if (adVerifying) return;
     triggerHaptic("medium");
     
-    const adCheck = checkAdEligibility();
-    if (!adCheck.allowed) {
+    setAdVerifying(type);
+    
+    const onComplete = () => {
+      setAdVerifying(null);
+      const rewardAmount = type === 'direct' ? 100 : 50;
+      updateResources({ activityScore: rewardAmount });
+      triggerHaptic("success");
+    };
+
+    const onError = (e: any) => {
+      console.error("Ad failed:", e);
+      setAdVerifying(null);
+      triggerHaptic("error");
+      
+      // Fallback for popup blocking or script load latency
       setPacerAlert({
-        title: "Ad Feed Synchronizing",
-        desc: adCheck.reason
+        title: "Signal Link Offline",
+        desc: "TELEMETRY SYNC INTERRUPTED — PLEASE TRY AGAIN"
+      });
+      setTimeout(() => setPacerAlert(null), 3000);
+    };
+
+    const showAd = (window as any).show_11030019;
+    if (typeof showAd !== "function") {
+      console.warn("Ad SDK not loaded yet");
+      setPacerAlert({
+        title: "Network Link Unstable",
+        desc: "WAITING FOR AD SIGNAL HANDSHAKE — RETRY IN A FEW SECONDS"
       });
       triggerHaptic("error");
-      setTimeout(() => setPacerAlert(null), 5000);
+      setTimeout(() => setPacerAlert(null), 3000);
+      setAdVerifying(null);
       return;
     }
 
-    // Record action tap to track engagement dynamics
-    recordUserTap();
-
-    console.log("Earn Screen eligibility check:", adCheck.reason);
-    
     if (type === 'direct') {
-      // ONLY trigger the direct link popup when selected
-      if (typeof (window as any).openDirectLink === "function") {
-        try {
-          (window as any).openDirectLink();
-        } catch (e) {
-          console.warn("Direct popup failed in EarnScreen:", e);
-          safeOpenLink("https://omg10.com/4/11030019");
-        }
-      } else {
-        safeOpenLink("https://omg10.com/4/11030019");
-      }
+      // Use Rewarded Popup
+      showAd('pop').then(onComplete).catch(onError);
     } else {
-      // ONLY trigger the standard Interstitial Ad SDK invocation when selected
-      const showAd = (window as any).show_11030019;
-      if (typeof showAd === "function") {
-        try {
-          showAd({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 2,         // Delivery interval is smooth (every 2 calls)
-              capping: 1,           // Balanced daily cap to maintain high CPC without blocking
-              interval: 30,         // Cooldown of 30 seconds
-              timeout: 1,
-              everyPage: false      // Prevent automatic spam
-            }
-          });
-        } catch (e) {
-          console.warn("Telemetry SDK watch ad trigger failed:", e);
-        }
-      }
+      // Use Rewarded Interstitial
+      showAd().then(onComplete).catch(onError);
     }
-
-    // Set ad verifying countdown
-    setAdVerifying(type);
-    setPacerCountdown(5);
-
-    const interval = setInterval(() => {
-      setPacerCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setAdVerifying(null);
-
-          // ONLY reward the score now when the verification finishes!
-          const rewardAmount = type === 'direct' ? 100 : 50;
-          updateResources({ activityScore: rewardAmount });
-          triggerHaptic("success");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   const clickCalibrationCircle = (id: number) => {
@@ -367,7 +341,7 @@ export default function EarnScreen() {
                       {adVerifying === 'direct' ? "Verifying..." : "Priority Earn"}
                     </span>
                     <h4 className="text-lg font-black uppercase italic text-white leading-none mt-1">
-                      {adVerifying === 'direct' ? `VERIFYING (${pacerCountdown}S)` : "DIRECT SIGNAL"}
+                      {adVerifying === 'direct' ? "VERIFYING..." : "DIRECT SIGNAL"}
                     </h4>
                     <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">
                       {adVerifying === 'direct' ? "Checking signal telemetry load" : "Instant +100 Activity Score"}
@@ -407,7 +381,7 @@ export default function EarnScreen() {
                  </div>
                  <div className="text-left">
                     <h4 className="text-sm font-black uppercase italic leading-none">
-                      {adVerifying === 'interstitial' ? `VERIFYING OVERLAY (${pacerCountdown}S)` : "OVERLAY SIGNAL"}
+                      {adVerifying === 'interstitial' ? "VERIFYING OVERLAY..." : "OVERLAY SIGNAL"}
                     </h4>
                     <span className="text-[10px] font-bold text-white/30 tracking-tight">
                       {adVerifying === 'interstitial' ? "Authorizing transmission packet..." : "+50 Activity Score"}

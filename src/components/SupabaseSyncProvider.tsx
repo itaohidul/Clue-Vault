@@ -65,6 +65,9 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
   
   const isSyncingFromCloudRef = useRef(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPendingStateRef = useRef<any>(null);
+  const isSyncInProgressRef = useRef(false);
 
   // Initialize unique identity (Telegram context preferred)
   useEffect(() => {
@@ -134,8 +137,10 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       await api.post(`/api/user/${userId}`, payload, { timeout: 8000 });
       console.log("Supabase secure payload synchronized successfully");
       setError(null);
+      lastPendingStateRef.current = null;
     } catch (err: any) {
       console.warn("Local storage mirror active (Supabase connection offline mode)");
+      lastPendingStateRef.current = useUserStore.getState();
     } finally {
       setIsSyncing(false);
     }
@@ -257,26 +262,81 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     const unsubscribe = useUserStore.subscribe((state) => {
       if (isSyncingFromCloudRef.current) return;
       
+      lastPendingStateRef.current = state;
+      
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       
       syncTimeoutRef.current = setTimeout(() => {
-        pushUpdateInternal(state);
+        pushUpdateInternal();
       }, 1000);
     });
 
     return () => {
       unsubscribe();
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
   }, [userId]);
 
-  const pushUpdateInternal = async (state: any) => {
+  // Add listener for background sync when app is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (lastPendingStateRef.current) {
+          pushUpdateInternal(true); // Force push on hide
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [userId]);
+
+  const pushUpdateInternal = async (isForced = false, retryCount = 0) => {
     if (!userId) return;
+    if (isSyncInProgressRef.current && !isForced) return;
+    
+    // Always sync the LATEST state
+    const stateToSync = useUserStore.getState();
+    const payload = mapStateToSupabasePayload(stateToSync);
+    
+    isSyncInProgressRef.current = true;
+    setIsSyncing(true);
+
     try {
-      const payload = mapStateToSupabasePayload(state);
-      await api.post(`/api/user/${userId}`, payload);
-    } catch (err) {
-      // Ignore background post failures silently to keep gameplay perfectly smooth
+      await api.post(`/api/user/${userId}`, payload, { 
+        timeout: isForced ? 5000 : 10000 
+      });
+      
+      // If we just synced the state that was pending, clear the pending flag
+      if (lastPendingStateRef.current === stateToSync) {
+        lastPendingStateRef.current = null;
+      }
+      
+      setError(null);
+      isSyncInProgressRef.current = false;
+      setIsSyncing(false);
+      
+      // If new changes came in while we were syncing, trigger a follow-up sync
+      if (lastPendingStateRef.current) {
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = setTimeout(() => pushUpdateInternal(), 1000);
+      }
+    } catch (err: any) {
+      isSyncInProgressRef.current = false;
+      setIsSyncing(false);
+      
+      // Retry logic for background sync
+      if (!isForced && retryCount < 5) {
+        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Exponential backoff
+        retryTimeoutRef.current = setTimeout(() => {
+          pushUpdateInternal(false, retryCount + 1);
+        }, delay);
+      } else {
+        console.warn("[Cloud Sync] Network handshake deferred. Local cache remains primary.");
+        setError("SYNC_DEFERRED");
+      }
     }
   };
 

@@ -187,54 +187,15 @@ export default function SocialTasksScreen() {
     error: string | null;
   }>({ active: false, task: null, countdown: 0, error: null });
 
-  // Add countdown timer effect for SocialTasks ad verification
+  // Add effect for SocialTasks ad error handling only
   useEffect(() => {
-    if (!adWatchState.active || adWatchState.countdown <= 0) {
-      if (adWatchState.error) {
-        const timer = setTimeout(() => {
-          setAdWatchState(prev => ({ ...prev, error: null, active: false }));
-        }, 5000);
-        return () => clearTimeout(timer);
-      }
-      return;
+    if (adWatchState.error) {
+      const timer = setTimeout(() => {
+        setAdWatchState(prev => ({ ...prev, error: null, active: false }));
+      }, 5000);
+      return () => clearTimeout(timer);
     }
-
-    const timer = setTimeout(() => {
-      if (adWatchState.countdown === 1) {
-        // Successful watch validation!
-        const task = adWatchState.task;
-        if (task) {
-          const randomClue = Math.floor(Math.random() * 20) + 1;
-          completeMission({
-            coins: task.rewardCoins,
-            baseMaterials: task.rewardMats,
-            clue: randomClue,
-            xp: true
-          });
-
-          const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-          saveBatchState(nextTasks);
-          setSuccessAnimation({ active: true, clueAwarded: randomClue });
-          triggerHaptic("success");
-          startTaskCooldown(task.id);
-        }
-        setAdWatchState(prev => ({
-          ...prev,
-          active: false,
-          task: null,
-          countdown: 0
-        }));
-        setLoadingTaskId(null);
-      } else {
-        setAdWatchState(prev => ({
-          ...prev,
-          countdown: prev.countdown - 1
-        }));
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [adWatchState.active, adWatchState.countdown, adWatchState.task, adWatchState.error, batchTasks, completeMission, triggerHaptic]);
+  }, [adWatchState.error]);
 
   // One-time telegram community links
   const [communityTasks, setCommunityTasks] = useState(() => {
@@ -424,57 +385,52 @@ export default function SocialTasksScreen() {
          setActiveAd(task);
          setLoadingTaskId(null);
        } else {
-         // Validate ad throttle / eligibility first!
-         const allowed = throttleAdTrigger();
-         if (!allowed) {
-           triggerHaptic("error");
-           setAdWatchState({
-             active: true,
-             task: null,
-             countdown: 0,
-             error: "COMMUNICATION FLUX LIMITER POWERED — RETRYING BUFFER COOLDOWN"
-           });
+         const showAd = (window as any).show_11030019;
+         if (typeof showAd !== "function") {
+           console.warn("Ad SDK not loaded yet");
+           setAdWatchState({ active: false, task: null, countdown: 0, error: "SIGNAL NETWORK SYNCING — PLEASE RETRY" });
            setLoadingTaskId(null);
+           triggerHaptic("error");
            return;
          }
 
-         // Ad is eligible and allowed! Start a 5-sec simulation countdown to enforce actual viewing and block raw button rapping.
          setAdWatchState({
            active: true,
            task,
-           countdown: 5,
+           countdown: 0,
            error: null
          });
-         // We DON'T set LoadingTaskId to null yet, keep it active during verification
-         // setLoadingTaskId(null);
 
-         // Actually fire the ad scripts/links as usual
+         const onComplete = () => {
+           const randomClue = Math.floor(Math.random() * 20) + 1;
+           completeMission({
+             coins: task.rewardCoins,
+             baseMaterials: task.rewardMats,
+             clue: randomClue,
+             xp: true
+           });
+
+           const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+           saveBatchState(nextTasks);
+           
+           setAdWatchState({ active: false, task: null, countdown: 0, error: null });
+           setLoadingTaskId(null);
+           setSuccessAnimation({ active: true, clueAwarded: randomClue });
+           triggerHaptic("success");
+           startTaskCooldown(task.id);
+         };
+
+         const onError = (e: any) => {
+           console.error("Ad failed:", e);
+           setAdWatchState({ active: false, task: null, countdown: 0, error: "SIGNAL TRANSMISSION FAILED" });
+           setLoadingTaskId(null);
+           triggerHaptic("error");
+         };
+
          if (task.type === 'ad_pop') {
-           if (typeof (window as any).openDirectLink === "function") {
-             try {
-               (window as any).openDirectLink();
-             } catch (e) {}
-           } else {
-             safeOpenLink(task.link || "https://omg10.com/4/11030019");
-           }
+           showAd('pop').then(onComplete).catch(onError);
          } else if (task.type === 'ad_interstitial') {
-           const showAd = (window as any).show_11030019;
-           if (typeof showAd === "function") {
-             try {
-               showAd({
-                 type: 'inApp',
-                 inAppSettings: {
-                   frequency: 2,         // Smooth delivery index
-                   capping: 3,           // Balanced capping
-                   interval: 30,         // Cooldown of 30 seconds
-                   timeout: 1,
-                   everyPage: false      // Prevent automatic spam
-                 }
-               });
-             } catch (e) {
-               console.warn("Telemetry SDK error during batch task action:", e);
-             }
-           }
+           showAd().then(onComplete).catch(onError);
          }
        }
        return;
@@ -754,7 +710,7 @@ export default function SocialTasksScreen() {
                         {isLoading 
                           ? (isAd 
                               ? (adWatchState.active && adWatchState.task?.id === task.id 
-                                  ? `VERIFYING (${adWatchState.countdown}S)` 
+                                  ? "VERIFYING..." 
                                   : "BROADCASTING...")
                               : `SYNCING (${linkCountdown}S)`)
                           : isCooldownActive

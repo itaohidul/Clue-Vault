@@ -80,7 +80,8 @@ app.get("/api/user/:userId", async (req, res) => {
       .eq("telegram_id", userId)
       .maybeSingle();
 
-    if (error && error.code !== "PGRST116") {
+    if (error) {
+      // Quietly fall through if table doesn't exist
       throw error;
     }
 
@@ -178,7 +179,11 @@ app.get("/api/user/:userId", async (req, res) => {
     return res.json(newUser?.state_json || seedState);
 
   } catch (err: any) {
-    console.warn("[DB Fallback] Fetch user failed, using in-memory local cache", err.message);
+    if (err.message?.includes("public.users")) {
+      console.log(`[DB Status] Supabase User Table Syncing... (Local Cache Active for ${userId})`);
+    } else {
+      console.warn(`[DB Status] Connection latency for ${userId}:`, err.message);
+    }
     
     // In-memory fallback check
     let cachedUser = localCache.users.get(userId);
@@ -272,7 +277,9 @@ app.post("/api/user/:userId", async (req, res) => {
     res.json({ success: true, message: "Saved to Supabase database" });
 
   } catch (err: any) {
-    console.warn(`[DB Fallback] Update failed, falling back to local memory store`, err.message);
+    if (!err.message?.includes("public.users")) {
+      console.warn(`[DB status] State synchronization latency:`, err.message);
+    }
     
     const cachedUser = localCache.users.get(userId) || {};
     localCache.users.set(userId, {

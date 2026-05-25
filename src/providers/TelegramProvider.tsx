@@ -17,10 +17,14 @@ export default function TelegramProvider({
 
     if (!tg) return;
 
-    // Polyfill CloudStorage for Telegram WebApp versions below 6.9 to prevent "[Telegram.WebApp] CloudStorage is not supported in version 6.0" warning/error.
+    // Polyfill CloudStorage for Telegram WebApp versions below 6.9 to prevent warnings or errors.
     try {
       const needsPolyfill = typeof tg.isVersionAtLeast !== 'function' || !tg.isVersionAtLeast('6.9');
-      if (needsPolyfill) {
+      
+      // Specifically check if CloudStorage property exists without calling a throwing getter
+      const hasCloudStorage = Object.prototype.hasOwnProperty.call(tg, 'CloudStorage') || (tg.CloudStorage !== undefined);
+
+      if (needsPolyfill && !hasCloudStorage) {
         const mockCloudStorage = {
           setItem: (key: string, value: string, callback?: any) => {
             localStorage.setItem('tg_cloud_' + key, value);

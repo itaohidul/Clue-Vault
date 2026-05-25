@@ -128,7 +128,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     return {
       user: {
         ...(cloudData.user || {}),
-        name: cloudData.name || cloudData.user?.name || "Agent",
+        name: cloudData.username || cloudData.name || cloudData.user?.name || "Agent",
         avatar: cloudData.avatar || cloudData.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=agent`,
         level: cloudData.level ?? cloudData.Level ?? cloudData.user?.level ?? 1,
         exp: cloudData.exp ?? cloudData.EXP ?? cloudData.user?.exp ?? 0,
@@ -138,9 +138,16 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       },
       resources: {
         ...(cloudData.resources || {}),
-        coins: cloudData.coins ?? cloudData.ZP ?? cloudData.resources?.coins ?? 1000,
+        coins: cloudData.balance ?? cloudData.coins ?? cloudData.ZP ?? cloudData.resources?.coins ?? 1000,
         keys: cloudData.keys ?? cloudData.key ?? cloudData.resources?.keys ?? 5,
         clue: cloudData.clue ?? cloudData.Clue ?? cloudData.resources?.clue ?? 0,
+        baseMaterials: cloudData.baseMaterials ?? cloudData.resources?.baseMaterials ?? 0,
+        fragments: cloudData.fragments ?? cloudData.resources?.fragments ?? 0,
+        energy: cloudData.energy ?? cloudData.resources?.energy ?? 100,
+        maxEnergy: cloudData.maxEnergy ?? cloudData.resources?.maxEnergy ?? 100,
+        stakedClue: cloudData.stakedClue ?? cloudData.resources?.stakedClue ?? 0,
+        stakingTier: cloudData.stakingTier ?? cloudData.resources?.stakingTier ?? "none",
+        activityScore: cloudData.activityScore ?? cloudData.resources?.activityScore ?? 0,
       },
       crew: cloudData.crew || null,
       base: cloudData.base || { level: 1, energy: 100 },

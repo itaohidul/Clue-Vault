@@ -306,12 +306,17 @@ app.post("/api/user/:userId", async (req, res) => {
 
   try {
     const updatedBalance = payload.ZP ?? payload.resources?.coins ?? 0;
+    const updateObj: Record<string, any> = {
+      balance: updatedBalance,
+      state_json: payload
+    };
+    if (payload.user?.name) {
+      updateObj.username = payload.user.name;
+    }
+
     const { error } = await supabase
       .from("users")
-      .update({
-        balance: updatedBalance,
-        state_json: payload
-      })
+      .update(updateObj)
       .eq("telegram_id", userId);
 
     if (error) throw error;
@@ -332,6 +337,7 @@ app.post("/api/user/:userId", async (req, res) => {
     localCache.users.set(userId, {
       ...cachedUser,
       telegram_id: userId,
+      username: payload.user?.name || cachedUser.username || "Agent_" + userId.slice(-4),
       balance: payload.ZP ?? payload.resources?.coins ?? 0,
       state_json: payload
     });

@@ -264,7 +264,7 @@ export default function SocialTasksScreen() {
       
       // Calculate random clue reward
       const clueTokens = Math.floor(Math.random() * 20) + 1;
-      completeMission({ coins: task.reward, clue: clueTokens, xp: true });
+      completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
       
       setSuccessAnimation({ active: true, clueAwarded: clueTokens });
       triggerHaptic("success");
@@ -405,6 +405,7 @@ export default function SocialTasksScreen() {
            const randomClue = Math.floor(Math.random() * 20) + 1;
            completeMission({
              coins: task.rewardCoins,
+             keys: task.rewardKeys,
              baseMaterials: task.rewardMats,
              clue: randomClue,
              xp: true
@@ -449,6 +450,7 @@ export default function SocialTasksScreen() {
             
             completeMission({
               coins: task.rewardCoins,
+              keys: task.rewardKeys,
               baseMaterials: task.rewardMats,
               clue: randomClue,
               xp: true
@@ -676,6 +678,12 @@ export default function SocialTasksScreen() {
                           <span className="text-[9px] font-black font-mono text-cyan-400 flex items-center gap-0.5">
                             • <Key size={8} /> +{task.rewardKeys} Key
                           </span>
+                        )}
+                        {task.rewardKeys > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Key size={10} className="text-amber-500" />
+                            <span className="text-white/40">{task.rewardKeys}</span>
+                          </div>
                         )}
                         {task.rewardMats > 0 && (
                           <span className="text-[9px] font-black font-mono text-emerald-400 flex items-center gap-0.5">

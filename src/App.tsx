@@ -174,19 +174,27 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
+  const [showBypass, setShowBypass] = useState(false);
   const [dismissedSyncError, setDismissedSyncError] = useState(false);
 
   // Sync state with Telegram WebApp Backend on load
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
+
+    // Show bypass button after 2.5 seconds of loading
+    const bypassTimer = setTimeout(() => {
+      setShowBypass(true);
+    }, 2500);
+
     if (tg && tg.initData) {
-      // Extended failsafe for mobile data: 5 seconds
+      // Extended failsafe for mobile data: 4 seconds
       const failSafeTimer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 5000);
+      }, 4000);
 
       syncWithBackend(tg.initData).then(() => {
         clearTimeout(failSafeTimer);
+        clearTimeout(bypassTimer);
         setInitSyncCompleted(true);
       }).catch(() => {
         clearTimeout(failSafeTimer);
@@ -195,9 +203,13 @@ function AppContent() {
     } else {
       const timer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 1500);
-      return () => clearTimeout(timer);
+      }, 1200);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(bypassTimer);
+      };
     }
+    return () => clearTimeout(bypassTimer);
   }, [syncWithBackend]);
 
   // Inside Telegram, automatically route from landing "/" to "/app/home"
@@ -324,6 +336,24 @@ function AppContent() {
             <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">SYNCING CREDENTIALS</h1>
             <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
           </div>
+
+          <AnimatePresence>
+            {showBypass && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="pt-2"
+              >
+                <button 
+                  onClick={() => setInitSyncCompleted(true)}
+                  className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-white/40 hover:text-white/60 transition-all active:scale-95"
+                >
+                  Bypass Signal Latency
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="w-48 h-1 bg-white/5 rounded-full mx-auto overflow-hidden">
             <motion.div 
               className="h-full bg-amber-500 glow-gold" 

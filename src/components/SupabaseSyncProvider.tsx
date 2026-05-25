@@ -209,7 +209,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     const fetchUserAndAssets = async () => {
       setIsSyncing(true);
       const controller = new AbortController();
-      const handshakeTimeout = setTimeout(() => controller.abort(), 8000); // Strict 8s mobile data handshake
+      const handshakeTimeout = setTimeout(() => controller.abort(), 5000); // Strict 5s mobile data handshake
 
       try {
         // Query server db state verify with restricted timeout

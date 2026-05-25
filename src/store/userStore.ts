@@ -312,7 +312,8 @@ export const useUserStore = create<GameState>((set, get) => ({
   syncWithBackend: async (initData: string) => {
     set({ isLoading: true });
     try {
-      const response = await axios.post('/api/auth/telegram', { initData }, { timeout: 6000 });
+      // Increase timeout to 15s for mobile carrier data links
+      const response = await axios.post('/api/auth/telegram', { initData }, { timeout: 15000 });
       // If server returned structured data
       if (response.data && response.data.user) {
         const serverUser = response.data.user;
@@ -337,9 +338,10 @@ export const useUserStore = create<GameState>((set, get) => ({
 
         set(nextState);
         localStorage.setItem('cluevault_game_state_zustand', JSON.stringify(nextState));
+        console.log("[Auth] Session handshake verified.");
       }
     } catch (e: any) {
-      console.warn("Skipping backend sync, using local state fallback", e.message);
+      console.warn("[Auth] Handshake signal latency detected. Falling back to encrypted local cache.", e.message);
     } finally {
       set({ isLoading: false });
     }

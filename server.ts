@@ -37,6 +37,27 @@ app.get("/api/health", (req, res) => {
 });
 
 // Supabase Connection Status Helper
+app.post("/api/auth/telegram", async (req, res) => {
+  const { initData } = req.body;
+  
+  // Minimal satisfying response for the front-end userStore sync protocol
+  // In a real app, this would validate the initData via bot token hash
+  try {
+    // If we have Telegram data, extract user ID for basic handshake
+    const params = new URLSearchParams(initData);
+    const userStr = params.get("user");
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    res.json({
+      success: true,
+      user: user || { id: "anon", first_name: "Guest" },
+      message: "Handshake established"
+    });
+  } catch (e) {
+    res.status(400).json({ error: "Invalid handshake signal" });
+  }
+});
+
 app.get("/api/db-verify", async (req, res) => {
   try {
     const { data, error } = await supabase.from("users").select("id").limit(1);

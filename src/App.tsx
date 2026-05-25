@@ -180,10 +180,10 @@ function AppContent() {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initData) {
-      // Extended failsafe for mobile data: 8 seconds
+      // Extended failsafe for mobile data: 5 seconds
       const failSafeTimer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 8000);
+      }, 5000);
 
       syncWithBackend(tg.initData).then(() => {
         clearTimeout(failSafeTimer);
@@ -302,8 +302,8 @@ function AppContent() {
   }, [location.pathname, navigate]);
 
   // Render Screen Preloader Loader Splash
-  // Wait for BOTH zustand base sync and supabase cloud hydration (or its failsafe)
-  if (!initSyncCompleted || !isCloudLoaded) {
+  // Wait for initial sync – we allow entry even if cloud is still connecting to prevent mobile data hangs
+  if (!initSyncCompleted) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div 
@@ -322,11 +322,7 @@ function AppContent() {
           </div>
           <div>
             <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">SYNCING CREDENTIALS</h1>
-            {!isCloudLoaded && initSyncCompleted ? (
-              <p className="text-[10px] text-amber-500/50 font-bold uppercase tracking-[0.25em] animate-pulse">Relinking Mystery Signal...</p>
-            ) : (
-              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
-            )}
+            <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
           </div>
           <div className="w-48 h-1 bg-white/5 rounded-full mx-auto overflow-hidden">
             <motion.div 

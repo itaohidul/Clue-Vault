@@ -1,11 +1,11 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
 import { supabase } from "./src/lib/supabase";
-
-dotenv.config();
 
 const app = express();
 const PORT = 3000;
@@ -402,9 +402,11 @@ app.post("/api/tasks/claim", async (req, res) => {
     if (userErr || !user) throw userErr || new Error("User file decrypted abnormally");
 
     const rewardCoins = Number(task.reward || 0);
+    const rewardKeys = Number(task.reward_keys ?? task.rewardKeys ?? 1);
     const updatedState = { ...user.state_json };
     if (updatedState.resources) {
       updatedState.resources.coins = (updatedState.resources.coins || 0) + rewardCoins;
+      updatedState.resources.keys = (updatedState.resources.keys || 0) + rewardKeys;
     }
 
     // Mark completed task inside state's custom tracker too, in case
@@ -428,7 +430,7 @@ app.post("/api/tasks/claim", async (req, res) => {
       type: "task_completion"
     }]);
 
-    res.json({ success: true, reward: rewardCoins });
+    res.json({ success: true, reward: rewardCoins, rewardKeys });
 
   } catch (err: any) {
     console.warn("[DB Fallback] Claiming task running offline fallback mode", err.message);
@@ -456,10 +458,12 @@ app.post("/api/tasks/claim", async (req, res) => {
 
     // Update Cache account balance
     const user = localCache.users.get(userId);
+    const rewardKeys = Number((task as any).reward_keys ?? (task as any).rewardKeys ?? 1);
     if (user) {
       user.balance += task.reward;
       if (user.state_json.resources) {
         user.state_json.resources.coins += task.reward;
+        user.state_json.resources.keys = (user.state_json.resources.keys || 0) + rewardKeys;
       }
       if (!user.state_json.completedTaskIds) {
         user.state_json.completedTaskIds = [];
@@ -475,7 +479,7 @@ app.post("/api/tasks/claim", async (req, res) => {
       created_at: new Date().toISOString()
     });
 
-    res.json({ success: true, reward: task.reward });
+    res.json({ success: true, reward: task.reward, rewardKeys });
   }
 });
 

@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Base API URL configuration
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const api = axios.create({ baseURL: API_BASE, timeout: 10000 }); // Add global 10s timeout protective layer
+const api = axios.create({ baseURL: API_BASE, timeout: 4000 }); // Add global 4s timeout protective layer to prevent mobile carrier data handshakes from hanging the thread
 
 interface SupabaseTask {
   id: number;
@@ -178,17 +178,22 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     try {
       const response = await api.post("/api/tasks/claim", { userId, taskId });
       if (response.data?.success) {
-        // Boost local game store state ZP
+        // Boost local game store state ZP and Keys
         const reward = response.data.reward || 0;
-        const currentCoins = useUserStore.getState().resources?.coins || 0;
+        const rewardKeys = response.data.rewardKeys || 1;
         
         // Push state update globally on userStore
-        useUserStore.setState((state: any) => ({
-          resources: {
-            ...(state.resources || {}),
-            coins: currentCoins + reward
-          }
-        }));
+        useUserStore.setState((state: any) => {
+          const currentCoins = state.resources?.coins || 0;
+          const currentKeys = state.resources?.keys || 0;
+          return {
+            resources: {
+              ...(state.resources || {}),
+              coins: currentCoins + reward,
+              keys: currentKeys + rewardKeys
+            }
+          };
+        });
 
         // Refresh completed tasks lists & ledger histories
         setCompletedTaskIds(prev => [...prev, taskId]);

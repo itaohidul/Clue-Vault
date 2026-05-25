@@ -170,7 +170,7 @@ function AppContent() {
     isLoading
   } = useUserStore();
 
-  const { userId, error: syncError, setError: setSyncError, syncLocalToCloud } = useSupabaseSync();
+  const { userId, error: syncError, setError: setSyncError, syncLocalToCloud, isCloudLoaded } = useSupabaseSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
@@ -180,10 +180,10 @@ function AppContent() {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initData) {
-      // Force sync completion as a failsafe after 3 seconds so the app never hangs on a black loading screen
+      // Extended failsafe for mobile data: 8 seconds
       const failSafeTimer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 3000);
+      }, 8000);
 
       syncWithBackend(tg.initData).then(() => {
         clearTimeout(failSafeTimer);
@@ -195,7 +195,7 @@ function AppContent() {
     } else {
       const timer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 1000);
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [syncWithBackend]);
@@ -302,7 +302,8 @@ function AppContent() {
   }, [location.pathname, navigate]);
 
   // Render Screen Preloader Loader Splash
-  if (!initSyncCompleted) {
+  // Wait for BOTH zustand base sync and supabase cloud hydration (or its failsafe)
+  if (!initSyncCompleted || !isCloudLoaded) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
         <motion.div 
@@ -321,7 +322,11 @@ function AppContent() {
           </div>
           <div>
             <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">SYNCING CREDENTIALS</h1>
-            <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
+            {!isCloudLoaded && initSyncCompleted ? (
+              <p className="text-[10px] text-amber-500/50 font-bold uppercase tracking-[0.25em] animate-pulse">Relinking Mystery Signal...</p>
+            ) : (
+              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.25em] animate-pulse">Establishing Signal Line...</p>
+            )}
           </div>
           <div className="w-48 h-1 bg-white/5 rounded-full mx-auto overflow-hidden">
             <motion.div 

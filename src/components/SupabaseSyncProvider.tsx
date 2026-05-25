@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Base API URL configuration
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const api = axios.create({ baseURL: API_BASE });
+const api = axios.create({ baseURL: API_BASE, timeout: 10000 }); // Add global 10s timeout protective layer
 
 interface SupabaseTask {
   id: number;
@@ -208,21 +208,24 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
 
     const fetchUserAndAssets = async () => {
       setIsSyncing(true);
+      const controller = new AbortController();
+      const handshakeTimeout = setTimeout(() => controller.abort(), 8000); // Strict 8s mobile data handshake
+
       try {
-        // Query server db state verify to show exact sync metrics
-        const verifyRes = await api.get<any>("/api/db-verify");
+        // Query server db state verify with restricted timeout
+        const verifyRes = await api.get<any>("/api/db-verify", { signal: controller.signal });
         setDbConnected(verifyRes.data?.readyState === 1);
 
         // Telegram user loader
-        const response = await api.get(`/api/user/${userId}`);
+        const response = await api.get(`/api/user/${userId}`, { signal: controller.signal });
         const cloudData = response.data;
         
+        clearTimeout(handshakeTimeout);
+
         if (cloudData) {
           const nextState = mapSupabaseToState(cloudData);
           const localState = useUserStore.getState();
 
-          // Elevate security check: if local storage holds completed progress or higher assets than cloud state,
-          // preserve local data and write it back up rather than reverting back to start/level 1.
           const localIsNewer = 
             (localState?.user?.onboarded && !nextState?.user?.onboarded) ||
             ((localState?.user?.level || 1) > (nextState?.user?.level || 1)) ||
@@ -230,23 +233,22 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
             ((localState?.resources?.clue || 0) > (nextState?.resources?.clue || 0));
 
           if (localIsNewer) {
-            console.log("Local progress is more advanced than cloud data. Preserving local progress and pushing updates...");
-            // Upload current advanced client data back to align cloud database
-            const payload = mapStateToSupabasePayload(localState);
-            await api.post(`/api/user/${userId}`, payload);
+            console.log("Local progress is ahead. Pushing update...");
+            pushUpdateInternal(true);
           } else {
-            console.log("Cloud data is up-to-date or newer. Restoring state from cloud node.");
+            console.log("Cloud data synced.");
             isSyncingFromCloudRef.current = true;
             useUserStore.setState(nextState);
-            localStorage.setItem("cluevault_game_state_zustand", JSON.stringify(nextState));
             isSyncingFromCloudRef.current = false;
           }
         }
         setIsCloudLoaded(true);
       } catch (err: any) {
-        setIsCloudLoaded(true);
+        console.warn("Mobile signal handshake deferred. Proceeding with local cache.");
+        setIsCloudLoaded(true); // Failsafe: unlock app even on network failure
       } finally {
         setIsSyncing(false);
+        clearTimeout(handshakeTimeout);
       }
     };
 

@@ -312,7 +312,7 @@ export const useUserStore = create<GameState>((set, get) => ({
   syncWithBackend: async (initData: string) => {
     set({ isLoading: true });
     try {
-      const response = await axios.post('/api/auth/telegram', { initData }, { timeout: 4000 });
+      const response = await axios.post('/api/auth/telegram', { initData }, { timeout: 6000 });
       // If server returned structured data
       if (response.data && response.data.user) {
         const serverUser = response.data.user;

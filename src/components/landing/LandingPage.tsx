@@ -56,8 +56,9 @@ export default function LandingPage() {
               Play Now
             </Link>
             <a 
-              href="https://t.me/" 
+              href="https://t.me/Cluevaultofficial" 
               target="_blank"
+              rel="noopener noreferrer"
               className="w-full sm:w-auto glass px-10 py-4 rounded-full font-black text-lg transition-all uppercase italic border-white/20 hover:border-white/40 active:scale-95"
             >
               Join Telegram
@@ -137,7 +138,8 @@ export default function LandingPage() {
           <div>
             <h4 className="text-white font-bold uppercase mb-6 tracking-wider">Engagement</h4>
             <ul className="space-y-4">
-              <li><a href="#" className="hover:text-amber-500">Telegram Channel</a></li>
+              <li><a href="https://t.me/Cluevaultofficial" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500">Telegram Channel</a></li>
+              <li><a href="https://t.me/Cluevaultchat" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500">Telegram Chat</a></li>
               <li><a href="#" className="hover:text-amber-500">Support</a></li>
               <li><a href="#" className="hover:text-amber-500">Referral Program</a></li>
             </ul>

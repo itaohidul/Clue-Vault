@@ -201,11 +201,19 @@ export default function SocialTasksScreen() {
   const [communityTasks, setCommunityTasks] = useState(() => {
     const saved = localStorage.getItem("cluevault_oneoff_tasks");
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        // Automatically migrate old links to new active targets while preserving completion states
+        return parsed.map((t: any) => {
+          if (t.id === "join_tg") return { ...t, link: "https://t.me/Cluevaultchat" };
+          if (t.id === "follow_news") return { ...t, link: "https://t.me/Cluevaultofficial" };
+          return t;
+        });
+      } catch {}
     }
     return [
-      { id: "join_tg", title: "Join Telegram Community", icon: MessageSquare, reward: 500, link: "https://t.me/cluevault_group", completed: false },
-      { id: "follow_news", title: "Follow Announcements", icon: Bell, reward: 300, link: "https://t.me/cluevault_channel", completed: false },
+      { id: "join_tg", title: "Join Telegram Community", icon: MessageSquare, reward: 500, link: "https://t.me/Cluevaultchat", completed: false },
+      { id: "follow_news", title: "Follow Announcements", icon: Bell, reward: 300, link: "https://t.me/Cluevaultofficial", completed: false },
     ];
   });
 

@@ -1,10 +1,56 @@
+import { useState, useEffect } from "react";
 import { useGame } from "../../App";
-import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight } from "lucide-react";
-import { motion } from "motion/react";
+import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 
 export default function ProfileScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<string | null>(null);
+
+  const handleSearch = async (val: string) => {
+    setSearchQuery(val);
+    setIsSearching(true);
+    try {
+      const resp = await fetch(`/api/users/search?query=${encodeURIComponent(val)}`);
+      const data = await resp.json();
+      setSearchResults(data || []);
+    } catch (e) {
+      console.error("Discovery error", e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    handleSearch("");
+  }, []);
+
+  const handleRestoreAccount = (remoteUser: any) => {
+    triggerHaptic("success");
+    setRecoveryStatus("Pairing selected credential node...");
+    
+    setTimeout(() => {
+      try {
+        localStorage.setItem("cluevault_supabase_id", remoteUser.telegram_id);
+        localStorage.setItem("cluevault_onboarding_hidden", "true");
+        localStorage.removeItem("cluevault_onboarding_skipped");
+        
+        setRecoveryStatus("Handshake paired successfully! Rebooting shell...");
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } catch (err) {
+        setRecoveryStatus("Initialization failed: permissions error.");
+      }
+    }, 1000);
+  };
 
   const handleAction = () => {
     if (!user.onboarded) {
@@ -105,20 +151,162 @@ export default function ProfileScreen() {
           </div>
           <ChevronRight size={16} className="text-white/20" />
         </button>
+        
+        {/* Account Discovery & Recovery Module */}
         <button 
-          onClick={handleAction}
-          className="w-full glass p-4 rounded-2xl flex items-center justify-between border-white/5 hover:bg-white/5 transition-all text-sm font-black uppercase italic tracking-tight"
+          onClick={() => {
+            triggerHaptic("heavy");
+            setShowRecoveryPanel(true);
+            handleSearch("");
+          }}
+          className="w-full glass p-4 rounded-2xl flex items-center justify-between border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/10 transition-all text-sm font-black uppercase italic tracking-tight text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.05)]"
+        >
+          <div className="flex items-center gap-3">
+            <Key size={18} className="animate-pulse" />
+            <span>Restore Lost Progress</span>
+          </div>
+          <ChevronRight size={16} className="text-amber-500/60" />
+        </button>
+
+        <button 
+          onClick={() => {
+            triggerHaptic("light");
+            localStorage.clear();
+            window.location.reload();
+          }}
+          className="w-full glass p-4 rounded-2xl flex items-center justify-between border-white/5 hover:bg-red-500/5 transition-all text-sm font-black uppercase italic tracking-tight"
         >
           <div className="flex items-center gap-3 text-red-500/60">
             <LogOut size={18} />
-            <span>Abandon Terminal</span>
+            <span>Reset Cache & Onboard</span>
           </div>
         </button>
       </div>
 
       <div className="text-center pt-4">
-        <p className="text-[8px] font-black uppercase tracking-[0.3em] text-white/10">ID: CV-882-AGENT-ALPHA</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.3em] text-white/10">{user?.id ? `TERMINAL ID: ${user.id}` : "MODE: OFFLINE MONITOR"}</p>
       </div>
+
+      {/* Account Restore Terminal Drawer */}
+      <AnimatePresence>
+        {showRecoveryPanel && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex flex-col justify-end"
+          >
+            {/* Backdrop Dismiss Clickable Area */}
+            <div className="absolute inset-0 z-0" onClick={() => setShowRecoveryPanel(false)} />
+
+            {/* Recovery Drawer Body */}
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="relative z-10 glass-dark rounded-t-[2.5rem] border-t border-white/10 max-h-[85vh] flex flex-col p-6 pb-12 w-full max-w-md mx-auto"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-black uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">Terminal Recovery</h2>
+                  <p className="text-[10px] text-white/40 font-bold uppercase italic">Sync previous credentials / codenames</p>
+                </div>
+                <button 
+                  onClick={() => setShowRecoveryPanel(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase text-white/50 transition-all"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Status Message Overlay */}
+              {recoveryStatus ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+                  <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
+                  <p className="text-[11px] font-black uppercase text-amber-500 tracking-wider animate-pulse">{recoveryStatus}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Search Query Area */}
+                  <div className="relative mb-5">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={16} />
+                    <input 
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      placeholder="Search codename or agent name..."
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-6 outline-none focus:border-amber-500/30 text-xs font-black uppercase italic text-amber-400 placeholder-white/20 transition-all animate-none"
+                    />
+                    {isSearching && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={14} />
+                    )}
+                  </div>
+
+                  {/* Scannable Results Container */}
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[45vh] min-h-[30vh]">
+                    {searchResults.length === 0 ? (
+                      <div className="h-44 flex flex-col items-center justify-center text-center p-6 text-white/20 border border-white/5 border-dashed rounded-2xl">
+                        <UserCheck size={28} className="mb-2 opacity-50" />
+                        <span className="text-[10px] font-black uppercase tracking-wider">No matching active nodes.</span>
+                        <span className="text-[8px] uppercase tracking-wide text-white/10 mt-1">Please insert at least 2 char codename.</span>
+                      </div>
+                    ) : (
+                      searchResults.map((item: any, idx: number) => {
+                        const parsedState = item.state_json || {};
+                        const playerLvl = parsedState.user?.level || item.level || 1;
+                        const isCurrent = item.telegram_id === localStorage.getItem("cluevault_supabase_id");
+
+                        return (
+                          <div 
+                            key={item.telegram_id || idx}
+                            className={cn(
+                              "glass rounded-2xl p-4 flex items-center justify-between border-white/5 transition-all text-left",
+                              isCurrent ? "border-amber-500/20 bg-amber-500/5 relative" : "hover:border-white/10"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 overflow-hidden">
+                                <img src={parsedState.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.telegram_id}`} className="w-full h-full object-cover" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-black uppercase tracking-tight flex items-center gap-1.5">
+                                  {item.username || parsedState.user?.name || "Agent"}
+                                  {isCurrent && <span className="text-[6.5px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-black uppercase italic tracking-wide">Connected</span>}
+                                </h4>
+                                <div className="text-[8px] font-black text-white/30 uppercase mt-0.5">
+                                  LEVEL {playerLvl} • {(item.balance || parsedState.resources?.coins || 0).toLocaleString()} ZP
+                                </div>
+                                <div className="text-[7px] text-white/15 uppercase font-mono mt-0.5 mt-1 leading-none">
+                                  ID: {item.telegram_id.slice(0, 12)}...
+                                </div>
+                              </div>
+                            </div>
+
+                            {!isCurrent && (
+                              <button
+                                onClick={() => handleRestoreAccount(item)}
+                                className="bg-amber-500 hover:bg-amber-600 px-4 py-2.5 rounded-xl text-black font-black uppercase italic text-[9px] tracking-tight transition-all active:scale-95 shadow-md"
+                              >
+                                Restore
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <p className="text-[7.5px] font-black uppercase text-center tracking-normal text-white/15 px-4 leading-normal mt-5">
+                    Terminal database synchronizer queries records in Supabase active cluster to re-route persistent session keys safely.
+                  </p>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

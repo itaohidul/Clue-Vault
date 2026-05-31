@@ -5,8 +5,8 @@
 
 import { HashRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useEffect, createContext, useContext, Component, ReactNode } from "react";
-import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu, Coins } from "lucide-react";
+import { useState, useEffect, createContext, useContext, Component, ReactNode, useRef } from "react";
+import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu, Coins, Award, Sparkles, Zap, ChevronRight } from "lucide-react";
 import { cn } from "./lib/utils";
 import LandingPage from "./components/landing/LandingPage";
 import AppNavbar from "./components/layout/AppNavbar";
@@ -162,6 +162,16 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: any) => void }) {
   );
 }
 
+const getClearanceBracket = (level: number) => {
+  const lvl = Math.floor(level);
+  if (lvl <= 5) return { name: "Beginner", cap: 100, desc: "Baseline security credential node" };
+  if (lvl <= 15) return { name: "Explorer", cap: 250, desc: "Unlocked advanced cryptographic data trails" };
+  if (lvl <= 30) return { name: "Vault Hunter", cap: 500, desc: "Deep decryption and rare artifacts tracker" };
+  if (lvl <= 50) return { name: "Cipher Elite", cap: 1000, desc: "High-clearance security agent tier" };
+  if (lvl <= 75) return { name: "Shadow Operator", cap: 1500, desc: "S-class classified decryption authorization" };
+  return { name: "Vault Master", cap: 2500, desc: "Master of absolute security bypass systems" };
+};
+
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -184,6 +194,30 @@ function AppContent() {
   const [dismissedSyncError, setDismissedSyncError] = useState(false);
 
   const [firstRouteLogged, setFirstRouteLogged] = useState(false);
+
+  // Clearance Level Escalation State & Listener
+  const [levelUpData, setLevelUpData] = useState<{ oldLevel: number; newLevel: number } | null>(null);
+  const prevLevelRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (initSyncCompleted && user && user.level) {
+      if (prevLevelRef.current === null) {
+        prevLevelRef.current = user.level;
+      } else if (user.level > prevLevelRef.current) {
+        setLevelUpData({
+          oldLevel: prevLevelRef.current,
+          newLevel: user.level
+        });
+        try {
+          triggerHaptic("heavy");
+        } catch (e) {}
+        prevLevelRef.current = user.level;
+      } else if (user.level < prevLevelRef.current) {
+        // Keeps state aligned if user switches profiles or resets cache
+        prevLevelRef.current = user.level;
+      }
+    }
+  }, [user?.level, initSyncCompleted, triggerHaptic]);
 
   // Sync state with Telegram WebApp Backend on load
   useEffect(() => {
@@ -412,6 +446,168 @@ function AppContent() {
         }} />}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {levelUpData && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl overflow-y-auto"
+          >
+            {/* Background elements */}
+            <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.15)_0%,transparent_70%)] pointer-events-none" />
+            
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative z-10 glass rounded-[2.5rem] p-8 max-w-sm w-full text-center border-amber-500/50 glow-gold shadow-2xl bg-black/40"
+            >
+              {/* Confetti / Sparkle Decor */}
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center justify-center">
+                <div className="relative">
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
+                    className="absolute inset-0 bg-amber-500/10 blur-xl w-32 h-32 -m-8 rounded-full"
+                  />
+                  <div className="w-24 h-24 bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-600 rounded-[2.2rem] flex items-center justify-center text-black shadow-lg relative z-10 border border-amber-300">
+                    <Award size={48} className="animate-bounce" />
+                  </div>
+                  <motion.div 
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="absolute -top-2 -right-2 bg-yellow-400 text-black p-1.5 rounded-full z-20 border border-black"
+                  >
+                    <Sparkles size={16} />
+                  </motion.div>
+                </div>
+              </div>
+
+              <div className="pt-14 mt-2">
+                <span className="text-[10px] font-mono tracking-[0.4em] uppercase text-amber-500 font-bold block mb-1">
+                  SECURITY CLEARANCE UPGRADE
+                </span>
+                <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white mb-2">
+                  Level Escalated!
+                </h2>
+                
+                {/* Level Display */}
+                <div className="flex items-center justify-center gap-4 bg-white/5 border border-white/5 py-3 px-6 rounded-2xl my-4">
+                  <div className="text-center">
+                    <span className="text-[9px] uppercase font-bold text-white/30 block leading-tight">PREVIOUS</span>
+                    <span className="text-base font-mono text-white/50 line-through">LVL {levelUpData.oldLevel}</span>
+                  </div>
+                  <ChevronRight className="text-amber-500 animate-pulse animate-none" size={16} />
+                  <div className="text-center">
+                    <span className="text-[9px] uppercase font-black text-amber-500 block leading-tight animate-pulse animate-none">CURRENT</span>
+                    <span className="text-xl font-mono text-amber-400 font-black">LVL {levelUpData.newLevel}</span>
+                  </div>
+                </div>
+
+                {/* Bracket Reveal */}
+                {(() => {
+                  const bracket = getClearanceBracket(levelUpData.newLevel);
+                  const isNewBracket = getClearanceBracket(levelUpData.oldLevel).name !== bracket.name;
+                  return (
+                    <div className="mb-6">
+                      <div className="text-[9px] font-bold text-white/40 uppercase tracking-widest block mb-1">
+                        CURRENT BRACKET CLASS
+                      </div>
+                      <div className="text-base font-black text-white uppercase italic tracking-wide flex items-center justify-center gap-2">
+                        <span>🛡️</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
+                          {bracket.name}
+                        </span>
+                        {isNewBracket && (
+                          <span className="text-[8px] font-black bg-emerald-500 text-black px-1.5 py-0.5 rounded uppercase font-sans animate-bounce animate-none">
+                            PROMOTED
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-white/40 mt-1 italic leading-snug px-2">
+                        "{bracket.desc}"
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Active Bonus Grid */}
+                <div className="space-y-2 text-left mb-6 mx-auto w-full">
+                  <div className="text-[8px] font-bold text-white/40 uppercase tracking-widest block mb-1">
+                    NEW OPERATIONAL STAT BONUSES:
+                  </div>
+
+                  {/* Bonus 1: Daily Score Cap */}
+                  {(() => {
+                    const oldBracket = getClearanceBracket(levelUpData.oldLevel);
+                    const newBracket = getClearanceBracket(levelUpData.newLevel);
+                    return (
+                      <div className="bg-white/5 border border-white/5 p-3 rounded-2xl flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <Zap size={14} className="text-amber-500 shrink-0" />
+                          <div>
+                            <div className="text-[9px] font-black text-white uppercase tracking-tight leading-none">Daily Reward Cap</div>
+                            <div className="text-[8px] text-white/30 uppercase mt-0.5 font-bold leading-none">Earn cap in earn screen</div>
+                          </div>
+                        </div>
+                        <div className="text-right font-mono text-[10px] leading-none">
+                          <span className="text-white/40 line-through mr-1.5">{oldBracket.cap} ZP</span>
+                          <span className="text-amber-500 font-black">+{newBracket.cap} ZP</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Bonus 2: Mission EXP Yield */}
+                  <div className="bg-white/5 border border-white/5 p-3 rounded-2xl flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Award size={14} className="text-violet-400 shrink-0" />
+                      <div>
+                        <div className="text-[9px] font-black text-white uppercase tracking-tight leading-none font-sans">Mission Base EXP</div>
+                        <div className="text-[8px] text-white/30 uppercase mt-0.5 font-bold leading-none">Scales with level upgrade</div>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono text-[10px] leading-none">
+                      <span className="text-white/40 line-through mr-1.5">+{40 + (levelUpData.oldLevel * 5)}</span>
+                      <span className="text-violet-400 font-black">+{40 + (levelUpData.newLevel * 5)}</span>
+                    </div>
+                  </div>
+
+                  {/* Bonus 3: Energy Restore Failsafe */}
+                  <div className="bg-white/5 border border-white/5 p-3 rounded-2xl flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Cpu size={14} className="text-emerald-400 animate-pulse shrink-0" />
+                      <div>
+                        <div className="text-[9px] font-black text-white uppercase tracking-tight leading-none">Terminal Energy</div>
+                        <div className="text-[8px] text-white/30 uppercase mt-0.5 font-bold leading-none">Payload backup battery</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-emerald-400 font-black uppercase text-[7.5px] bg-emerald-500/10 px-1.5 py-0.5 rounded leading-none">RESTORED</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Confirm Action Button */}
+                <button
+                  onClick={() => {
+                    try {
+                      triggerHaptic("medium");
+                    } catch (e) {}
+                    setLevelUpData(null);
+                  }}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-600 hover:to-amber-500 text-black py-4 rounded-2xl font-black uppercase italic active:scale-95 transition-all text-xs tracking-wider shadow-lg shadow-amber-500/10"
+                >
+                  Authorize Promotion & Continue
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         <Routes location={location}>
           <Route path="/" element={<LandingPage />} />
@@ -512,8 +708,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               <button 
                 onClick={() => {
                   try {
+                    const savedId = localStorage.getItem("cluevault_supabase_id");
+                    const onboardingHidden = localStorage.getItem("cluevault_onboarding_hidden");
+                    const onboardingSkipped = localStorage.getItem("cluevault_onboarding_skipped");
+                    
                     localStorage.clear();
-                    console.log("[DIAG] Cleared localStorage to bypass crash loop");
+                    
+                    if (savedId) {
+                      localStorage.setItem("cluevault_supabase_id", savedId);
+                    }
+                    if (onboardingHidden) {
+                      localStorage.setItem("cluevault_onboarding_hidden", onboardingHidden);
+                    }
+                    if (onboardingSkipped) {
+                      localStorage.setItem("cluevault_onboarding_skipped", onboardingSkipped);
+                    }
+                    console.log("[DIAG] Cleared state cache, but restored user session key:", savedId);
                   } catch (e) {}
                   window.location.reload();
                 }} 

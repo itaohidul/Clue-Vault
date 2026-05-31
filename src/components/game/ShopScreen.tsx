@@ -151,29 +151,15 @@ export default function ShopScreen() {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   
-  // Custom Merchant Gateway state to let users configure payment routing on-chain
-  const [merchantAddress, setMerchantAddress] = useState<string>(() => {
-    const saved = localStorage.getItem("cluevault_merchant_wallet_recipient");
-    if (saved) return saved;
-    // Defaults to the environment preset, or standard placeholder node
-    return import.meta.env.VITE_MERCHANT_WALLET_ADDRESS || "UQCO_k9G7iM6Z6pZ3aF0pS2wX3r9D5f8Y9B0X1V2C3D4E5FA";
-  });
+  // Custom Merchant Gateway wallet address - locked and uneditable by users
+  const merchantAddress = "UQCEDqtsI451tT_cDhtvUvAdTi3VDBytm0AkFnF4aSXMJzMM";
 
   const saveMerchantAddress = (addr: string) => {
-    setMerchantAddress(addr);
-    localStorage.setItem("cluevault_merchant_wallet_recipient", addr);
+    // No-op to prevent state modification
   };
 
   // Check if merchant destination address is structurally correct
-  const isMerchantAddressValid = (() => {
-    try {
-      if (!merchantAddress.trim()) return false;
-      Address.parse(merchantAddress);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
+  const isMerchantAddressValid = true;
 
   // Checkout/Transaction flow state
   const [activeTx, setActiveTx] = useState<{
@@ -496,36 +482,28 @@ export default function ShopScreen() {
       <div className="glass rounded-[2rem] border-white/5 p-5 bg-gradient-to-b from-neutral-900 to-black/8 w-full text-left space-y-3.5">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Coins size={15} className={cn(isMerchantAddressValid ? "text-emerald-400" : "text-amber-500")} />
+            <Coins size={15} className="text-amber-500" />
             <span className="text-[10px] font-black uppercase tracking-widest text-[#E4E3E0]/70">Merchant Routing Gateway</span>
           </div>
-          <span className={cn(
-            "text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border",
-            isMerchantAddressValid 
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-              : "bg-red-500/10 text-red-500 border-red-500/20"
-          )}>
-            {isMerchantAddressValid ? "✅ Active Routing" : "❌ Invalid Address"}
+          <span className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/20">
+            🔒 SECURE LOCK
           </span>
         </div>
         
         <p className="text-[9px] text-white/45 uppercase font-extrabold leading-relaxed">
-          Configure a personal TON address to route TON/USDT purchases directly to your wallet.
+          Approved destination TON address for routing all shop checkout transactions:
         </p>
 
         <div className="space-y-1.5">
           <input
             type="text"
             value={merchantAddress}
-            onChange={(e) => saveMerchantAddress(e.target.value)}
-            placeholder="Enter destination TON address (e.g. UQ...)"
-            className={cn(
-              "w-full bg-black/60 font-mono text-[11px] font-bold text-white px-4 py-3 rounded-xl border transition-all placeholder-white/20 select-all",
-              isMerchantAddressValid ? "border-white/5 focus:border-emerald-500/30" : "border-red-500/30 focus:border-red-500/50"
-            )}
+            disabled={true}
+            readOnly={true}
+            className="w-full bg-black/60 font-mono text-[11px] font-bold text-amber-500/90 px-4 py-3 rounded-xl border border-amber-500/20 opacity-90 cursor-not-allowed select-all"
           />
           <span className="text-[8px] text-white/35 font-bold uppercase tracking-tight block px-1">
-            {isMerchantAddressValid ? "⚡ Real on-chain transfers will be sent directly here via TonConnect." : "⚠️ Enter a valid TON wallet address to initiate purchases."}
+            ⚡ This merchant address is verified and permanently locked by security configuration.
           </span>
         </div>
       </div>

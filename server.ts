@@ -361,6 +361,47 @@ app.get("/api/startup/:userId", async (req, res) => {
   }
 });
 
+// Search and recover users for account restoration
+app.get("/api/users/search", async (req, res) => {
+  const { query } = req.query;
+  try {
+    if (!query || String(query).trim().length < 2) {
+      // Return top 15 players as recovery suggestions
+      const { data, error } = await supabase
+        .from("users")
+        .select("telegram_id, username, balance, state_json, created_at")
+        .order("balance", { ascending: false })
+        .limit(15);
+      if (error) throw error;
+      return res.json(data || []);
+    }
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("telegram_id, username, balance, state_json, created_at")
+      .ilike("username", `%${String(query).trim()}%`)
+      .limit(15);
+    
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error("[Search Users API] Error:", err.message);
+    const results = [];
+    const lowerQuery = String(query || "").trim().toLowerCase();
+    for (const [id, value] of localCache.users.entries()) {
+      if (!lowerQuery || value.username.toLowerCase().includes(lowerQuery)) {
+        results.push({
+          telegram_id: value.telegram_id,
+          username: value.username,
+          balance: value.balance,
+          state_json: value.state_json
+        });
+      }
+    }
+    res.json(results.slice(0, 15));
+  }
+});
+
 // Get User State (Auto-Registration + Referral Tracker)
 app.get("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -817,60 +858,93 @@ app.get("/api/transactions/:userId", async (req, res) => {
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const { category } = req.query;
-    const sortField = category === "referrals" ? "referCount" : "balance";
 
-    let items: any[] = [];
-    if (category === "referrals") {
-      // Find all and sort by refer count
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("balance", { ascending: false }) // Fallback to balance
-        .limit(20);
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .limit(100);
 
-      if (error) throw error;
-      items = data || [];
-    } else {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("balance", { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      items = data || [];
-    }
+    if (error) throw error;
+    const items = data || [];
 
     // Convert internal database schema to leaderboard visualizer specs
-    const scoredLeaderboard = items.map((u: any) => {
+    let scoredLeaderboard = items.map((u: any) => {
       const details = u.state_json || {};
+      const nameVal = u.username || details.user?.name || "Agent_" + u.telegram_id?.slice(-4);
+      const avatarVal = details.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.telegram_id}`;
+      const levelVal = details.user?.level || 1;
+      const expVal = details.user?.exp || 0;
+      const clearanceVal = details.user?.clearanceCount || 0;
+      const referVal = details.user?.referCount || 0;
       return {
         userId: u.telegram_id,
-        name: u.username || details.user?.name || "Agent_" + u.telegram_id?.slice(-4),
-        avatar: details.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.telegram_id}`,
-        Level: details.user?.level || 1,
-        EXP: details.user?.exp || 0,
-        ZP: u.balance,
-        referCount: details.user?.referCount || 0
+        name: nameVal,
+        avatar: avatarVal,
+        Level: levelVal,
+        EXP: expVal,
+        ZP: u.balance || details.resources?.coins || 0,
+        clearanceCount: clearanceVal,
+        referCount: referVal,
+        user: {
+          name: nameVal,
+          avatar: avatarVal,
+          level: levelVal,
+          exp: expVal,
+          clearanceCount: clearanceVal,
+          referCount: referVal
+        }
       };
     });
 
-    if (scoredLeaderboard.length === 0) throw new Error("Supabase returned empty leaderboard");
-    res.json(scoredLeaderboard);
+    // Sort accordingly
+    if (category === "referrals") {
+      scoredLeaderboard.sort((a, b) => b.referCount - a.referCount);
+    } else if (category === "vaults") {
+      scoredLeaderboard.sort((a, b) => b.clearanceCount - a.clearanceCount || b.ZP - a.ZP);
+    } else {
+      // Default to "solvers" (or other) category sorting by ZP (balance)
+      scoredLeaderboard.sort((a, b) => b.ZP - a.ZP);
+    }
+
+    res.json(scoredLeaderboard.slice(0, 20));
   } catch (err: any) {
     console.warn("[DB Fallback] Leaderboard fallback", err.message);
     const subset = Array.from(localCache.users.values()).map(u => {
       const details = u.state_json || {};
+      const nameVal = u.username || details.user?.name || "Operator";
+      const avatarVal = details.user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.telegram_id}`;
+      const levelVal = details.user?.level || 1;
+      const expVal = details.user?.exp || 0;
+      const clearanceVal = details.user?.clearanceCount || 0;
+      const referVal = details.user?.referCount || 0;
       return {
         userId: u.telegram_id,
-        name: u.username || "Operator",
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${u.telegram_id}`,
-        Level: details.user?.level || 1,
-        EXP: details.user?.exp || 0,
-        ZP: u.balance,
-        referCount: details.user?.referCount || 0
+        name: nameVal,
+        avatar: avatarVal,
+        Level: levelVal,
+        EXP: expVal,
+        ZP: u.balance || details.resources?.coins || 0,
+        clearanceCount: clearanceVal,
+        referCount: referVal,
+        user: {
+          name: nameVal,
+          avatar: avatarVal,
+          level: levelVal,
+          exp: expVal,
+          clearanceCount: clearanceVal,
+          referCount: referVal
+        }
       };
     });
+
+    if (req.query.category === "referrals") {
+      subset.sort((a, b) => b.referCount - a.referCount);
+    } else if (req.query.category === "vaults") {
+      subset.sort((a, b) => b.clearanceCount - a.clearanceCount || b.ZP - a.ZP);
+    } else {
+      subset.sort((a, b) => b.ZP - a.ZP);
+    }
+
     res.json(subset.slice(0, 20));
   }
 });

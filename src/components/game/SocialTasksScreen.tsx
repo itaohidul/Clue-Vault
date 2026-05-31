@@ -836,10 +836,10 @@ export default function SocialTasksScreen() {
         </div>
       </section>
 
-      {/* Section 4: Live Supabase PostgreSQL Quest Cores */}
+      {/* Section 4: Live Cloud Database Quest Cores */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.15em]">III. Supabase Cloud Database Quests</h3>
+          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.15em]">III. Cloud Sync Database Quests</h3>
           <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
             {supabaseTasks.filter(t => completedTaskIds.includes(t.id)).length} / {supabaseTasks.length} DECRYPTED
           </span>
@@ -847,10 +847,10 @@ export default function SocialTasksScreen() {
 
         <div className="bg-emerald-500/5 border border-dashed border-emerald-500/20 rounded-2xl p-4 text-center">
           <p className="text-[9px] text-emerald-400 font-black uppercase tracking-widest leading-none mb-1">
-            ⚡ REAL-TIME SUPABASE POSTGRES CORES
+            ⚡ REAL-TIME SECURE CLOUD CORES
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold">
-            All balance changes are saved in real-time to your secure public schema Users and Transactions tables on Vercel.
+            All balance changes are saved in real-time to your secure public users and transactions tables on the cloud network.
           </p>
         </div>
 
@@ -932,7 +932,7 @@ export default function SocialTasksScreen() {
            {transactions.length === 0 ? (
              <div className="py-6 text-center">
                 <Database size={24} className="text-white/10 mx-auto mb-2" />
-                <p className="text-[9px] text-white/30 uppercase font-bold">No transactions found on Supabase. Set up missions to log records.</p>
+                <p className="text-[9px] text-white/30 uppercase font-bold">No transactions found on the database logs. Set up missions to log records.</p>
              </div>
            ) : (
              <div className="space-y-3.5">

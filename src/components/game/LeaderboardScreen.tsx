@@ -37,7 +37,7 @@ export default function LeaderboardScreen() {
 
       {/* Categories */}
       <div className="flex gap-2 bg-white/5 p-1 rounded-2xl">
-        {["solvers", "referrals"].map((cat) => (
+        {["solvers", "vaults", "referrals"].map((cat) => (
           <button
             key={cat}
             onClick={() => setCategory(cat)}
@@ -46,7 +46,7 @@ export default function LeaderboardScreen() {
               category === cat ? "bg-amber-500 text-black shadow-lg" : "text-white/40 hover:text-white/60"
             )}
           >
-            {cat}
+            {cat === "solvers" ? "💰 Solvers" : cat === "vaults" ? "🛡️ Vaults" : "🤝 Referrals"}
           </button>
         ))}
       </div>
@@ -67,8 +67,16 @@ export default function LeaderboardScreen() {
                      <Medal className="text-slate-400 absolute -top-3" size={24} />
                      <span className="text-xs font-black italic relative z-10">#2</span>
                   </div>
-                  <span className="text-[8px] font-black uppercase tracking-tight text-white/40 px-1 truncate max-w-[80px]">
+                  <span className="text-[8px] font-black uppercase tracking-tight text-white/40 px-1 truncate max-w-[80px] text-center">
                     {leaderboardData[1].user?.name || "Agent"}
+                  </span>
+                  <span className="text-[7.5px] font-black text-amber-500/80 uppercase">
+                     {category === "referrals" 
+                       ? `${leaderboardData[1].user?.referCount || leaderboardData[1].referCount || 0} REFS` 
+                       : category === "vaults"
+                         ? `${leaderboardData[1].user?.clearanceCount || leaderboardData[1].clearanceCount || 0} CLEARS`
+                         : `${(leaderboardData[1].ZP || 0).toLocaleString()} ZP`
+                     }
                   </span>
                </div>
             )}
@@ -80,8 +88,16 @@ export default function LeaderboardScreen() {
                      <Crown className="text-amber-500 absolute -top-4 scale-125" size={32} />
                      <span className="text-lg font-black italic text-amber-500 relative z-10">#1</span>
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-tight text-white italic truncate max-w-[100px]">
+                  <span className="text-[10px] font-black uppercase tracking-tight text-white italic truncate max-w-[100px] text-center">
                     {leaderboardData[0].user?.name || "Agent"}
+                  </span>
+                  <span className="text-[8px] font-black text-amber-500 uppercase">
+                     {category === "referrals" 
+                       ? `${leaderboardData[0].user?.referCount || leaderboardData[0].referCount || 0} REFS` 
+                       : category === "vaults"
+                         ? `${leaderboardData[0].user?.clearanceCount || leaderboardData[0].clearanceCount || 0} CLEARS`
+                         : `${(leaderboardData[0].ZP || 0).toLocaleString()} ZP`
+                     }
                   </span>
                </div>
             )}
@@ -93,8 +109,16 @@ export default function LeaderboardScreen() {
                      <Medal className="text-amber-700 absolute -top-2" size={20} />
                      <span className="text-xs font-black italic relative z-10">#3</span>
                   </div>
-                  <span className="text-[8px] font-black uppercase tracking-tight text-white/40 px-1 truncate max-w-[80px]">
+                  <span className="text-[8px] font-black uppercase tracking-tight text-white/40 px-1 truncate max-w-[80px] text-center">
                     {leaderboardData[2].user?.name || "Agent"}
+                  </span>
+                  <span className="text-[7.5px] font-black text-amber-500/80 uppercase">
+                     {category === "referrals" 
+                       ? `${leaderboardData[2].user?.referCount || leaderboardData[2].referCount || 0} REFS` 
+                       : category === "vaults"
+                         ? `${leaderboardData[2].user?.clearanceCount || leaderboardData[2].clearanceCount || 0} CLEARS`
+                         : `${(leaderboardData[2].ZP || 0).toLocaleString()} ZP`
+                     }
                   </span>
                </div>
             )}
@@ -106,7 +130,7 @@ export default function LeaderboardScreen() {
                  initial={{ opacity: 0, x: -10 }}
                  animate={{ opacity: 1, x: 0 }}
                  transition={{ delay: i * 0.05 }}
-                 key={item.id} 
+                 key={item.userId || item.id || `row-${i}`} 
                  className={cn(
                    "glass rounded-2xl p-4 flex items-center gap-4 border-white/5",
                    i === 0 && "border-amber-500/10 bg-amber-500/5"
@@ -117,12 +141,17 @@ export default function LeaderboardScreen() {
                   </div>
                   <div className="flex-1">
                      <h4 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
-                        {item.user?.name || "Anonymous"}
+                        {item.user?.name || item.name || "Anonymous"}
                         {i === 0 && <Flame size={12} className="text-amber-500" />}
                      </h4>
                      <div className="flex items-center gap-2">
                        <span className="text-[8px] font-black text-white/30 truncate">
-                         {category === "referrals" ? `${item.user?.referCount || 0} REFS` : `${(item.ZP || item.resources?.activityScore || 0).toLocaleString()} ZP`}
+                         {category === "referrals" 
+                          ? `${item.user?.referCount || item.referCount || 0} REFS` 
+                          : category === "vaults"
+                            ? `${item.user?.clearanceCount || item.clearanceCount || 0} CLEARS`
+                            : `${(item.ZP || 0).toLocaleString()} ZP`
+                        }
                        </span>
                        <div className="w-1 h-1 rounded-full bg-white/10" />
                        <span className="text-[8px] font-bold text-white/20 uppercase truncate">
@@ -132,7 +161,12 @@ export default function LeaderboardScreen() {
                   </div>
                   <div className="text-right">
                      <div className="text-[10px] font-bold uppercase text-white/20">
-                        {category === "referrals" ? "REFS" : "ZP"}
+                        {category === "referrals" 
+                         ? "REFS" 
+                         : category === "vaults" 
+                           ? "CLEARS" 
+                           : "ZP"
+                       }
                      </div>
                   </div>
                </motion.div>

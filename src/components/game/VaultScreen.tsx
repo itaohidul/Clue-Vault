@@ -197,6 +197,7 @@ export default function VaultScreen() {
       const nextUser = {
         ...state.user,
         completedToday: false, // Reset Decryption Game!
+        clearanceCount: (state.user.clearanceCount || 0) + 1, // Store decrypted vault counts
         level: newLevel,
         exp: newExp,
         maxExp: newMaxExp

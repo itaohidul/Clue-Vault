@@ -205,9 +205,12 @@ export default function SocialTasksScreen() {
         const parsed = JSON.parse(saved);
         // Automatically migrate old links to new active targets while preserving completion states
         return parsed.map((t: any) => {
-          if (t.id === "join_tg") return { ...t, link: "https://t.me/Cluevaultchat" };
-          if (t.id === "follow_news") return { ...t, link: "https://t.me/Cluevaultofficial" };
-          return t;
+          const icon = t.id === "join_tg" ? MessageSquare : Bell;
+          return {
+            ...t,
+            icon,
+            link: t.id === "join_tg" ? "https://t.me/Cluevaultchat" : "https://t.me/Cluevaultofficial"
+          };
         });
       } catch {}
     }

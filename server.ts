@@ -103,6 +103,264 @@ app.get("/api/db-status", async (req, res) => {
   }
 });
 
+// Startup Handshake Endpoint (Consolidates 5 API requests into 1 for mobile connectivity)
+app.get("/api/startup/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const usernameQuery = (req.query.username as string) || "Agent_" + userId.slice(-4);
+  const referredByCode = req.query.referredBy as string;
+
+  const responsePayload: any = {
+    dbConnected: false,
+    user: null,
+    tasks: [],
+    completedTaskIds: [],
+    transactions: [],
+    source: "Supabase Live Connection"
+  };
+
+  try {
+    // 1. Get/Register User State
+    let user = null;
+    let registeredNow = false;
+
+    try {
+      const { data: dbUser, error: fetchErr } = await supabase
+        .from("users")
+        .select("*")
+        .eq("telegram_id", userId)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      user = dbUser;
+    } catch (dbErr: any) {
+      console.warn("[Handshake DB] Read user state deferred:", dbErr.message);
+    }
+
+    if (user) {
+      responsePayload.user = user.state_json || user;
+      responsePayload.dbConnected = true;
+    } else {
+      // Auto register
+      const referralCode = `ref_${userId.substring(0, 8)}`;
+      const initialBalance = referredByCode ? 2500 : 1000;
+      const seedState = {
+        user: {
+          name: usernameQuery,
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
+          level: 1,
+          exp: 0,
+          referCount: 0,
+          referralCode,
+          referredBy: referredByCode || null,
+          onboarded: false,
+        },
+        resources: {
+          coins: initialBalance,
+          keys: 5,
+          clue: 0,
+        },
+        purchases: [],
+        crew: null,
+        base: { level: 1, energy: 100 },
+        unlockedTabs: ["daily"],
+        riddleState: { activeRiddleId: null, unlockedParts: 0 }
+      };
+
+      try {
+        const { data: newUser, error: insertError } = await supabase
+          .from("users")
+          .insert([{
+            telegram_id: userId,
+            username: usernameQuery,
+            balance: initialBalance,
+            referral_code: referralCode,
+            referred_by: referredByCode || null,
+            state_json: seedState
+          }])
+          .select()
+          .maybeSingle();
+
+        if (insertError) throw insertError;
+        user = newUser;
+        responsePayload.user = newUser?.state_json || seedState;
+        responsePayload.dbConnected = true;
+        registeredNow = true;
+
+        // Referrer bonuses
+        if (referredByCode) {
+          const { data: referrer } = await supabase
+            .from("users")
+            .select("*")
+            .eq("referral_code", referredByCode)
+            .maybeSingle();
+
+          if (referrer) {
+            const bonus = 5000;
+            const updatedReferrerState = { ...referrer.state_json };
+            if (updatedReferrerState.resources) {
+              updatedReferrerState.resources.coins = (updatedReferrerState.resources.coins || 0) + bonus;
+            }
+            if (updatedReferrerState.user) {
+              updatedReferrerState.user.referCount = (updatedReferrerState.user.referCount || 0) + 1;
+            }
+
+            await supabase
+              .from("users")
+              .update({
+                balance: (referrer.balance || 0) + bonus,
+                state_json: updatedReferrerState
+              })
+              .eq("telegram_id", referrer.telegram_id);
+
+            await supabase.from("transactions").insert([{
+              telegram_id: referrer.telegram_id,
+              amount: bonus,
+              type: "referral_bonus"
+            }]);
+          }
+        }
+
+        // Welcome package transaction
+        await supabase.from("transactions").insert([{
+          telegram_id: userId,
+          amount: initialBalance,
+          type: "welcome_package"
+        }]);
+
+      } catch (regErr: any) {
+        console.warn("[Handshake DB] Registration fail, falling back to cached user:", regErr.message);
+      }
+    }
+
+    // 2. Fetch Tasks (Auto seeds if empty)
+    try {
+      let { data: tasks, error: tasksError } = await supabase
+        .from("tasks")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (tasksError) throw tasksError;
+
+      if (!tasks || tasks.length === 0) {
+        const defaultTasks = [
+          { title: "Deface Syndicate Access Terminal", reward: 2500, type: "social", link: "https://x.com" },
+          { title: "Subscribe to CipherNet Intel Hub", reward: 5000, type: "channel", link: "https://t.me" },
+          { title: "Authorize Safe Ledger Gateway", reward: 12000, type: "wallet", link: "https://ton.org" },
+          { title: "Solve Cryptography Riddle Challenge", reward: 15000, type: "riddle", link: "" }
+        ];
+
+        const { data: seeded } = await supabase
+          .from("tasks")
+          .insert(defaultTasks)
+          .select();
+        tasks = seeded || defaultTasks;
+      }
+      responsePayload.tasks = tasks;
+    } catch (tskErr: any) {
+      console.warn("[Handshake DB] Read tasks fail:", tskErr.message);
+      responsePayload.tasks = localCache.tasks;
+    }
+
+    // 3. Fetch Completed Tasks IDs
+    try {
+      const { data: compData, error: compDbErr } = await supabase
+        .from("user_tasks")
+        .select("task_id")
+        .eq("telegram_id", userId);
+
+      if (compDbErr) throw compDbErr;
+      responsePayload.completedTaskIds = compData.map(item => item.task_id);
+    } catch (cmpErr: any) {
+      console.warn("[Handshake DB] Read completions fail:", cmpErr.message);
+      responsePayload.completedTaskIds = localCache.user_tasks
+        .filter(ut => ut.telegram_id === userId)
+        .map(ut => ut.task_id);
+    }
+
+    // 4. Fetch User Transactions
+    try {
+      const { data: txData, error: txDbErr } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("telegram_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (txDbErr) throw txDbErr;
+      responsePayload.transactions = txData || [];
+    } catch (txErr: any) {
+      console.warn("[Handshake DB] Read transactions fail:", txErr.message);
+      responsePayload.transactions = localCache.transactions
+        .filter(t => t.telegram_id === userId)
+        .sort((a, b) => b.id - a.id);
+    }
+
+    // 5. If everything failed to fetch but we can support offline
+    if (!responsePayload.user) {
+      throw new Error("No database records accessible");
+    }
+
+    return res.json(responsePayload);
+
+  } catch (globalErr: any) {
+    console.warn(`[Startup Handshake API] Service degradation fallback triggered:`, globalErr.message);
+    
+    // In-Memory Fallback Implementation
+    let cachedUser = localCache.users.get(userId);
+    if (!cachedUser) {
+      const referralCode = `ref_${userId.substring(0, 8)}`;
+      const initialBalance = referredByCode ? 2500 : 1000;
+      const seedState = {
+        user: {
+          name: usernameQuery,
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
+          level: 1,
+          exp: 0,
+          referCount: 0,
+          referralCode,
+          referredBy: referredByCode || null,
+        },
+        resources: {
+          coins: initialBalance,
+          keys: 5,
+          clue: 0,
+        },
+        purchases: [],
+        crew: null,
+        base: { level: 1, energy: 100 },
+        unlockedTabs: ["daily"],
+        riddleState: { activeRiddleId: null, unlockedParts: 0 }
+      };
+
+      cachedUser = {
+        telegram_id: userId,
+        username: usernameQuery,
+        balance: initialBalance,
+        referral_code: referralCode,
+        referred_by: referredByCode || null,
+        state_json: seedState
+      };
+      localCache.users.set(userId, cachedUser);
+
+      localCache.transactions.push({
+        id: Date.now(),
+        telegram_id: userId,
+        amount: initialBalance,
+        type: "welcome_package",
+        created_at: new Date().toISOString()
+      });
+    }
+
+    return res.json({
+      dbConnected: false,
+      user: cachedUser.state_json,
+      tasks: localCache.tasks,
+      completedTaskIds: localCache.user_tasks.filter(ut => ut.telegram_id === userId).map(ut => ut.task_id),
+      transactions: localCache.transactions.filter(t => t.telegram_id === userId).sort((a, b) => b.id - a.id),
+      source: "Offline Memory Cache"
+    });
+  }
+});
+
 // Get User State (Auto-Registration + Referral Tracker)
 app.get("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;

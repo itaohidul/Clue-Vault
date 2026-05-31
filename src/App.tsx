@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, createContext, useContext } from "react";
 import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu, Coins } from "lucide-react";
@@ -496,9 +496,9 @@ export default function App() {
           finalizeOnboarding: store.finalizeOnboarding,
           triggerHaptic: store.triggerHaptic 
         }}>
-          <BrowserRouter>
+          <HashRouter>
             <AppContent />
-          </BrowserRouter>
+          </HashRouter>
         </GameContext.Provider>
       </SupabaseSyncProvider>
     </TelegramProvider>

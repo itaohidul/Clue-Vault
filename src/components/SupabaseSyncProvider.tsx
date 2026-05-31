@@ -71,42 +71,63 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
 
   // Initialize unique identity (Telegram context preferred)
   useEffect(() => {
-    const resolveIdentity = () => {
+    // Check if URL suggests we are running inside Telegram interface, or user agent
+    const isTelegramEnvironment = 
+      typeof window !== 'undefined' && (
+        window.location.search.includes('tgWebAppData') || 
+        window.location.hash.includes('tgWebAppData') || 
+        navigator.userAgent.toLowerCase().includes('telegram') ||
+        (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
+      );
+
+    const resolveIdentity = (allowAnonymousFallback = false) => {
       let id = localStorage.getItem("cluevault_supabase_id");
       
-      if (
-        window.Telegram &&
-        window.Telegram.WebApp &&
-        window.Telegram.WebApp.initDataUnsafe &&
-        window.Telegram.WebApp.initDataUnsafe.user &&
-        window.Telegram.WebApp.initDataUnsafe.user.id
-      ) {
-        id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-        if (id) {
-          setUserId(id);
-          localStorage.setItem("cluevault_supabase_id", id);
-          return true;
-        }
+      const nativeTgUser = 
+        window.Telegram && 
+        window.Telegram.WebApp && 
+        window.Telegram.WebApp.initDataUnsafe && 
+        window.Telegram.WebApp.initDataUnsafe.user;
+
+      if (nativeTgUser && nativeTgUser.id) {
+        const nativeId = nativeTgUser.id.toString();
+        setUserId(nativeId);
+        localStorage.setItem("cluevault_supabase_id", nativeId);
+        console.log("[Identity Resolver] Native Telegram user resolved:", nativeId);
+        return true;
       }
       
+      // If we are in Telegram, ALWAYS prioritize waiting for the SDK polling to succeed, and do not fall back to anonymous ID instantly
+      if (isTelegramEnvironment && !allowAnonymousFallback) {
+        if (id && !id.startsWith("anon_")) {
+          // If we had a real cached ID previously, we can set that safely
+          setUserId(id);
+          return true;
+        }
+        // Return false to let the polling timer catch the SDK injections
+        return false;
+      }
+
+      // If we are not in Telegram, or we timed out, fall back safely
       if (!id) {
         id = "anon_" + Math.random().toString(36).substring(2, 11);
       }
       
       setUserId(id);
       localStorage.setItem("cluevault_supabase_id", id);
-      return false;
+      console.log("[Identity Resolver] Fallback ID resolved:", id);
+      return true;
     };
 
-    // Run immediately
-    const resolvedNatively = resolveIdentity();
-    if (resolvedNatively) return;
+    // Run first resolve pass
+    const resolvedNatively = resolveIdentity(false);
+    if (resolvedNatively && !isTelegramEnvironment) return;
 
     // Set up polling fallback for asynchronous Telegram SDK load
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
-      const success = resolveIdentity();
+      const success = resolveIdentity(attempts >= 15); // force fallback on last attempt
       if (success || attempts >= 15) {
         clearInterval(interval);
       }
@@ -242,12 +263,12 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     }
   };
 
-  // Pre-load state when user connects
+  // Pre-load state when user connects via a single consolidated Handshake HTTP request
   useEffect(() => {
     if (!userId) return;
 
     const fetchUserAndAssets = async () => {
-      console.log(`[Startup Handshake] Initializing fetch for userId: ${userId}`);
+      console.log(`[Startup Handshake] Initializing consolidated fetch for userId: ${userId}`);
       setIsSyncing(true);
       const controller = new AbortController();
       const handshakeTimeout = setTimeout(() => {
@@ -256,20 +277,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       }, 25000); // 25s mobile-friendly resilient fallback handshake
 
       try {
-        // Query server db state verify asynchronously in the background so it is completely non-blocking
-        console.log("[Startup Handshake] Verification request sent /api/db-verify...");
-        api.get<any>("/api/db-verify", { timeout: 8000 })
-          .then((verifyRes) => {
-            console.log("[Startup Handshake] /api/db-verify responded. Ready:", verifyRes.data?.readyState);
-            setDbConnected(verifyRes.data?.readyState === 1);
-          })
-          .catch((e) => {
-            console.warn("[Startup Handshake] Verification request non-blocking check failed:", e.message);
-            // Don't crash loading, we are still connected to fallback database if necessary
-            setDbConnected(false);
-          });
-
-        // Telegram user loader
+        // Telegram user parameters
         let queryParams = "";
         if (
           window.Telegram &&
@@ -280,17 +288,23 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
           const username = utg.user?.username || utg.user?.first_name || "";
           const startParam = utg.start_param || "";
           queryParams = `?username=${encodeURIComponent(username)}&referredBy=${encodeURIComponent(startParam)}`;
-          console.log("[Startup Handshake] Detected Telegram WebApp context:", { username, hasStartParam: !!startParam });
-        } else {
-          console.log("[Startup Handshake] No Telegram WebApp environment injected yet.");
+          console.log("[Startup Handshake] Context parameters:", { username, hasStartParam: !!startParam });
         }
 
-        console.log(`[Startup Handshake] Executing primary handshake: /api/user/${userId}${queryParams ? ' with params' : ''}`);
-        const response = await api.get(`/api/user/${userId}${queryParams}`, { signal: controller.signal });
-        const cloudData = response.data;
+        console.log(`[Startup Handshake] Executing consolidated startup payload: /api/startup/${userId}${queryParams ? ' with params' : ''}`);
+        const response = await api.get(`/api/startup/${userId}${queryParams}`, { signal: controller.signal });
+        const { dbConnected: dbReady, user: cloudData, tasks: tasksData, completedTaskIds: completionsData, transactions: transactionsData } = response.data;
         
         clearTimeout(handshakeTimeout);
-        console.log("[Startup Handshake] Handshake received cloud data payload successfully.");
+        console.log("[Startup Handshake] Handshake received consolidated payload successfully.");
+
+        // Apply Database status connection status
+        setDbConnected(dbReady);
+
+        // Apply state/tasks/completions/transactions lists simultaneously
+        if (Array.isArray(tasksData)) setTasks(tasksData);
+        if (Array.isArray(completionsData)) setCompletedTaskIds(completionsData);
+        if (Array.isArray(transactionsData)) setTransactions(transactionsData);
 
         if (cloudData) {
           const nextState = mapSupabaseToState(cloudData);
@@ -303,16 +317,14 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
             ((localState?.resources?.clue || 0) > (nextState?.resources?.clue || 0));
 
           if (localIsNewer) {
-            console.log("[Startup Handshake] Local client progress is newer. Pushing to sync cloud...");
+            console.log("[Startup Handshake] Local client progress is newer. Syncing to cloud asynchronously.");
             pushUpdateInternal(true);
           } else {
-            console.log("[Startup Handshake] Cloud state matches or is newer. Applying state sync.");
+            console.log("[Startup Handshake] Applying cloud synchronized status state.");
             isSyncingFromCloudRef.current = true;
             useUserStore.setState(nextState);
             isSyncingFromCloudRef.current = false;
           }
-        } else {
-          console.warn("[Startup Handshake] Cloud returned empty data. Initializing empty profile model.");
         }
         setIsCloudLoaded(true);
       } catch (err: any) {
@@ -325,8 +337,6 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     };
 
     fetchUserAndAssets();
-    loadTasksAndCompletions();
-    loadTransactions();
   }, [userId]);
 
   // Subscribe to changes with debounce for auto-sync silently

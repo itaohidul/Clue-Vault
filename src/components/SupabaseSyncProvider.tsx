@@ -73,10 +73,15 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
   useEffect(() => {
     const resolveIdentity = () => {
       let id = localStorage.getItem("cluevault_supabase_id");
-      const tg = (window as any).Telegram?.WebApp;
       
-      if (tg?.initDataUnsafe?.user?.id) {
-        id = tg.initDataUnsafe.user.id.toString();
+      if (
+        window.Telegram &&
+        window.Telegram.WebApp &&
+        window.Telegram.WebApp.initDataUnsafe &&
+        window.Telegram.WebApp.initDataUnsafe.user &&
+        window.Telegram.WebApp.initDataUnsafe.user.id
+      ) {
+        id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
         if (id) {
           setUserId(id);
           localStorage.setItem("cluevault_supabase_id", id);
@@ -259,11 +264,15 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
           });
 
         // Telegram user loader
-        const tg = (window as any).Telegram?.WebApp;
         let queryParams = "";
-        if (tg?.initDataUnsafe) {
-          const username = tg.initDataUnsafe.user?.username || tg.initDataUnsafe.user?.first_name || "";
-          const startParam = tg.initDataUnsafe.start_param || "";
+        if (
+          window.Telegram &&
+          window.Telegram.WebApp &&
+          window.Telegram.WebApp.initDataUnsafe
+        ) {
+          const utg = window.Telegram.WebApp.initDataUnsafe;
+          const username = utg.user?.username || utg.user?.first_name || "";
+          const startParam = utg.start_param || "";
           queryParams = `?username=${encodeURIComponent(username)}&referredBy=${encodeURIComponent(startParam)}`;
         }
 

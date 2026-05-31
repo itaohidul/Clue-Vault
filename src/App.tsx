@@ -48,7 +48,13 @@ function OnboardingWizard({ onComplete }: { onComplete: (data: any) => void }) {
   });
 
   const next = () => {
-    if (step === 0 && !window.Telegram?.WebApp?.initDataUnsafe?.user) {
+    const hasTgUser = !!(
+      window.Telegram &&
+      window.Telegram.WebApp &&
+      window.Telegram.WebApp.initDataUnsafe &&
+      window.Telegram.WebApp.initDataUnsafe.user
+    );
+    if (step === 0 && !hasTgUser) {
       // In a real scenario, this would be where we explain Telegram is required
     }
     setStep(s => s + 1);

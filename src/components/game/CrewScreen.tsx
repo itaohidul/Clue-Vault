@@ -47,7 +47,7 @@ export default function CrewScreen() {
   const fetchCrewMembers = async (crewName: string) => {
     setLoadingMembers(true);
     try {
-      const response = await axios.get(`/api/crews/${crewName}/members`);
+      const response = await axios.get(`/api/crews/${crewName}/members`, { timeout: 10000 });
       setCrewMembers(response.data);
     } catch (e) {
       console.error("Failed to fetch crew members", e);

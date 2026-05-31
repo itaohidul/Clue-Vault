@@ -15,7 +15,7 @@ export default function LeaderboardScreen() {
   const fetchLeaderboard = async (cat: string) => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/leaderboard?category=${cat}`);
+      const response = await axios.get(`/api/leaderboard?category=${cat}`, { timeout: 10000 });
       setLeaderboardData(response.data);
     } catch (e) {
       console.error("Failed to fetch leaderboard", e);

@@ -5,7 +5,7 @@
 
 import { HashRouter, Routes, Route, Navigate, useLocation, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, Component, ReactNode } from "react";
 import { Home, ClipboardList, Shield, Warehouse, Lock, Trophy, User, ShoppingCart, Settings, HelpCircle, Users, Cpu, Coins } from "lucide-react";
 import { cn } from "./lib/utils";
 import LandingPage from "./components/landing/LandingPage";
@@ -183,6 +183,8 @@ function AppContent() {
   const [showBypass, setShowBypass] = useState(false);
   const [dismissedSyncError, setDismissedSyncError] = useState(false);
 
+  const [firstRouteLogged, setFirstRouteLogged] = useState(false);
+
   // Sync state with Telegram WebApp Backend on load
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -193,23 +195,28 @@ function AppContent() {
     }, 2500);
 
     if (tg && tg.initData) {
-      // Extended failsafe for mobile data: 10 seconds
+      console.log("[DIAG] Telegram context detected, initiating handshake...");
+      // Extended failsafe for mobile data: reduced to 500ms so shell renders immediately while sync proceeds in background.
       const failSafeTimer = setTimeout(() => {
+        console.log("[DIAG] Startup failsafe elapsed (500ms). Rendering shell immediately in background sync mode.");
         setInitSyncCompleted(true);
-      }, 10000);
+      }, 500);
 
       syncWithBackend(tg.initData).then(() => {
         clearTimeout(failSafeTimer);
         clearTimeout(bypassTimer);
+        console.log("[DIAG] WebApp handshake success.");
         setInitSyncCompleted(true);
-      }).catch(() => {
+      }).catch((err) => {
         clearTimeout(failSafeTimer);
+        console.error("[DIAG] WebApp handshake failed, continuing to shell.", err);
         setInitSyncCompleted(true);
       });
     } else {
+      console.log("[DIAG] No Telegram initData, scheduling instant browser mount.");
       const timer = setTimeout(() => {
         setInitSyncCompleted(true);
-      }, 1200);
+      }, 200);
       return () => {
         clearTimeout(timer);
         clearTimeout(bypassTimer);
@@ -217,6 +224,14 @@ function AppContent() {
     }
     return () => clearTimeout(bypassTimer);
   }, [syncWithBackend]);
+
+  // Track and log first route rendered
+  useEffect(() => {
+    if (!firstRouteLogged && initSyncCompleted) {
+      console.log("[DIAG] First route rendered:", location.pathname);
+      setFirstRouteLogged(true);
+    }
+  }, [location.pathname, initSyncCompleted, firstRouteLogged]);
 
   // Inside Telegram, automatically route from landing "/" to "/app/home"
   useEffect(() => {
@@ -453,8 +468,88 @@ function AppContent() {
   );
 }
 
-export default function App() {
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: any) {
+    console.error("[DIAG] Uncaught startup or runtime error captured in Boundary:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white font-sans">
+          <div className="space-y-6 max-w-sm w-full border border-red-500/30 bg-red-950/20 p-8 rounded-3xl backdrop-blur-md">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto text-red-500 border border-red-500/20 text-3xl">
+              ⚠️
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl font-black uppercase tracking-tight text-red-500 italic">SYSTEM CRASH</h1>
+              <p className="text-[10px] text-white/50 leading-relaxed">An unexpected startup or runtime error occurred. We can bypass this to run in offline/cleared mode.</p>
+            </div>
+            {this.state.error && (
+              <pre className="text-[9px] text-red-300/80 bg-black/40 p-3 rounded-xl overflow-x-auto text-left font-mono max-h-32">
+                {this.state.error.message || String(this.state.error)}
+              </pre>
+            )}
+            <div className="pt-2">
+              <button 
+                onClick={() => {
+                  try {
+                    localStorage.clear();
+                    console.log("[DIAG] Cleared localStorage to bypass crash loop");
+                  } catch (e) {}
+                  window.location.reload();
+                }} 
+                className="w-full py-4 bg-red-600 hover:bg-red-700 active:scale-95 text-[10px] font-black uppercase tracking-wider rounded-2xl transition-all"
+              >
+                Reset Cache & Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
+}
+
+function AppInner() {
   const store = useUserStore();
+
+  // Diagnostic Startup Logging
+  useEffect(() => {
+    console.log("[DIAG] App mounted and active");
+    console.log("[DIAG] Router initialized (HashRouter active)");
+    
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      console.log("[DIAG] Telegram SDK detected:", { version: tg.version, platform: tg.platform });
+    } else {
+      console.log("[DIAG] Telegram SDK not found in window context (Guest Mode)");
+    }
+
+    const hasSupabase = !!(import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_ANON_KEY);
+    console.log("[DIAG] Supabase configuration status:", { configured: hasSupabase });
+    console.log("[DIAG] Auth system initialized:", store.user ? "YES" : "NO");
+  }, []);
 
   // Energy Regeneration
   useEffect(() => {
@@ -502,5 +597,13 @@ export default function App() {
         </GameContext.Provider>
       </SupabaseSyncProvider>
     </TelegramProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }

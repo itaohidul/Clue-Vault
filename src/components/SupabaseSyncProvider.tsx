@@ -247,18 +247,24 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     if (!userId) return;
 
     const fetchUserAndAssets = async () => {
+      console.log(`[Startup Handshake] Initializing fetch for userId: ${userId}`);
       setIsSyncing(true);
       const controller = new AbortController();
-      const handshakeTimeout = setTimeout(() => controller.abort(), 25000); // 25s mobile-friendly resilient fallback handshake
+      const handshakeTimeout = setTimeout(() => {
+        console.warn("[Startup Handshake] 25-second mobile timeout reached. Aborting request and unlocking with local state.");
+        controller.abort();
+      }, 25000); // 25s mobile-friendly resilient fallback handshake
 
       try {
         // Query server db state verify asynchronously in the background so it is completely non-blocking
+        console.log("[Startup Handshake] Verification request sent /api/db-verify...");
         api.get<any>("/api/db-verify", { timeout: 8000 })
           .then((verifyRes) => {
+            console.log("[Startup Handshake] /api/db-verify responded. Ready:", verifyRes.data?.readyState);
             setDbConnected(verifyRes.data?.readyState === 1);
           })
           .catch((e) => {
-            console.warn("Non-blocking DB verification check failed:", e.message);
+            console.warn("[Startup Handshake] Verification request non-blocking check failed:", e.message);
             // Don't crash loading, we are still connected to fallback database if necessary
             setDbConnected(false);
           });
@@ -274,12 +280,17 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
           const username = utg.user?.username || utg.user?.first_name || "";
           const startParam = utg.start_param || "";
           queryParams = `?username=${encodeURIComponent(username)}&referredBy=${encodeURIComponent(startParam)}`;
+          console.log("[Startup Handshake] Detected Telegram WebApp context:", { username, hasStartParam: !!startParam });
+        } else {
+          console.log("[Startup Handshake] No Telegram WebApp environment injected yet.");
         }
 
+        console.log(`[Startup Handshake] Executing primary handshake: /api/user/${userId}${queryParams ? ' with params' : ''}`);
         const response = await api.get(`/api/user/${userId}${queryParams}`, { signal: controller.signal });
         const cloudData = response.data;
         
         clearTimeout(handshakeTimeout);
+        console.log("[Startup Handshake] Handshake received cloud data payload successfully.");
 
         if (cloudData) {
           const nextState = mapSupabaseToState(cloudData);
@@ -292,18 +303,20 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
             ((localState?.resources?.clue || 0) > (nextState?.resources?.clue || 0));
 
           if (localIsNewer) {
-            console.log("Local progress is ahead. Pushing update...");
+            console.log("[Startup Handshake] Local client progress is newer. Pushing to sync cloud...");
             pushUpdateInternal(true);
           } else {
-            console.log("Cloud data synced.");
+            console.log("[Startup Handshake] Cloud state matches or is newer. Applying state sync.");
             isSyncingFromCloudRef.current = true;
             useUserStore.setState(nextState);
             isSyncingFromCloudRef.current = false;
           }
+        } else {
+          console.warn("[Startup Handshake] Cloud returned empty data. Initializing empty profile model.");
         }
         setIsCloudLoaded(true);
       } catch (err: any) {
-        console.warn("Mobile signal handshake deferred. Proceeding with local cache:", err.message);
+        console.error("[Startup Handshake] Mobile signal handshake deferred. Proceeding with local cache immediately. Error:", err.message);
         setIsCloudLoaded(true); // Failsafe: unlock app even on network failure
       } finally {
         setIsSyncing(false);

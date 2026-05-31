@@ -73,11 +73,23 @@ export default function TelegramProvider({
       console.warn("Failed to apply Telegram CloudStorage polyfill:", e);
     }
 
-    tg.ready();
-    tg.expand();
+    if (tg && typeof tg.ready === 'function') {
+      try {
+        tg.ready();
+      } catch (e) {
+        console.warn("tg.ready fail:", e);
+      }
+    }
+    if (tg && typeof tg.expand === 'function') {
+      try {
+        tg.expand();
+      } catch (e) {
+        console.warn("tg.expand fail:", e);
+      }
+    }
 
     // Set background to tg theme color
-    if (tg.themeParams?.bg_color) {
+    if (tg && tg.themeParams?.bg_color) {
       document.body.style.background = tg.themeParams.bg_color;
     }
 

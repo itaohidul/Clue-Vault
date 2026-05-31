@@ -240,10 +240,12 @@ function AppContent() {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
 
-    if (location.pathname === "/app/home" || location.pathname === "/" || location.pathname === "") {
-      tg.BackButton.hide();
-    } else {
-      tg.BackButton.show();
+    if (tg.BackButton && typeof tg.BackButton.hide === 'function' && typeof tg.BackButton.show === 'function') {
+      if (location.pathname === "/app/home" || location.pathname === "/" || location.pathname === "") {
+        tg.BackButton.hide();
+      } else {
+        tg.BackButton.show();
+      }
     }
   }, [location.pathname]);
 
@@ -290,10 +292,12 @@ function AppContent() {
       navigate(-1);
     };
 
-    tg.BackButton.onClick(handleBack);
-    return () => {
-      tg.BackButton.offClick(handleBack);
-    };
+    if (tg.BackButton && typeof tg.BackButton.onClick === 'function' && typeof tg.BackButton.offClick === 'function') {
+      tg.BackButton.onClick(handleBack);
+      return () => {
+        tg.BackButton.offClick(handleBack);
+      };
+    }
   }, [navigate]);
 
   // Handle Telegram MainButton on homepage (PLAY OPERATIONS)
@@ -301,21 +305,25 @@ function AppContent() {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
 
-    if (location.pathname === "/app/home") {
-      tg.MainButton.setText("PLAY OPERATIONS");
-      tg.MainButton.show();
+    if (tg.MainButton && typeof tg.MainButton.setText === 'function' && typeof tg.MainButton.show === 'function' && typeof tg.MainButton.onClick === 'function' && typeof tg.MainButton.offClick === 'function' && typeof tg.MainButton.hide === 'function') {
+      if (location.pathname === "/app/home") {
+        tg.MainButton.setText("PLAY OPERATIONS");
+        tg.MainButton.show();
 
-      const handleMain = () => {
-        navigate("/app/missions");
-      };
+        const handleMain = () => {
+          navigate("/app/missions");
+        };
 
-      tg.MainButton.onClick(handleMain);
-      return () => {
+        tg.MainButton.onClick(handleMain);
+        return () => {
+          if (tg.MainButton && typeof tg.MainButton.hide === 'function' && typeof tg.MainButton.offClick === 'function') {
+            tg.MainButton.hide();
+            tg.MainButton.offClick(handleMain);
+          }
+        };
+      } else {
         tg.MainButton.hide();
-        tg.MainButton.offClick(handleMain);
-      };
-    } else {
-      tg.MainButton.hide();
+      }
     }
   }, [location.pathname, navigate]);
 

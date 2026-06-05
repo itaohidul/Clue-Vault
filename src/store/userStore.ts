@@ -2,6 +2,17 @@ import { create } from 'zustand';
 import axios from 'axios';
 import { RIDDLES } from '../data/gameConfig';
 
+export interface ReferralAgent {
+  id: string;
+  name: string;
+  avatar: string;
+  status: 'unverified' | 'verified';
+  consecutiveDays: number;
+  missionsToday: number;
+  lastActiveDate: string;
+  joinedAt: string;
+}
+
 export interface TelegramUser {
   id: number;
   first_name: string;
@@ -28,6 +39,7 @@ export interface GameState {
     referralCommission?: number;
     claimedCommission?: number;
     lastDailyClaim: number;
+    referrals?: ReferralAgent[];
   };
   resources: {
     coins: number;
@@ -80,6 +92,7 @@ export interface GameState {
   leaveCrew: () => void;
   claimDailyReward: () => boolean;
   updateRiddleProgression: () => { riddleId: string; part: number; isComplete: boolean };
+  simulateReferralDay: (agentId: string) => { rewarded: boolean; coins: number; keys: number };
 }
 
 const getInitialState = () => {
@@ -99,6 +112,7 @@ const getInitialState = () => {
       referralCommission: 0,
       claimedCommission: 0,
       lastDailyClaim: 0,
+      referrals: [] as ReferralAgent[],
     },
     resources: {
       coins: 100,
@@ -380,11 +394,35 @@ export const useUserStore = create<GameState>((set, get) => ({
 
   addMockReferral: () => {
     const { user } = get();
+    
+    const agentNames = [
+      "Vesper_Decrypt", "Neon_Cipher", "Spectre_X", "Glitch_Solver", 
+      "Kernel_Breaker", "Zero_Cool", "Cyber_Ghost", "Hash_Master",
+      "Vault_Runner", "Code_Phantom", "Bit_Cracker", "Shadow_Lock"
+    ];
+    const index = (user.referrals?.length || 0);
+    const name = agentNames[index % agentNames.length] + `_${Math.floor(Math.random() * 90) + 10}`;
+    const avatar = `https://api.dicebear.com/7.x/pixel-art/svg?seed=${name}`;
+    
+    const newAgent: ReferralAgent = {
+      id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+      name,
+      avatar,
+      status: 'unverified',
+      consecutiveDays: 0,
+      missionsToday: 0,
+      lastActiveDate: new Date().toISOString().split('T')[0],
+      joinedAt: new Date().toISOString()
+    };
+
+    const referralsList = [...(user.referrals || []), newAgent];
+
     const nextUser = {
       ...user,
-      referCount: (user.referCount || 0) + 1,
+      referCount: referralsList.length,
+      referrals: referralsList
     };
-    
+
     set({ user: nextUser });
     localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
       user: nextUser,
@@ -395,6 +433,69 @@ export const useUserStore = create<GameState>((set, get) => ({
       riddleState: get().riddleState,
     }));
     get().triggerHaptic('success');
+  },
+
+  simulateReferralDay: (agentId: string) => {
+    const { user, resources } = get();
+    let rewarded = false;
+    let bonusCoins = 0;
+    let bonusKeys = 0;
+
+    const updatedReferrals = (user.referrals || []).map((agent) => {
+      if (agent.id === agentId) {
+        if (agent.status === 'verified') return agent;
+
+        const nextMissionsToday = 5;
+        const nextConsecutiveDays = agent.consecutiveDays + 1;
+        const nextStatus = nextConsecutiveDays >= 7 ? 'verified' : 'unverified';
+
+        if (nextStatus === 'verified') {
+          rewarded = true;
+          bonusCoins = 25000;
+          bonusKeys = 5;
+        }
+
+        return {
+          ...agent,
+          consecutiveDays: Math.min(7, nextConsecutiveDays),
+          missionsToday: nextMissionsToday,
+          status: nextStatus,
+          lastActiveDate: new Date().toISOString().split('T')[0]
+        } as ReferralAgent;
+      }
+      return agent;
+    });
+
+    const nextUser = {
+      ...user,
+      referCount: updatedReferrals.length,
+      referrals: updatedReferrals
+    };
+
+    set({ user: nextUser });
+
+    if (rewarded) {
+      set({
+        resources: {
+          ...resources,
+          coins: resources.coins + bonusCoins,
+          keys: resources.keys + bonusKeys
+        }
+      });
+    }
+
+    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
+      user: nextUser,
+      resources: get().resources,
+      crew: get().crew,
+      base: get().base,
+      unlockedTabs: get().unlockedTabs,
+      riddleState: get().riddleState,
+    }));
+
+    get().triggerHaptic('success');
+
+    return { rewarded, coins: bonusCoins, keys: bonusKeys };
   },
 
   triggerHaptic: (style = 'light') => {

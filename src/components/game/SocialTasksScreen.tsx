@@ -510,6 +510,8 @@ export default function SocialTasksScreen() {
   };
 
   const completedCount = batchTasks.filter(t => t.completed).length;
+  const completedSupabaseCount = supabaseTasks.filter(t => completedTaskIds.includes(t.id)).length;
+  const totalSupabaseCount = supabaseTasks.length;
 
   return (
     <div className="p-5 pb-24 space-y-6">
@@ -583,11 +585,55 @@ export default function SocialTasksScreen() {
 
       {/* Section 1: Dynamic 10-Task Decryption Batch */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. Active Telemetry Batch</h3>
-          <span className="text-[9px] font-mono font-black text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2.5 py-0.5 rounded-full">
-            {completedCount} / 10 SECURED
-          </span>
+        <div className="flex items-center justify-between px-1 bg-white/[0.01] border border-white/5 py-2 px-4 rounded-3xl backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. Active Telemetry Batch</h3>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* Radial Progress Ring Component */}
+            <div className="relative flex items-center justify-center w-12 h-12">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+                <circle
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="transparent"
+                  stroke="rgba(245, 158, 11, 0.08)"
+                  strokeWidth="3.5"
+                />
+                <motion.circle
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="transparent"
+                  stroke="#f59e0b"
+                  strokeWidth="3.5"
+                  strokeDasharray={`${2 * Math.PI * 20}`}
+                  initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+                  animate={{ strokeDashoffset: 2 * Math.PI * 20 - (Math.min(completedCount, 10) / 10) * (2 * Math.PI * 20) }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center text-center -mt-0.5">
+                <span className="text-[11px] font-mono font-black text-amber-500 leading-none">
+                  {completedCount}
+                </span>
+                <span className="text-[7px] font-mono text-white/30 font-black leading-none mt-0.5">
+                  /10
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex flex-col text-right leading-none">
+              <span className="text-[9px] font-black uppercase text-amber-500 tracking-wider">BATCH STATUS</span>
+              <span className="text-[7.5px] font-mono font-black text-white/35 uppercase mt-0.5">
+                {completedCount === 10 ? "FULLY SECURED" : "SYNCING CORES"}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="bg-amber-500/5 border border-dashed border-amber-500/20 rounded-2xl p-3 text-center">
@@ -838,11 +884,57 @@ export default function SocialTasksScreen() {
 
       {/* Section 4: Live Cloud Database Quest Cores */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.15em]">III. Cloud Sync Database Quests</h3>
-          <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
-            {supabaseTasks.filter(t => completedTaskIds.includes(t.id)).length} / {supabaseTasks.length} DECRYPTED
-          </span>
+        <div className="flex items-center justify-between px-1 bg-white/[0.01] border border-white/5 py-2 px-4 rounded-3xl backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="text-[10px] font-black uppercase text-emerald-500 tracking-[0.15em]">III. Cloud Sync Database Quests</h3>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* Radial Progress Ring Component */}
+            <div className="relative flex items-center justify-center w-12 h-12">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+                <circle
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="transparent"
+                  stroke="rgba(16, 185, 129, 0.08)"
+                  strokeWidth="3.5"
+                />
+                <motion.circle
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="transparent"
+                  stroke="#10b981"
+                  strokeWidth="3.5"
+                  strokeDasharray={`${2 * Math.PI * 20}`}
+                  initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+                  animate={{ 
+                    strokeDashoffset: 2 * Math.PI * 20 - (totalSupabaseCount > 0 ? (Math.min(completedSupabaseCount, totalSupabaseCount) / totalSupabaseCount) : 0) * (2 * Math.PI * 20) 
+                  }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center text-center -mt-0.5">
+                <span className="text-[11px] font-mono font-black text-emerald-400 leading-none">
+                  {completedSupabaseCount}
+                </span>
+                <span className="text-[7px] font-mono text-white/30 font-black leading-none mt-0.5">
+                  /{totalSupabaseCount}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex flex-col text-right leading-none">
+              <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">CLOUD STORAGE</span>
+              <span className="text-[7.5px] font-mono font-black text-white/35 uppercase mt-0.5">
+                {completedSupabaseCount === totalSupabaseCount && totalSupabaseCount > 0 ? "FULLY SYNCED" : "UNRESOLVED"}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="bg-emerald-500/5 border border-dashed border-emerald-500/20 rounded-2xl p-4 text-center">

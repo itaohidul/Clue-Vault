@@ -959,15 +959,35 @@ app.get("/api/crews/:crewName/members", async (req, res) => {
 
     if (error) throw error;
 
-    const filtered = data
-      .filter(u => u.state_json?.crew?.name?.toLowerCase() === crewName.toLowerCase())
-      .map(u => u.state_json);
+    const filtered = (data || [])
+      .map(u => {
+        let state = u.state_json;
+        if (typeof state === "string") {
+          try {
+            state = JSON.parse(state);
+          } catch (e) {
+            return null;
+          }
+        }
+        return state;
+      })
+      .filter(state => state && state.crew?.name?.toLowerCase() === crewName.toLowerCase());
 
     res.json(filtered);
   } catch (err: any) {
     const items = Array.from(localCache.users.values())
-      .map(u => u.state_json)
-      .filter(u => u.crew && u.crew.name?.toLowerCase() === crewName.toLowerCase());
+      .map(u => {
+        let state = u.state_json;
+        if (typeof state === "string") {
+          try {
+            state = JSON.parse(state);
+          } catch (e) {
+            return null;
+          }
+        }
+        return state;
+      })
+      .filter(state => state && state.crew?.name?.toLowerCase() === crewName.toLowerCase());
     res.json(items);
   }
 });

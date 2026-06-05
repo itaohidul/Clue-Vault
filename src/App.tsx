@@ -790,6 +790,7 @@ function AppInner() {
           buyItem: store.buyItem,
           claimReferralCommission: store.claimReferralCommission,
           addMockReferral: store.addMockReferral,
+          simulateReferralDay: store.simulateReferralDay,
           updateCrewBadge: store.updateCrewBadge,
           joinCrew: store.joinCrew,
           leaveCrew: store.leaveCrew,

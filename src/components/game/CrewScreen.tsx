@@ -143,7 +143,7 @@ export default function CrewScreen() {
     { name: "Echo_X", points: 1820, rank: "Veteran" },
     { name: "VoidWalker", points: 1650, rank: "Soldier" },
     { name: "Ghost_Agent", points: 1200, rank: "Soldier" },
-    { name: "You (Active)", points: crew.points, rank: "Operator" },
+    { name: "You (Active)", points: crew?.points || 0, rank: "Operator" },
   ].sort((a, b) => b.points - a.points);
 
   const handleInvite = () => {
@@ -369,7 +369,7 @@ export default function CrewScreen() {
                            onClick={() => updateCrewBadge({ color: c.hex })}
                            className={cn(
                              "w-10 h-10 rounded-full border-2 transition-all",
-                             crew.badge.color === c.hex ? "border-white scale-110" : "border-transparent"
+                             crew?.badge?.color === c.hex ? "border-white scale-110" : "border-transparent"
                            )}
                            style={{ backgroundColor: c.hex }}
                          />
@@ -387,7 +387,7 @@ export default function CrewScreen() {
                            onClick={() => updateCrewBadge({ shape: name })}
                            className={cn(
                              "flex-1 flex items-center justify-center p-3 rounded-xl transition-all",
-                             crew.badge.shape === name ? "bg-white/10 text-white" : "text-white/20"
+                             crew?.badge?.shape === name ? "bg-white/10 text-white" : "text-white/20"
                            )}
                          >
                             <Icon size={24} />
@@ -406,7 +406,7 @@ export default function CrewScreen() {
                            onClick={() => updateCrewBadge({ icon: name })}
                            className={cn(
                              "aspect-square flex items-center justify-center rounded-xl transition-all",
-                             crew.badge.icon === name ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20" : "bg-white/5 text-white/20"
+                             crew?.badge?.icon === name ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20" : "bg-white/5 text-white/20"
                            )}
                          >
                             <Icon size={20} />

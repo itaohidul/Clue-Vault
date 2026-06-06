@@ -1,18 +1,44 @@
 import { useGame } from "../../App";
 import { useUserStore } from "../../store/userStore";
-import { Share2, Users, Gift, Copy, Check, ChevronRight, Trophy, Coins, Zap, Sparkles, UserPlus, Pause, Play, RotateCcw, ShieldCheck, HelpCircle } from "lucide-react";
+import { Share2, Users, Gift, Copy, Check, ChevronRight, Trophy, Coins, Zap, Sparkles, UserPlus, Pause, Play, RotateCcw, ShieldCheck, HelpCircle, Terminal, Activity, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import axios from "axios";
 
 export default function ReferralScreen() {
   const { user, resources, claimReferralCommission, addMockReferral, simulateReferralDay, triggerHaptic } = useGame();
+  const { userId } = useSupabaseSync();
   const [copied, setCopied] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("Referral URL linked to clipboard!");
   const [verificationPromo, setVerificationPromo] = useState<{ name: string; coins: number; keys: number } | null>(null);
   const [isSimActive, setIsSimActive] = useState(() => {
     const saved = localStorage.getItem("cluevault_sandbox_yield_active");
     return saved === null ? true : saved === "true";
   });
+
+  const [mockUnclaimed, setMockUnclaimed] = useState<number>(() => {
+    const saved = localStorage.getItem("cluevault_mock_unclaimed");
+    return saved ? parseFloat(saved) : 0;
+  });
+
+  const [mockClaimed, setMockClaimed] = useState<number>(() => {
+    const saved = localStorage.getItem("cluevault_mock_claimed");
+    return saved ? parseFloat(saved) : 0;
+  });
+
+  const [mockFirstRecruitTime, setMockFirstRecruitTime] = useState<number | null>(() => {
+    const saved = localStorage.getItem("cluevault_mock_first_recruit_time");
+    return saved ? parseInt(saved, 10) : null;
+  });
+
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  const localReferralsList = user.referrals || [];
+  const mockReferrals = localReferralsList.filter(r => r.isSimulated);
+  const mockReferCount = mockReferrals.length;
 
   useEffect(() => {
     localStorage.setItem("cluevault_sandbox_yield_active", String(isSimActive));
@@ -21,7 +47,82 @@ export default function ReferralScreen() {
   const referralCode = user.referralCode || "CV-RESET";
   const inviteLink = `https://t.me/cluevaultbot?start=ref_${referralCode}`;
 
-  // Passive real-time commission ticker
+  // Set mock recruiter timestamp when the first agent is added
+  useEffect(() => {
+    if (mockReferCount > 0) {
+      if (!mockFirstRecruitTime) {
+        const now = Date.now();
+        localStorage.setItem("cluevault_mock_first_recruit_time", String(now));
+        setMockFirstRecruitTime(now);
+      }
+    } else {
+      if (mockFirstRecruitTime) {
+        localStorage.removeItem("cluevault_mock_first_recruit_time");
+        setMockFirstRecruitTime(null);
+      }
+    }
+  }, [mockReferCount, mockFirstRecruitTime]);
+
+  // Check for auto reset (1 hour expiry)
+  useEffect(() => {
+    if (!mockFirstRecruitTime || mockReferCount === 0) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - mockFirstRecruitTime;
+      const limit = 3600000; // 1 hour
+      if (elapsed >= limit) {
+        resetSimulation();
+      } else {
+        setTimeLeft(limit - elapsed);
+      }
+    }, 1000);
+
+    return () => clearInterval(checkInterval);
+  }, [mockFirstRecruitTime, mockReferCount]);
+
+  // Live polling for referral updates to ensure referee sees joins instantly
+  useEffect(() => {
+    if (!userId) return;
+
+    const API_BASE = import.meta.env.VITE_API_URL || "";
+    
+    const checkForUpdates = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/user/${userId}`);
+        const cloudData = response.data;
+        if (cloudData && cloudData.user) {
+          const currentRealReferrals = (user.referrals || []).filter(r => !r.isSimulated);
+          const serverReferrals = cloudData.user.referrals || [];
+          
+          if (JSON.stringify(serverReferrals) !== JSON.stringify(currentRealReferrals)) {
+            useUserStore.setState((state) => {
+              const currentSimulated = (state.user.referrals || []).filter(r => r.isSimulated);
+              const merged = [...serverReferrals, ...currentSimulated];
+              
+              const updatedUser = {
+                ...state.user,
+                referrals: merged,
+                referCount: serverReferrals.length
+              };
+              return { ...state, user: updatedUser };
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to automatically synchronize network recruits:", err);
+      }
+    };
+
+    const interval = setInterval(checkForUpdates, 4000); // Poll every 4 seconds
+    checkForUpdates(); // Run immediately
+
+    return () => clearInterval(interval);
+  }, [userId, user.referrals]);
+
+  // Passive real-time commission ticker for REAL references
   useEffect(() => {
     const referCount = user.referCount || 0;
     if (referCount === 0 || !isSimActive) return;
@@ -42,11 +143,33 @@ export default function ReferralScreen() {
     return () => clearInterval(interval);
   }, [user.referCount, isSimActive]);
 
+  // Passive real-time commission ticker for MOCK references
+  useEffect(() => {
+    if (mockReferCount === 0 || !isSimActive) return;
+
+    const interval = setInterval(() => {
+      // Passive commission rate from referrals
+      const commissionRate = 0.01 + Math.random() * 0.03; // average 0.025 coins per referral
+      const addedCommission = mockReferCount * commissionRate;
+      
+      setMockUnclaimed((prev) => {
+        const next = parseFloat((prev + addedCommission).toFixed(4));
+        localStorage.setItem("cluevault_mock_unclaimed", String(next));
+        return next;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [mockReferCount, isSimActive]);
+
   const copyLink = () => {
     navigator.clipboard.writeText(inviteLink);
+    setToastMessage("Referral URL linked to clipboard!");
     setCopied(true);
+    setShowToast(true);
     triggerHaptic("success");
     setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
   const shareLink = () => {
@@ -64,13 +187,22 @@ export default function ReferralScreen() {
 
   const resetSimulation = () => {
     triggerHaptic("heavy");
+    
+    // Clear mock metrics
+    localStorage.removeItem("cluevault_mock_unclaimed");
+    localStorage.removeItem("cluevault_mock_claimed");
+    localStorage.removeItem("cluevault_mock_first_recruit_time");
+    setMockUnclaimed(0);
+    setMockClaimed(0);
+    setMockFirstRecruitTime(null);
+    setTimeLeft(null);
+    
     useUserStore.setState((state) => {
+      const nextReferrals = (state.user.referrals || []).filter(r => !r.isSimulated);
       const nextUser = {
         ...state.user,
-        referCount: 0,
-        referralCommission: 0,
-        claimedCommission: 0,
-        referrals: [],
+        referrals: nextReferrals,
+        referCount: nextReferrals.filter(r => !r.isSimulated).length,
       };
       
       localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
@@ -84,14 +216,50 @@ export default function ReferralScreen() {
       
       return { user: nextUser };
     });
+
+    setToastMessage("Sandbox crew and metrics successfully reset!");
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // Mount check for expired mock session (older than 1h)
+  useEffect(() => {
+    if (mockFirstRecruitTime && mockReferCount > 0) {
+      const elapsed = Date.now() - mockFirstRecruitTime;
+      if (elapsed >= 3600000) {
+        resetSimulation();
+      }
+    }
+  }, []);
+
+  const claimMockCommission = () => {
+    if (mockUnclaimed <= 0) {
+      triggerHaptic("error");
+      return;
+    }
+    
+    triggerHaptic("success");
+    const claimedVal = mockUnclaimed;
+    
+    setMockClaimed((prev) => {
+      const next = parseFloat((prev + claimedVal).toFixed(4));
+      localStorage.setItem("cluevault_mock_claimed", String(next));
+      return next;
+    });
+    setMockUnclaimed(0);
+    localStorage.setItem("cluevault_mock_unclaimed", "0");
+    
+    setToastMessage(`Secured demo coins cargo: +${Math.round(claimedVal)} ZP (No real ZP added in sandbox mode)`);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4500);
   };
 
   // Milestones
   const milestones = [
-    { count: 1, reward: "100 ZP Bonus", reached: (user.referCount || 0) >= 1 },
-    { count: 3, reward: "+1 Core key", reached: (user.referCount || 0) >= 3 },
-    { count: 5, reward: "Rare Decryption Vault", reached: (user.referCount || 0) >= 5 },
-    { count: 10, reward: "Premium Hint Pack", reached: (user.referCount || 0) >= 10 },
+    { count: 1, reward: "100 ZP Bonus", reached: (user.referCount || 0) >= 1 || mockReferCount >= 1 },
+    { count: 3, reward: "+1 Core key", reached: (user.referCount || 0) >= 3 || mockReferCount >= 3 },
+    { count: 5, reward: "Rare Decryption Vault", reached: (user.referCount || 0) >= 5 || mockReferCount >= 5 },
+    { count: 10, reward: "Premium Hint Pack", reached: (user.referCount || 0) >= 10 || mockReferCount >= 10 },
   ];
 
   const handleSimulateDay = (agentId: string) => {
@@ -107,8 +275,92 @@ export default function ReferralScreen() {
     }
   };
 
-  const localReferralsList = user.referrals || [];
   const unclaimed = user.referralCommission || 0;
+
+  const getRelativeTimeString = (dateStr: string) => {
+    try {
+      const past = new Date(dateStr).getTime();
+      const now = Date.now();
+      const diffMs = now - past;
+      if (diffMs < 0) return "Just now";
+      
+      const secs = Math.floor(diffMs / 1000);
+      const mins = Math.floor(secs / 60);
+      const hours = Math.floor(mins / 60);
+      const days = Math.floor(hours / 24);
+      
+      if (secs < 60) return "Just now";
+      if (mins < 60) return `${mins}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      return `${days}d ago`;
+    } catch (e) {
+      return "Recently";
+    }
+  };
+
+  const getReferralLogs = () => {
+    const logs: Array<{ id: string; text: string; time: string; type: 'join' | 'progress' | 'verify' | 'mission' }> = [];
+    
+    localReferralsList.forEach((agent) => {
+      const sandboxTag = agent.isSimulated ? " [SANDBOX]" : "";
+      // 1. Join event
+      logs.push({
+        id: `${agent.id}-join`,
+        text: `New Agent Recruited: ${agent.name} deployed to crew network${sandboxTag}`,
+        time: getRelativeTimeString(agent.joinedAt || new Date().toISOString()),
+        type: 'join'
+      });
+
+      // 2. Training progress
+      if (agent.consecutiveDays > 0) {
+        logs.push({
+          id: `${agent.id}-progress`,
+          text: `Training Progress: ${agent.name} advanced to Day ${agent.consecutiveDays}/7${sandboxTag}`,
+          time: "Active",
+          type: 'progress'
+        });
+      }
+
+      // 3. Daily missions
+      if (agent.missionsToday > 0) {
+        logs.push({
+          id: `${agent.id}-mission`,
+          text: `Decrypt Protocol: ${agent.name} completed ${agent.missionsToday} tasks${sandboxTag}`,
+          time: "Today",
+          type: 'mission'
+        });
+      }
+
+      // 4. Verification Reward
+      if (agent.status === 'verified') {
+        logs.push({
+          id: `${agent.id}-verify`,
+          text: `Verification Secured: ${agent.name} certified! Received +25,000 ZP${sandboxTag}`,
+          time: "Success",
+          type: 'verify'
+        });
+      }
+    });
+
+    if (logs.length === 0) {
+      return [
+        {
+          id: 'system-ready',
+          text: "Decryption Network: Standby mode. Syncing with ledger ports...",
+          time: "03:13:13",
+          type: 'progress' as const
+        },
+        {
+          id: 'recruit-tip',
+          text: "Network Hub: Distribute your invite link to register unverified recruits.",
+          time: "Info",
+          type: 'join' as const
+        }
+      ];
+    }
+
+    return logs.slice(-5).reverse();
+  };
 
   return (
     <div className="pb-16 space-y-6">
@@ -249,6 +501,54 @@ export default function ReferralScreen() {
             </button>
           </div>
         </div>
+
+        {/* Sandbox Mock Stats and Yield Panel */}
+        {mockReferCount > 0 && (
+          <div className="mt-4 pt-4 border-t border-blue-500/20 space-y-4 bg-blue-500/5 p-4 rounded-3xl border border-blue-500/10">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-1.5 font-mono text-[9px] text-blue-400 font-black uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Sandbox Mode Active
+              </div>
+              {timeLeft !== null && (
+                <span className="text-[8px] font-mono font-black text-blue-400/80 bg-blue-500/10 px-2.5 py-0.5 rounded border border-blue-500/20 flex items-center gap-1">
+                  <Clock size={10} /> {Math.floor(timeLeft / 60000)}m {Math.floor((timeLeft % 60000) / 1000)}s Left
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-black/30 border border-blue-500/10 rounded-xl p-3 text-center">
+                <span className="text-[7px] font-black text-blue-400/40 uppercase block mb-1">Simulated Crew</span>
+                <span className="text-lg font-black italic text-blue-400 font-mono">{mockReferCount}</span>
+              </div>
+              <div className="bg-black/30 border border-blue-500/10 rounded-xl p-3 text-center">
+                <span className="text-[7px] font-black text-blue-400/40 uppercase block mb-1">Simulated Claimed</span>
+                <span className="text-lg font-black italic text-emerald-400 font-mono">{Math.round(mockClaimed)} <span className="text-[9px]">ZP</span></span>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-r from-blue-500/10 to-emerald-500/5 border border-blue-500/20 rounded-xl p-3.5 flex justify-between items-center">
+              <div className="min-w-0">
+                <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest block font-sans">Simulated Yields (Sandbox)</span>
+                <span className="text-xs font-black font-mono text-white tracking-tight mt-0.5 block truncate">
+                  {mockUnclaimed.toFixed(4)} <span className="text-[10px] text-white/40">ZP</span>
+                </span>
+              </div>
+              <button
+                onClick={claimMockCommission}
+                disabled={mockUnclaimed <= 0}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider italic transition-all shrink-0",
+                  mockUnclaimed > 0 
+                    ? "bg-blue-500 text-black shadow-[0_0_15px_#3b82f6] active:scale-95" 
+                    : "bg-white/5 text-white/30 border border-white/5 cursor-not-allowed"
+                )}
+              >
+                Claim Sandbox ZP
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mock Recruiter Simulator Action */}
@@ -332,7 +632,14 @@ export default function ReferralScreen() {
               </div>
               <div>
                 {m.reached ? (
-                  <span className="text-[8px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-lg">Unlocked</span>
+                  <span className={cn(
+                    "text-[8px] font-black uppercase border px-2 py-1 rounded-lg",
+                    (user.referCount || 0) >= m.count
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                  )}>
+                    {(user.referCount || 0) >= m.count ? "Unlocked" : "Unlocked (Demo)"}
+                  </span>
                 ) : (
                   <span className="text-[8px] font-black uppercase bg-white/5 text-white/20 px-2 py-1 rounded-lg">Locked</span>
                 )}
@@ -374,7 +681,14 @@ export default function ReferralScreen() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-white truncate font-mono">{agent.name}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-black text-white truncate font-mono">{agent.name}</span>
+                          {agent.isSimulated && (
+                            <span className="text-[7px] font-mono leading-none tracking-widest font-black bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase shrink-0">
+                              SANDBOX
+                            </span>
+                          )}
+                        </div>
                         {agent.status === 'verified' ? (
                           <span className="text-[8px] font-black tracking-wider uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
                             <ShieldCheck size={10} /> Verified
@@ -416,32 +730,40 @@ export default function ReferralScreen() {
                       })}
                     </div>
 
-                    <div className="flex justify-between items-center pt-2 border-t border-white/5 text-[9px]">
-                      <span className="font-bold text-white/40 uppercase">Missions Today</span>
-                      <span className={cn(
-                        "font-black font-mono px-2 py-0.5 rounded-md uppercase",
-                        (agent.missionsToday || 0) >= 5 
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/15" 
-                          : "bg-white/5 text-white/50"
-                      )}>
-                        {agent.missionsToday || 0} / 5 TASKS
-                      </span>
-                    </div>
                   </div>
-
-                  {agent.status !== 'verified' && (
-                    <button
-                      onClick={() => handleSimulateDay(agent.id)}
-                      className="w-full bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 hover:border-amber-500/35 text-amber-400 py-3 rounded-2xl text-[9px] font-black uppercase italic tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <Sparkles size={11} className="text-amber-500" /> Simulate Active Training Day (+5 Missions)
-                    </button>
-                  )}
                 </div>
               );
             })}
           </div>
         )}
+      </div>
+
+      {/* Recent Network Action Log */}
+      <div className="glass rounded-[2rem] p-6 border-white/5 space-y-4">
+        <div className="flex justify-between items-center px-1">
+          <h3 className="text-xs font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
+            <Activity size={14} className="text-emerald-400 animate-pulse" /> Recent Network Activity Logs
+          </h3>
+          <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/10 flex items-center gap-1.5 uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Telemetry
+          </span>
+        </div>
+
+        <div className="bg-black/40 border border-white/5 rounded-2xl p-4 font-mono text-[10px] text-white/70 space-y-3.5 divide-y divide-white/5">
+          {getReferralLogs().map((log) => (
+            <div key={log.id} className="flex justify-between items-start gap-4 pt-3.5 first:pt-0">
+              <div className="flex gap-2.5 items-start">
+                <Terminal size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                <span className="leading-relaxed uppercase font-semibold text-white/60">
+                  {log.text}
+                </span>
+              </div>
+              <span className="text-[9px] text-white/30 whitespace-nowrap shrink-0 flex items-center gap-1 font-bold">
+                <Clock size={10} /> {log.time}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Verification Celebration Modal Overlay */}
@@ -498,6 +820,28 @@ export default function ReferralScreen() {
                 Secure Assets &amp; Dismiss
               </button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Copy Link Cyber Toast Notification */}
+      <AnimatePresence>
+        {showToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 left-4 right-4 z-50 pointer-events-none flex justify-center"
+          >
+            <div className="w-full max-w-sm glass bg-black/90 border border-emerald-500/40 p-4 rounded-2xl flex items-center gap-3 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Check size={16} />
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] font-mono font-black uppercase text-emerald-400 tracking-wider">SECURE SHIELD INTEL</div>
+                <div className="text-[9px] font-mono text-white/70 font-semibold uppercase">{toastMessage}</div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

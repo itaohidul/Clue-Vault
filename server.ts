@@ -201,7 +201,21 @@ app.get("/api/startup/:userId", async (req, res) => {
               updatedReferrerState.resources.coins = (updatedReferrerState.resources.coins || 0) + bonus;
             }
             if (updatedReferrerState.user) {
-              updatedReferrerState.user.referCount = (updatedReferrerState.user.referCount || 0) + 1;
+              if (!updatedReferrerState.user.referrals) {
+                updatedReferrerState.user.referrals = [];
+              }
+              const newAgent = {
+                id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+                name: usernameQuery,
+                avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
+                status: "unverified",
+                consecutiveDays: 0,
+                missionsToday: 0,
+                lastActiveDate: new Date().toISOString().split('T')[0],
+                joinedAt: new Date().toISOString()
+              };
+              updatedReferrerState.user.referrals.push(newAgent);
+              updatedReferrerState.user.referCount = updatedReferrerState.user.referrals.length;
             }
 
             await supabase
@@ -348,6 +362,42 @@ app.get("/api/startup/:userId", async (req, res) => {
         type: "welcome_package",
         created_at: new Date().toISOString()
       });
+
+      if (referredByCode) {
+        for (const [key, value] of localCache.users.entries()) {
+          if (value.referral_code === referredByCode) {
+            value.balance += 5000;
+            if (value.state_json.resources) {
+              value.state_json.resources.coins += 5000;
+            }
+            if (value.state_json.user) {
+              if (!value.state_json.user.referrals) {
+                value.state_json.user.referrals = [];
+              }
+              const newAgent = {
+                id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+                name: usernameQuery,
+                avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
+                status: "unverified",
+                consecutiveDays: 0,
+                missionsToday: 0,
+                lastActiveDate: new Date().toISOString().split('T')[0],
+                joinedAt: new Date().toISOString()
+              };
+              value.state_json.user.referrals.push(newAgent);
+              value.state_json.user.referCount = value.state_json.user.referrals.length;
+            }
+            localCache.transactions.push({
+              id: Date.now() + 1,
+              telegram_id: value.telegram_id,
+              amount: 5000,
+              type: "referral_bonus",
+              created_at: new Date().toISOString()
+            });
+            break;
+          }
+        }
+      }
     }
 
     return res.json({
@@ -485,7 +535,21 @@ app.get("/api/user/:userId", async (req, res) => {
           updatedReferrerState.resources.coins = (updatedReferrerState.resources.coins || 0) + bonus;
         }
         if (updatedReferrerState.user) {
-          updatedReferrerState.user.referCount = (updatedReferrerState.user.referCount || 0) + 1;
+          if (!updatedReferrerState.user.referrals) {
+            updatedReferrerState.user.referrals = [];
+          }
+          const newAgent = {
+            id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+            name: usernameQuery,
+            avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
+            status: "unverified",
+            consecutiveDays: 0,
+            missionsToday: 0,
+            lastActiveDate: new Date().toISOString().split('T')[0],
+            joinedAt: new Date().toISOString()
+          };
+          updatedReferrerState.user.referrals.push(newAgent);
+          updatedReferrerState.user.referCount = updatedReferrerState.user.referrals.length;
         }
 
         await supabase
@@ -579,7 +643,21 @@ app.get("/api/user/:userId", async (req, res) => {
               value.state_json.resources.coins += 5000;
             }
             if (value.state_json.user) {
-              value.state_json.user.referCount += 1;
+              if (!value.state_json.user.referrals) {
+                value.state_json.user.referrals = [];
+              }
+              const newAgent = {
+                id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+                name: usernameQuery,
+                avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
+                status: "unverified",
+                consecutiveDays: 0,
+                missionsToday: 0,
+                lastActiveDate: new Date().toISOString().split('T')[0],
+                joinedAt: new Date().toISOString()
+              };
+              value.state_json.user.referrals.push(newAgent);
+              value.state_json.user.referCount = value.state_json.user.referrals.length;
             }
             localCache.transactions.push({
               id: Date.now() + 1,
@@ -604,6 +682,40 @@ app.post("/api/user/:userId", async (req, res) => {
   const payload = req.body;
 
   try {
+    // 1. Fetch current database record to preserve server-created referrals!
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("state_json")
+      .eq("telegram_id", userId)
+      .maybeSingle();
+
+    if (dbUser && dbUser.state_json) {
+      const dbReferrals = (dbUser.state_json.user?.referrals || []).filter((r: any) => !r.isSimulated);
+      const clientReferrals = (payload.user?.referrals || []).filter((r: any) => !r.isSimulated);
+
+      // Merge referrals by distinct ID
+      const mergedReferrals = [...clientReferrals];
+      dbReferrals.forEach((dbRef: any) => {
+        if (!mergedReferrals.some((r: any) => r.id === dbRef.id)) {
+          mergedReferrals.push(dbRef);
+        } else {
+          // Sync verification status changes
+          const idx = mergedReferrals.findIndex((r: any) => r.id === dbRef.id);
+          const clientRef = mergedReferrals[idx];
+          if (dbRef.status === "verified" && clientRef.status !== "verified") {
+            mergedReferrals[idx] = dbRef;
+          } else if (dbRef.consecutiveDays > clientRef.consecutiveDays) {
+            mergedReferrals[idx] = dbRef;
+          }
+        }
+      });
+
+      if (payload.user) {
+        payload.user.referrals = mergedReferrals;
+        payload.user.referCount = mergedReferrals.length;
+      }
+    }
+
     const updatedBalance = payload.ZP ?? payload.resources?.coins ?? 0;
     const updateObj: Record<string, any> = {
       balance: updatedBalance,
@@ -633,6 +745,22 @@ app.post("/api/user/:userId", async (req, res) => {
     }
     
     const cachedUser = localCache.users.get(userId) || {};
+    
+    if (cachedUser && cachedUser.state_json) {
+      const dbReferrals = (cachedUser.state_json.user?.referrals || []).filter((r: any) => !r.isSimulated);
+      const clientReferrals = (payload.user?.referrals || []).filter((r: any) => !r.isSimulated);
+      const mergedReferrals = [...clientReferrals];
+      dbReferrals.forEach((dbRef: any) => {
+        if (!mergedReferrals.some((r: any) => r.id === dbRef.id)) {
+          mergedReferrals.push(dbRef);
+        }
+      });
+      if (payload.user) {
+        payload.user.referrals = mergedReferrals;
+        payload.user.referCount = mergedReferrals.length;
+      }
+    }
+
     localCache.users.set(userId, {
       ...cachedUser,
       telegram_id: userId,

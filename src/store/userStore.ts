@@ -11,6 +11,7 @@ export interface ReferralAgent {
   missionsToday: number;
   lastActiveDate: string;
   joinedAt: string;
+  isSimulated?: boolean;
 }
 
 export interface TelegramUser {
@@ -412,14 +413,15 @@ export const useUserStore = create<GameState>((set, get) => ({
       consecutiveDays: 0,
       missionsToday: 0,
       lastActiveDate: new Date().toISOString().split('T')[0],
-      joinedAt: new Date().toISOString()
+      joinedAt: new Date().toISOString(),
+      isSimulated: true
     };
 
     const referralsList = [...(user.referrals || []), newAgent];
 
     const nextUser = {
       ...user,
-      referCount: referralsList.length,
+      referCount: referralsList.filter(r => !r.isSimulated).length,
       referrals: referralsList
     };
 
@@ -438,6 +440,7 @@ export const useUserStore = create<GameState>((set, get) => ({
   simulateReferralDay: (agentId: string) => {
     const { user, resources } = get();
     let rewarded = false;
+    let visualRewarded = false;
     let bonusCoins = 0;
     let bonusKeys = 0;
 
@@ -450,9 +453,12 @@ export const useUserStore = create<GameState>((set, get) => ({
         const nextStatus = nextConsecutiveDays >= 7 ? 'verified' : 'unverified';
 
         if (nextStatus === 'verified') {
-          rewarded = true;
+          visualRewarded = true;
           bonusCoins = 25000;
           bonusKeys = 5;
+          if (!agent.isSimulated) {
+            rewarded = true;
+          }
         }
 
         return {
@@ -468,7 +474,7 @@ export const useUserStore = create<GameState>((set, get) => ({
 
     const nextUser = {
       ...user,
-      referCount: updatedReferrals.length,
+      referCount: updatedReferrals.filter(r => !r.isSimulated).length,
       referrals: updatedReferrals
     };
 
@@ -495,7 +501,7 @@ export const useUserStore = create<GameState>((set, get) => ({
 
     get().triggerHaptic('success');
 
-    return { rewarded, coins: bonusCoins, keys: bonusKeys };
+    return { rewarded: visualRewarded, coins: bonusCoins, keys: bonusKeys };
   },
 
   triggerHaptic: (style = 'light') => {

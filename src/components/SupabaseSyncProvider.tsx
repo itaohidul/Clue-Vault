@@ -138,8 +138,14 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
 
   // Map state converters
   const mapStateToSupabasePayload = (state: any) => {
+    const realReferrals = (state.user?.referrals || []).filter((r: any) => !r.isSimulated);
+    const updatedUser = {
+      ...state.user,
+      referrals: realReferrals,
+      referCount: realReferrals.length
+    };
     return {
-      user: state.user,
+      user: updatedUser,
       resources: state.resources,
       purchases: state.purchases,
       crew: state.crew,
@@ -160,6 +166,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         exp: cloudData.exp ?? cloudData.EXP ?? cloudData.user?.exp ?? 0,
         referCount: cloudData.referCount ?? cloudData.user?.referCount ?? 0,
         referralCode: cloudData.referralCode || cloudData.user?.referralCode,
+        referrals: cloudData.user?.referrals || cloudData.referrals || [],
         onboarded: cloudData.onboarded ?? cloudData.user?.onboarded ?? false,
       },
       resources: {

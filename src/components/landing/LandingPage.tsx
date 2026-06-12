@@ -1,9 +1,24 @@
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Shield, Search, Zap, Trophy, ArrowRight, Github, Users } from "lucide-react";
 import cluevaultLogo from "../../assets/images/cluevault_logo_1779272321887.png";
+import { LoginButton } from '@telegram-auth/react';
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+
+  const handleTelegramAuth = (tgUser: any) => {
+    try {
+      const id = tgUser.id.toString();
+      localStorage.setItem("cluevault_supabase_id", id);
+      navigate("/app/home");
+    } catch (err) {
+      console.warn("Failed web login", err);
+    }
+  };
+
+  const isTgWebApp = typeof window !== 'undefined' && !!(window.Telegram?.WebApp?.initData);
+
   return (
     <div className="relative min-h-screen">
       {/* Background Atmosphere */}
@@ -48,21 +63,35 @@ export default function LandingPage() {
             Join the underground network of mystery solvers. Complete daily missions, 
             earn rare resources, and lead your crew to total dominance in the ClueVault.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link 
-              to="/app/home" 
-              className="w-full sm:w-auto bg-amber-500 text-black px-10 py-4 rounded-full font-black text-lg transition-all glow-gold uppercase italic active:scale-95"
-            >
-              Play Now
-            </Link>
-            <a 
-              href="https://t.me/Cluevaultofficial" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto glass px-10 py-4 rounded-full font-black text-lg transition-all uppercase italic border-white/20 hover:border-white/40 active:scale-95"
-            >
-              Join Telegram
-            </a>
+          <div className="flex flex-col items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
+              <Link 
+                to="/app/home" 
+                className="w-full sm:w-auto bg-amber-500 text-black px-10 py-4 rounded-full font-black text-lg transition-all glow-gold uppercase italic active:scale-95"
+              >
+                Play Web (Guest)
+              </Link>
+              <a 
+                href="https://t.me/Cluevaultofficial" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto glass px-10 py-4 rounded-full font-black text-lg transition-all uppercase italic border-white/20 hover:border-white/40 active:scale-95"
+              >
+                Join Telegram
+              </a>
+            </div>
+            
+            {!isTgWebApp && (
+              <div className="mt-4 shrink-0 transition-transform hover:scale-105">
+                <LoginButton
+                  botUsername="ClueVaultBot"
+                  onAuthCallback={handleTelegramAuth}
+                  buttonSize="large"
+                  cornerRadius={20}
+                  showAvatar={true}
+                />
+              </div>
+            )}
           </div>
         </motion.div>
 

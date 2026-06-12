@@ -37,6 +37,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey && !supabaseUrl.includes("placeholder");
+
 export const supabase = createClient(
   supabaseUrl || "https://cluevault-placeholder-id.supabase.co",
   supabaseAnonKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.placeholder"

@@ -80,9 +80,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
       );
 
-    const resolveIdentity = (allowAnonymousFallback = false) => {
-      let id = localStorage.getItem("cluevault_supabase_id");
-      
+    const resolveIdentity = () => {
       const nativeTgUser = 
         window.Telegram && 
         window.Telegram.WebApp && 
@@ -97,43 +95,32 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         return true;
       }
       
-      // If we are in Telegram, ALWAYS prioritize waiting for the SDK polling to succeed, and do not fall back to anonymous ID instantly
-      if (isTelegramEnvironment && !allowAnonymousFallback) {
-        if (id && !id.startsWith("anon_")) {
-          // If we had a real cached ID previously, we can set that safely
-          setUserId(id);
-          return true;
-        }
-        // Return false to let the polling timer catch the SDK injections
-        return false;
-      }
-
-      // If we are not in Telegram, or we timed out, fall back safely
-      if (!id) {
-        id = "anon_" + Math.random().toString(36).substring(2, 11);
-      }
-      
-      setUserId(id);
-      localStorage.setItem("cluevault_supabase_id", id);
-      console.log("[Identity Resolver] Fallback ID resolved:", id);
-      return true;
+      return false;
     };
 
     // Run first resolve pass
-    const resolvedNatively = resolveIdentity(false);
-    if (resolvedNatively && !isTelegramEnvironment) return;
-
+    const resolvedNatively = resolveIdentity();
+    
     // Set up polling fallback for asynchronous Telegram SDK load
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      const success = resolveIdentity(attempts >= 15); // force fallback on last attempt
-      if (success || attempts >= 15) {
-        clearInterval(interval);
-      }
-    }, 200);
-
-    return () => clearInterval(interval);
+    if (!resolvedNatively) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+        attempts++;
+        const success = resolveIdentity(); // force fallback on last attempt
+        if (success || attempts >= 50) { // More attempts for TWA
+            clearInterval(interval);
+            if (!success) {
+                // If STILL not resolving, fall back to anon only if not in Telegram environment
+                if (!isTelegramEnvironment) {
+                    let id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
+                    setUserId(id);
+                    localStorage.setItem("cluevault_supabase_id", id);
+                }
+            }
+        }
+        }, 100);
+        return () => clearInterval(interval);
+    }
   }, []);
 
   // Map state converters
@@ -168,6 +155,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         referralCode: cloudData.referralCode || cloudData.user?.referralCode,
         referrals: cloudData.user?.referrals || cloudData.referrals || [],
         onboarded: cloudData.onboarded ?? cloudData.user?.onboarded ?? false,
+        timezone: cloudData.user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
       resources: {
         ...(cloudData.resources || {}),

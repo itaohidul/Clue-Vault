@@ -45,6 +45,7 @@ export interface GameState {
     referredMissionsToday?: number;
     referredVaultsToday?: number;
     referredConsecutiveDays?: number;
+    timezone?: string;
   };
   resources: {
     coins: number;
@@ -118,6 +119,7 @@ const getInitialState = () => {
       claimedCommission: 0,
       lastDailyClaim: 0,
       referrals: [] as ReferralAgent[],
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
     resources: {
       coins: 100,
@@ -148,10 +150,14 @@ const getInitialState = () => {
   };
 
   const saved = localStorage.getItem('cluevault_game_state_zustand');
+  // If we are logged in via Telegram, we should ideally NOT load from local storage immediately, 
+  // but let the Backend Sync Handshake override it. 
+  // However, for offline support, we keep the load, 
+  // but we should mark the state as 'potential stale' if we are logged in.
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      console.log("[State] Loaded state from localStorage:", parsed);
+      console.log("[State] Loaded state from localStorage (potential cache):", parsed);
       return {
         ...defaults,
         ...parsed,
@@ -173,6 +179,19 @@ const getInitialState = () => {
 };
 
 // Add centralized save to avoid duplication
+export const getTzDateString = (timestamp: number, timezone?: string) => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(timestamp));
+  } catch (e) {
+    return new Date(timestamp).toISOString().split('T')[0];
+  }
+};
+
 const saveState = (state: GameState) => {
   const dataToSave = {
     user: state.user,
@@ -260,8 +279,9 @@ export const useUserStore = create<GameState>((set, get) => ({
       newMaxExp = newLevel * 100;
     }
 
-    // Dynamic referred activity check
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Dynamic referred activity check using timezone
+    const tz = user.timezone;
+    const todayStr = getTzDateString(Date.now(), tz);
     const userLastActive = user.lastActiveDate || todayStr;
 
     let missionsToday = user.referredMissionsToday || 0;
@@ -680,9 +700,10 @@ export const useUserStore = create<GameState>((set, get) => ({
     const { user, resources } = get();
     const now = Date.now();
     const lastClaim = user.lastDailyClaim || 0;
+    const tz = user.timezone;
     
-    const lastDate = new Date(lastClaim).toDateString();
-    const nowDate = new Date(now).toDateString();
+    const lastDate = lastClaim === 0 ? "" : getTzDateString(lastClaim, tz);
+    const nowDate = getTzDateString(now, tz);
     
     if (lastClaim !== 0 && lastDate === nowDate) {
       get().triggerHaptic('error');
@@ -691,7 +712,7 @@ export const useUserStore = create<GameState>((set, get) => ({
     
     // Streak logic: check if last claim was yesterday
     const oneDay = 24 * 60 * 60 * 1000;
-    const yesterday = new Date(now - oneDay).toDateString();
+    const yesterday = getTzDateString(now - oneDay, tz);
     const wasYesterday = lastDate === yesterday;
 
     let nextStreak = wasYesterday ? (user.streak || 0) + 1 : 1;

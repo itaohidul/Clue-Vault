@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { useGame } from "../../App";
-import { useUserStore } from "../../store/userStore";
+import { useUserStore, getTzDateString } from "../../store/userStore";
 import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X, HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
@@ -195,7 +195,8 @@ export default function VaultScreen() {
       };
 
       // Referred user activity tracking
-      const todayStr = new Date().toISOString().split('T')[0];
+      const tz = state.user.timezone;
+      const todayStr = getTzDateString(Date.now(), tz);
       const userLastActive = state.user.lastActiveDate || todayStr;
 
       let missionsToday = state.user.referredMissionsToday || 0;

@@ -28,6 +28,8 @@ import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
+import { initInAppAds } from "./lib/adEngine";
+
 
 // Simple Game Context
 const GameContext = createContext<any>(null);
@@ -37,7 +39,8 @@ export const useGame = () => useContext(GameContext);
 // Declare types for Telegram WebApp
 declare global {
   interface Window {
-    Telegram?: any;
+    Telegram?: { WebApp?: any; WebView?: any };
+    show_11030019?: any;
   }
 }
 
@@ -300,39 +303,15 @@ function AppContent() {
     }
   }, [location.pathname]);
 
-  // Register In-App Interstitial Ad Engine with robust initialization and navigation sync
   useEffect(() => {
-    let attempts = 0;
-    const MAX_ATTEMPTS = 15;
-    
-    const initAds = () => {
-      if (!initSyncCompleted) return;
-
-      const showAd = (window as any).show_11030019;
-      if (typeof showAd === "function") {
-        try {
-          showAd({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 2,
-              capping: 0.1,
-              interval: 30,
-              timeout: 5,
-              everyPage: false
-            }
-          });
-          console.log("ClueVault Ad Engine: Global Telemetry Frequency Active");
-        } catch (e) {
-          console.warn("Telemetry signal injection failed:", e);
-        }
-      } else if (attempts < MAX_ATTEMPTS) {
-        attempts++;
-        setTimeout(initAds, 1000); // Exponential backoff or steady retry for script load
-      }
-    };
-
-    initAds();
-  }, [initSyncCompleted, location.pathname]); // Re-verify on navigation to maintain SDK session in SPA mode
+    initInAppAds({
+      frequency: 1000,
+      capping: 0.1, // Show up to 1000 ads within 6 minutes (basically unlimited)
+      interval: 30, // 30 seconds between ads
+      timeout: 30,  // 30 seconds initial delay on app start
+      everyPage: false
+    });
+  }, []);
 
   // Handle BackButton click callbacks
   useEffect(() => {

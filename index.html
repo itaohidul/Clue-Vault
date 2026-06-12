@@ -32,73 +32,79 @@
             return true;
           };
 
-          // Only attempt polyfill if not supported natively to avoid triggering SDK warnings
-          var needsPolyfill = false;
-          try {
-            if (!isAtLeast('6.9') || !tg.CloudStorage) {
-              needsPolyfill = true;
-            }
-          } catch(e) {
+        var needsPolyfill = false;
+        try {
+          // Check version safely without triggering CloudStorage getter
+          var currentVer = tg.version || '6.0';
+          var vParts = currentVer.split('.');
+          var major = parseInt(vParts[0], 10);
+          var minor = parseInt(vParts[1] || '0', 10);
+          
+          if (major < 6 || (major === 6 && minor < 9)) {
             needsPolyfill = true;
           }
+        } catch(e) {
+          needsPolyfill = true;
+        }
 
-          if (needsPolyfill) {
-            var mockCloudStorage = {
-              setItem: function(key, value, callback) {
-                localStorage.setItem('tg_cloud_' + key, value);
-                if (callback) callback(null, true);
-                return Promise.resolve(true);
-              },
-              getItem: function(key, callback) {
-                var val = localStorage.getItem('tg_cloud_' + key);
-                if (callback) callback(null, val);
-                return Promise.resolve(val);
-              },
-              getItems: function(keys, callback) {
-                var res = {};
-                keys.forEach(function(k) {
-                  res[k] = localStorage.getItem('tg_cloud_' + k);
-                });
-                if (callback) callback(null, res);
-                return Promise.resolve(res);
-              },
-              removeItem: function(key, callback) {
-                localStorage.removeItem('tg_cloud_' + key);
-                if (callback) callback(null, true);
-                return Promise.resolve(true);
-              },
-              removeItems: function(keys, callback) {
-                keys.forEach(function(k) { localStorage.removeItem('tg_cloud_' + k); });
-                if (callback) callback(null, true);
-                return Promise.resolve(true);
-              },
-              getKeys: function(callback) {
-                var keys = Object.keys(localStorage)
-                  .filter(function(k) { return k.indexOf('tg_cloud_') === 0; })
-                  .map(function(k) { return k.replace('tg_cloud_', ''); });
-                if (callback) callback(null, keys);
-                return Promise.resolve(keys);
-              }
-            };
-            
-            try {
-              // Try to define it peacefully
-              if (!tg.CloudStorage) {
-                Object.defineProperty(tg, 'CloudStorage', {
-                  get: function() { return mockCloudStorage; },
-                  configurable: true,
-                  enumerable: true
-                });
-              }
-            } catch (e) {
-              tg.CloudStorage = mockCloudStorage;
+        if (needsPolyfill) {
+          var mockCloudStorage = {
+            setItem: function(key, value, callback) {
+              localStorage.setItem('tg_cloud_' + key, value);
+              if (callback) callback(null, true);
+              return Promise.resolve(true);
+            },
+            getItem: function(key, callback) {
+              var val = localStorage.getItem('tg_cloud_' + key);
+              if (callback) callback(null, val);
+              return Promise.resolve(val);
+            },
+            getItems: function(keys, callback) {
+              var res = {};
+              keys.forEach(function(k) {
+                res[k] = localStorage.getItem('tg_cloud_' + k);
+              });
+              if (callback) callback(null, res);
+              return Promise.resolve(res);
+            },
+            removeItem: function(key, callback) {
+              localStorage.removeItem('tg_cloud_' + key);
+              if (callback) callback(null, true);
+              return Promise.resolve(true);
+            },
+            removeItems: function(keys, callback) {
+              keys.forEach(function(k) { localStorage.removeItem('tg_cloud_' + k); });
+              if (callback) callback(null, true);
+              return Promise.resolve(true);
+            },
+            getKeys: function(callback) {
+              var keys = Object.keys(localStorage)
+                .filter(function(k) { return k.indexOf('tg_cloud_') === 0; })
+                .map(function(k) { return k.replace('tg_cloud_', ''); });
+              if (callback) callback(null, keys);
+              return Promise.resolve(keys);
             }
+          };
+          
+          try {
+            // Force define property to bypass SDK's throwing getter
+            Object.defineProperty(tg, 'CloudStorage', {
+              value: mockCloudStorage,
+              writable: true,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {
+            try {
+               tg.CloudStorage = mockCloudStorage;
+            } catch (e2) {}
           }
+        }
         } catch (e) {}
       })();
     </script>
     <!-- 3. Third-party Ad SDK (libtl.com) -->
-    <script src='https://libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019' async></script>
+    <script src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019'></script>
   </head>
   <body>
     <div id="root"></div>

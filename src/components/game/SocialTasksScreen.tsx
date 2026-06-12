@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn, safeOpenLink } from "../../lib/utils";
-import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
+import { triggerAd } from "../../lib/adEngine";
 
 interface TaskState {
   id: string;
@@ -366,19 +366,9 @@ export default function SocialTasksScreen() {
     }
   };
 
-  // Helper to rate-limit auto popup ad delivery safely to maintain safe medium mode
-  const throttleAdTrigger = (): boolean => {
-    const result = checkAdEligibility();
-    console.log("Ad Eligibility check:", result.reason);
-    return result.allowed;
-  };
-
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
-
-    // Track user rapid-tapping frequency to dynamically adjust ad intervals!
-    recordUserTap();
 
     const randomClue = Math.floor(Math.random() * 20) + 1;
 
@@ -399,15 +389,7 @@ export default function SocialTasksScreen() {
          setActiveAd(task);
          setLoadingTaskId(null);
        } else {
-         const showAd = (window as any).show_11030019;
-         if (typeof showAd !== "function") {
-           console.warn("Ad SDK not loaded yet");
-           setAdWatchState({ active: false, task: null, countdown: 0, error: "SIGNAL NETWORK SYNCING — PLEASE RETRY" });
-           setLoadingTaskId(null);
-           triggerHaptic("error");
-           return;
-         }
-
+         
          setAdWatchState({
            active: true,
            task,
@@ -415,6 +397,8 @@ export default function SocialTasksScreen() {
            error: null
          });
 
+         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded';
+         
          const onComplete = () => {
            const randomClue = Math.floor(Math.random() * 20) + 1;
            completeMission({
@@ -433,19 +417,21 @@ export default function SocialTasksScreen() {
            setSuccessAnimation({ active: true, clueAwarded: randomClue });
            triggerHaptic("success");
            startTaskCooldown(task.id);
+           alert('You have seen an ad!');
          };
 
          const onError = (e: any) => {
-           console.error("Ad failed:", e);
+           console.error("Ad Engine Execution Error:", e);
            setAdWatchState({ active: false, task: null, countdown: 0, error: "SIGNAL TRANSMISSION FAILED" });
            setLoadingTaskId(null);
            triggerHaptic("error");
          };
 
-         if (task.type === 'ad_pop') {
-           showAd('pop').then(onComplete).catch(onError);
-         } else if (task.type === 'ad_interstitial') {
-           showAd().then(onComplete).catch(onError);
+         try {
+           triggerAd(adType).then(onComplete).catch(onError);
+         } catch (err) {
+           console.error("SDK Call Exception:", err);
+           onError(err);
          }
        }
        return;

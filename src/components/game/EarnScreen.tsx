@@ -24,7 +24,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { cn, safeOpenLink } from "../../lib/utils";
-import { recordUserTap, checkAdEligibility } from "../../lib/adPacer";
+import { triggerAd } from "../../lib/adEngine";
 
 export default function EarnScreen() {
   const { user, resources, updateResources, crew, triggerHaptic } = useGame();
@@ -206,51 +206,30 @@ export default function EarnScreen() {
     setCalibrationActive(true);
   };
 
-  const handleWatchAd = (type: 'interstitial' | 'direct') => {
+  const handleWatchAd = async (type: 'interstitial' | 'direct') => {
     if (adVerifying) return;
     triggerHaptic("medium");
-    
     setAdVerifying(type);
     
-    const onComplete = () => {
+    const adType = type === 'direct' ? 'pop' : 'rewarded';
+    
+    try {
+      await triggerAd(adType);
       setAdVerifying(null);
       const rewardAmount = type === 'direct' ? 100 : 50;
       updateResources({ activityScore: rewardAmount });
       triggerHaptic("success");
-    };
-
-    const onError = (e: any) => {
-      console.error("Ad failed:", e);
+      alert('You have seen an ad!');
+    } catch (err) {
+      console.error("Ad Engine Execution Error:", err);
       setAdVerifying(null);
       triggerHaptic("error");
       
-      // Fallback for popup blocking or script load latency
       setPacerAlert({
         title: "Signal Link Offline",
         desc: "TELEMETRY SYNC INTERRUPTED — PLEASE TRY AGAIN"
       });
       setTimeout(() => setPacerAlert(null), 3000);
-    };
-
-    const showAd = (window as any).show_11030019;
-    if (typeof showAd !== "function") {
-      console.warn("Ad SDK not loaded yet");
-      setPacerAlert({
-        title: "Network Link Unstable",
-        desc: "WAITING FOR AD SIGNAL HANDSHAKE — RETRY IN A FEW SECONDS"
-      });
-      triggerHaptic("error");
-      setTimeout(() => setPacerAlert(null), 3000);
-      setAdVerifying(null);
-      return;
-    }
-
-    if (type === 'direct') {
-      // Use Rewarded Popup
-      showAd('pop').then(onComplete).catch(onError);
-    } else {
-      // Use Rewarded Interstitial
-      showAd().then(onComplete).catch(onError);
     }
   };
 

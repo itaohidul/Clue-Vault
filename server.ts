@@ -5,7 +5,7 @@ import express from "express";
 import path from "path";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import { supabase } from "./src/lib/supabase";
+import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
 const app = express();
 const PORT = 3000;
@@ -112,7 +112,16 @@ app.post("/api/auth/telegram", async (req, res) => {
 });
 
 app.get("/api/db-verify", async (req, res) => {
-  const url_configured = !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL);
+  const url_configured = isSupabaseConfigured;
+  if (!url_configured) {
+    return res.json({
+      hasUri: false,
+      readyState: 0,
+      dbName: "Supabase Configuration Missing",
+      urlConfigured: false,
+      warning: "Supabase environment variables are not set or contain placeholders. Using local server-side cache fallback."
+    });
+  }
   try {
     const { data, error } = await supabase.from("users").select("id").limit(1);
     if (error) throw error;
@@ -120,14 +129,14 @@ app.get("/api/db-verify", async (req, res) => {
       hasUri: true,
       readyState: 1,
       dbName: "Supabase Active Cluster",
-      urlConfigured: url_configured
+      urlConfigured: true
     });
   } catch (err: any) {
     res.json({
       hasUri: false,
       readyState: 0,
       dbName: "Supabase Connection Pending",
-      urlConfigured: url_configured,
+      urlConfigured: true,
       errorDetail: err.message || err.details || String(err),
       hint: err.hint || "Make sure you ran the SQL setup script to create the 'users' table in your Supabase DB, and that Row Level Security (RLS) is configured correctly.",
       warning: "Using secure serverless memory cache (local sandbox fallback). Please supply NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to sync to live database."
@@ -136,20 +145,27 @@ app.get("/api/db-verify", async (req, res) => {
 });
 
 app.get("/api/db-status", async (req, res) => {
-  const url_configured = !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL);
+  const url_configured = isSupabaseConfigured;
+  if (!url_configured) {
+    return res.json({ 
+      connected: false, 
+      database: "Encrypted Cloud Memory Fallback (Configuration Missing)", 
+      urlConfigured: false 
+    });
+  }
   try {
     const { error } = await supabase.from("users").select("id").limit(1);
     if (error) throw error;
     res.json({ 
       connected: true, 
       database: "Supabase PostgreSQL Database", 
-      urlConfigured: url_configured 
+      urlConfigured: true 
     });
   } catch (err: any) {
     res.json({ 
       connected: false, 
       database: "Encrypted Cloud Memory Fallback", 
-      urlConfigured: url_configured,
+      urlConfigured: true,
       errorDetail: err.message || err.details || String(err),
       hint: err.hint || "Make sure the 'users' table is created and RLS is disabled or allowed for public anon requests."
     });
@@ -175,6 +191,8 @@ app.get("/api/startup/:userId", async (req, res) => {
   };
 
   try {
+    if (!isSupabaseConfigured) throw new Error("Supabase is not configured. Falling back to local cache.");
+
     // 1. Get/Register User State
     let user = null;
     let registeredNow = false;
@@ -686,6 +704,12 @@ app.get("/api/user/:userId", async (req, res) => {
   let referredByCode = req.query.referredBy as string;
   if (referredByCode && referredByCode.startsWith("ref_ref_")) {
     referredByCode = referredByCode.substring(4);
+  }
+  
+  if (!isSupabaseConfigured) {
+    console.warn("[API User] Supabase not configured, using local fallback");
+    // Jump straight to the fallback logic
+    return handleUserFallback(req, res, userId, usernameQuery, referredByCode);
   }
 
   try {

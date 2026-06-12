@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { triggerAd } from "../../lib/adEngine";
 
 // Custom type for swap pairs
 interface SwapOption {
@@ -92,6 +93,15 @@ export default function WalletDexScreen() {
   const { user, resources, updateResources, triggerHaptic } = useGame();
   const { track } = useTelemetree();
   
+  const getTodayStr = () => {
+    const tz = user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    } catch {
+      return new Date().toDateString();
+    }
+  };
+  
   // Tab control: "wallet" (Ledger), "dex" (ClueDeX Swap Platform), or "spin" (USDT Spin section)
   const [activeTab, setActiveTab] = useState<"wallet" | "dex" | "spin">("wallet");
 
@@ -99,10 +109,7 @@ export default function WalletDexScreen() {
   const [showFromSelector, setShowFromSelector] = useState(false);
   const [showToSelector, setShowToSelector] = useState(false);
 
-  // Spin unskippable ad states
-  const [showSpinAd, setShowSpinAd] = useState(false);
-  const [spinAdCountdown, setSpinAdCountdown] = useState(6);
-  const [pendingSpinIsDaily, setPendingSpinIsDaily] = useState(false);
+
 
   // Premium spin withdrawals
   const [showPremiumWithdrawModal, setShowPremiumWithdrawModal] = useState(false);
@@ -114,22 +121,7 @@ export default function WalletDexScreen() {
   const [isPremiumWithdrawProcessing, setIsPremiumWithdrawProcessing] = useState(false);
   const [premiumWithdrawSuccess, setPremiumWithdrawSuccess] = useState(false);
 
-  // Spin unskippable ad timer countdown
-  useEffect(() => {
-    let timer: any;
-    if (showSpinAd && spinAdCountdown > 0) {
-      timer = setInterval(() => {
-        setSpinAdCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [showSpinAd, spinAdCountdown]);
+
 
   // Premium withdrawal timer countdown simulation
   useEffect(() => {
@@ -566,13 +558,14 @@ export default function WalletDexScreen() {
     }, 4200);
   };
 
-  // Spin rotation handle (Forces unskippable ad at spin initialization)
+  // Spin rotation handle (Forces real ad at spin initialization)
   const handleStartSpin = (isDailyFree: boolean = false) => {
     if (isWheelSpinning) return;
 
     // Integrity checks
     if (isDailyFree) {
-      const todayStr = new Date().toDateString();
+      const tz = user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
       if (lastFreeSpinDate === todayStr) {
         triggerHaptic("error");
         return;
@@ -586,11 +579,16 @@ export default function WalletDexScreen() {
 
     track("spin_started", { isDailyFree });
 
-    // Show unskippable ad at spin initialization
-    setPendingSpinIsDaily(isDailyFree);
-    setSpinAdCountdown(6);
-    setShowSpinAd(true);
     triggerHaptic("medium");
+    // Use triggerAd for rewarded ad
+    triggerAd('rewarded').then(() => {
+      executeRealSpin(isDailyFree);
+      alert('You have seen an ad!');
+    }).catch((e: any) => {
+      console.error("Spin ad engine error:", e);
+      // Execute anyway as fallback to maintain UX
+      executeRealSpin(isDailyFree);
+    });
   };
 
   // Countdown clock control for Simulated Unskippable Ad
@@ -1188,7 +1186,7 @@ export default function WalletDexScreen() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500">
-                      <Flame size={18} className={lastFreeSpinDate !== new Date().toDateString() ? "animate-pulse" : ""} />
+                      <Flame size={18} className={lastFreeSpinDate !== getTodayStr() ? "animate-pulse" : ""} />
                     </div>
                     <div>
                       <span className="text-[7.5px] font-bold text-amber-500 uppercase tracking-widest block font-sans">Quantum Charge</span>
@@ -1196,7 +1194,7 @@ export default function WalletDexScreen() {
                     </div>
                   </div>
                   <div>
-                    {lastFreeSpinDate === new Date().toDateString() ? (
+                    {lastFreeSpinDate === getTodayStr() ? (
                       <span className="text-[7px] font-mono font-bold text-white/40 border border-white/10 px-2 py-0.5 rounded uppercase font-sans">CLAIMED</span>
                     ) : (
                       <span className="text-[7px] font-mono font-bold text-[#eab308] border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 rounded uppercase animate-pulse font-sans">READY</span>
@@ -1205,7 +1203,7 @@ export default function WalletDexScreen() {
                 </div>
                 <div className="pt-3 border-t border-white/5 mt-3 flex items-center justify-between">
                   <span className="text-[8px] text-white/40 uppercase font-sans">Resets calendar day</span>
-                  {lastFreeSpinDate === new Date().toDateString() ? (
+                  {lastFreeSpinDate === getTodayStr() ? (
                     <span className="text-[8px] font-mono text-white/30 italic font-sans">Next active tomorrow</span>
                   ) : (
                     <button
@@ -1520,18 +1518,18 @@ export default function WalletDexScreen() {
               {/* Action Spin trigger */}
               <button
                 onClick={() => {
-                  if (lastFreeSpinDate !== new Date().toDateString()) {
+                  if (lastFreeSpinDate !== getTodayStr()) {
                     handleStartSpin(true);
                   } else {
                     handleStartSpin(false);
                   }
                 }}
-                disabled={isWheelSpinning || (lastFreeSpinDate === new Date().toDateString() && spinTickets < 1)}
+                disabled={isWheelSpinning || (lastFreeSpinDate === getTodayStr() && spinTickets < 1)}
                 className={cn(
                   "mt-6 px-12 py-4 rounded-2xl italic font-black uppercase text-xs tracking-widest transition-all border outline-none cursor-pointer",
                   isWheelSpinning
                     ? "bg-neutral-900 border-white/10 text-white/40 cursor-not-allowed"
-                    : lastFreeSpinDate !== new Date().toDateString()
+                    : lastFreeSpinDate !== getTodayStr()
                       ? "bg-amber-500 hover:bg-amber-600 text-black border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)] hover:scale-105 active:scale-95 animate-pulse"
                       : spinTickets >= 1
                         ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-400/30 shadow-[0_0_25px_rgba(244,63,94,0.25)] hover:scale-105 active:scale-95"
@@ -1542,7 +1540,7 @@ export default function WalletDexScreen() {
                   <span className="flex items-center gap-2">
                     <RefreshCw className="animate-spin" size={14} /> Spinning Isolator...
                   </span>
-                ) : lastFreeSpinDate !== new Date().toDateString() ? (
+                ) : lastFreeSpinDate !== getTodayStr() ? (
                   "Initiate Free Daily Spin"
                 ) : spinTickets >= 1 ? (
                   "Initiate Ticket Spin (1 Key)"
@@ -2193,73 +2191,7 @@ export default function WalletDexScreen() {
         )}
       </AnimatePresence>
 
-      {/* Spin Unskippable Ad Overlay (At Spin Initiation) */}
-      <AnimatePresence>
-        {showSpinAd && (
-          <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 text-left">
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: -20 }}
-              className="w-full max-w-sm bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-[0_0_50px_rgba(244,63,94,0.15)] relative overflow-hidden"
-            >
-              <div className="flex justify-between items-center bg-white/5 border border-white/5 px-3.5 py-1.5 rounded-2xl">
-                <span className="text-[8px] font-black tracking-widest text-[#f43f5e] uppercase flex items-center gap-1.5 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#f43f5e]" /> Sponsor Spin Authorization
-                </span>
-                <span className="text-[9px] font-mono font-black text-white/40 uppercase">
-                  Sponsor Ad
-                </span>
-              </div>
 
-              <div className="aspect-video bg-neutral-950/80 rounded-2xl border border-white/5 relative flex flex-col items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#f43f5e]/10 via-transparent to-transparent opacity-70" />
-                <Tv size={36} className="text-[#f43f5e]/30 animate-bounce mb-2" />
-                <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">Streaming Sponsor Channel</span>
-                <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/80 px-2.5 py-1 rounded-lg border border-white/5 text-[8px] font-mono text-rose-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> AD CONTENT ENGAGEMENT ACTIVE
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-black uppercase text-white tracking-tight">
-                  {AD_SPONSORS[currentAdIndex]?.title || "ClueVault Fast Ledger"}
-                </h3>
-                <p className="text-[10px] text-white/50 leading-relaxed font-bold uppercase">
-                  {AD_SPONSORS[currentAdIndex]?.desc || "Unlock supreme rewards and key allocations."}
-                </p>
-                <div className="text-[8px] font-mono text-white/30 pt-2 border-t border-white/5 uppercase">
-                  UNSKIPPABLE AUTHENTICATOR SECURE VERIFICATION FLUIDS CHANNELS
-                </div>
-              </div>
-
-              <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center">
-                {spinAdCountdown > 0 ? (
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-black uppercase text-[#f43f5e] tracking-wider animate-pulse">
-                      Generating Spin Authorization Token
-                    </span>
-                    <p className="text-[20px] font-mono font-black text-white">
-                      {spinAdCountdown}s remaining
-                    </p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      triggerHaptic("success");
-                      setShowSpinAd(false);
-                      executeRealSpin(pendingSpinIsDaily);
-                    }}
-                    className="w-full py-3.5 bg-gradient-to-r from-[#f43f5e] to-rose-600 hover:from-rose-500 hover:to-rose-600 text-white font-black uppercase italic tracking-wider rounded-xl text-[10px] active:scale-95 transition-all shadow-[0_0_20px_rgba(244,63,94,0.3)] cursor-pointer"
-                  >
-                    Authorize Node & Spin Wheel!
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Premium Separate Withdrawal Modal */}
       <AnimatePresence>

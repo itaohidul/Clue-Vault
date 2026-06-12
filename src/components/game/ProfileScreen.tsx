@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../../App";
-import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck, Database, Wifi, WifiOff, CheckCircle2, AlertTriangle, Check, Copy, Activity, Terminal } from "lucide-react";
+import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck, Database, Wifi, WifiOff, CheckCircle2, AlertTriangle, Check, Copy, Activity, Terminal, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
-
+import { LoginButton } from '@telegram-auth/react';
 
 export default function ProfileScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
@@ -19,8 +19,23 @@ export default function ProfileScreen() {
   const [localSyncStatus, setLocalSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>("idle");
   const [localSyncMsg, setLocalSyncMsg] = useState("");
   const [uidCopied, setUidCopied] = useState(false);
+  const isTgWebApp = typeof window !== 'undefined' && !!(window.Telegram?.WebApp?.initData);
 
-
+  const handleTelegramLink = (tgUser: any) => {
+    try {
+      triggerHaptic("heavy");
+      const id = tgUser.id.toString();
+      localStorage.setItem("cluevault_supabase_id", id);
+      setRecoveryStatus("Handshake paired successfully! Rebooting shell...");
+      
+      // Attempt to secure current cache using new identity before reloading
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.warn("Failed handling Telegram link", err);
+    }
+  };
 
   const handleForceSync = async () => {
     if (isSyncing || localSyncStatus === "syncing") return;
@@ -219,24 +234,35 @@ export default function ProfileScreen() {
 
           {/* Identity Node Row */}
           {userId && (
-            <div className="p-3 bg-black/50 border border-white/5 rounded-2xl flex items-center justify-between text-left">
-              <div>
-                <span className="text-[7px] font-bold text-white/20 uppercase tracking-widest block">Identity Node</span>
-                <span className="text-[10px] font-mono text-amber-500/90 font-black tracking-tight uppercase truncate block max-w-[150px]">
-                  {userId}
-                </span>
+            <div className="space-y-2">
+              <div className="p-3 bg-black/50 border border-white/5 rounded-2xl flex items-center justify-between text-left">
+                <div>
+                  <span className="text-[7px] font-bold text-white/20 uppercase tracking-widest block">Identity Node</span>
+                  <span className="text-[10px] font-mono text-amber-500/90 font-black tracking-tight uppercase truncate block max-w-[150px]">
+                    {userId}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCopyUid}
+                  className={cn(
+                    "p-2 rounded-xl transition-all border shrink-0",
+                    uidCopied 
+                      ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                      : "bg-white/5 border-white/5 text-white/40 hover:text-white"
+                  )}
+                >
+                  {uidCopied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                </button>
               </div>
-              <button
-                onClick={handleCopyUid}
-                className={cn(
-                  "p-2 rounded-xl transition-all border shrink-0",
-                  uidCopied 
-                    ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
-                    : "bg-white/5 border-white/5 text-white/40 hover:text-white"
-                )}
-              >
-                {uidCopied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
-              </button>
+              <div className="p-3 bg-black/50 border border-white/5 rounded-2xl flex items-center justify-between text-left">
+                <div>
+                  <span className="text-[7px] font-bold text-white/20 uppercase tracking-widest block">Local Sector Time</span>
+                  <span className="text-[10px] font-mono text-blue-400 font-black tracking-tight uppercase block">
+                    {user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  </span>
+                </div>
+                <Globe size={14} className="text-white/20" />
+              </div>
             </div>
           )}
 
@@ -414,6 +440,27 @@ export default function ProfileScreen() {
 
                   {/* Scannable Results Container */}
                   <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[45vh] min-h-[30vh]">
+                    {!isTgWebApp && (
+                      <div className="mb-4 glass rounded-2xl p-4 border-emerald-500/20 bg-emerald-500/5 text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-2 opacity-10">
+                          <CheckCircle2 size={40} className="text-emerald-500" />
+                        </div>
+                        <h4 className="text-xs font-black uppercase tracking-tight text-emerald-400 mb-2">Automated Web Login</h4>
+                        <p className="text-[9px] text-white/50 leading-relaxed mb-4">
+                          Link or restore your existing Telegram Data instantly using Telegram's secure payload widget.
+                        </p>
+                        <div className="inline-block relative z-10 scale-[1.15] origin-center -ml-2">
+                          <LoginButton
+                            botUsername="ClueVaultBot"
+                            onAuthCallback={handleTelegramLink}
+                            buttonSize="large"
+                            cornerRadius={8}
+                            showAvatar={true}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
                     {searchResults.length === 0 ? (
                       <div className="h-44 flex flex-col items-center justify-center text-center p-6 text-white/20 border border-white/5 border-dashed rounded-2xl">
                         <UserCheck size={28} className="mb-2 opacity-50" />

@@ -17,10 +17,10 @@ app.use(express.json());
 const localCache = {
   users: new Map<string, any>(),
   tasks: [
-    { id: 1, title: "Decrypt Dark Web Intel Folder", reward: 5000, type: "social", link: "https://x.com" },
-    { id: 2, title: "Initialize Proxy Connection Protocol", reward: 7500, type: "channel", link: "https://t.me" },
-    { id: 3, title: "Verify TON Wallet Integration", reward: 15000, type: "wallet", link: "https://ton.org" },
-    { id: 4, title: "Solve Cyber Crypt Riddle Challenge", reward: 20000, type: "riddle", link: "" }
+    { id: 1, title: "Decrypt Dark Web Intel Folder", reward: 2500, type: "social", link: "https://x.com" },
+    { id: 2, title: "Initialize Proxy Connection Protocol", reward: 3750, type: "channel", link: "https://t.me" },
+    { id: 3, title: "Verify TON Wallet Integration", reward: 7500, type: "wallet", link: "https://ton.org" },
+    { id: 4, title: "Solve Cyber Crypt Riddle Challenge", reward: 10000, type: "riddle", link: "" }
   ],
   user_tasks: [] as Array<{ telegram_id: string; task_id: number; completed: boolean }>,
   transactions: [] as Array<{ id: number; telegram_id: string; amount: number; type: string; created_at: string }>
@@ -34,6 +34,59 @@ localCache.users.set("anon_cipher", { telegram_id: "anon_cipher", username: "Cip
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Telegram MiniApp Telemetry Tracking Proxy Endpoint
+app.post("/api/analytics/track", (req, res) => {
+  const { eventName, params, user, timestamp } = req.body;
+  console.log(`\x1b[35m[TELEMETRY PIPELINE]\x1b[0m Event: "${eventName}" | User: ${user?.username || user?.first_name || "anon"} (${user?.id || "N/A"})`);
+  if (params && Object.keys(params).length > 0) {
+    console.log(`\x1b[35m[TELEMETRY PIPELINE]\x1b[0m Payload:`, JSON.stringify(params));
+  }
+  
+  // Optionally push to local cache for admin inspections
+  if (!(localCache as any).analytics) {
+    (localCache as any).analytics = [];
+  }
+  (localCache as any).analytics.push({ eventName, params, user, timestamp: timestamp || new Date().toISOString() });
+
+  // Safe background REST forwarding to the user's live Telemetree Cloud Dashboard
+  const TELEMETREE_API_KEY = process.env.VITE_TELEMETREE_API_KEY || "eyJhcHBfbmFtZSI6ImNsdWV2YXVsdCIsImFwcF91cmwiOiJodHRwczovL3QubWUvY2x1ZXZhdWx0Ym90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vY2x1ZS12YXVsdC52ZXJjZWwuYXBwLyJ9!6Y2ufwQNDoAHOR3+U+W/dtYypxTxe5zw8UxBWh11OXc=";
+  if (TELEMETREE_API_KEY) {
+    fetch("https://api.telemetree.io/api/v1/event", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": TELEMETREE_API_KEY
+      },
+      body: JSON.stringify({
+        event: eventName,
+        event_name: eventName,
+        properties: {
+          ...params,
+          username: user?.username || "anonymous",
+          first_name: user?.first_name || "anonymous",
+          platform: user?.platform || "telegram",
+        },
+        user_id: user?.id?.toString() || "unknown",
+        session_id: `session_${user?.id || "unknown_session"}`,
+        timestamp: timestamp || new Date().toISOString()
+      })
+    })
+    .then(async (response) => {
+      if (!response.ok) {
+        const text = await response.text();
+        console.warn(`[TELEMETRY PIPELINE] Forward warning: Status ${response.status} - ${text}`);
+      } else {
+        console.log(`[TELEMETRY PIPELINE] Event successfully uploaded to Telemetree!`);
+      }
+    })
+    .catch((err) => {
+      console.warn("[TELEMETRY PIPELINE] Fail to push event to Telemetree REST API:", err.message || err);
+    });
+  }
+  
+  res.json({ success: true, logged: true });
 });
 
 // Supabase Connection Status Helper
@@ -107,7 +160,10 @@ app.get("/api/db-status", async (req, res) => {
 app.get("/api/startup/:userId", async (req, res) => {
   const { userId } = req.params;
   const usernameQuery = (req.query.username as string) || "Agent_" + userId.slice(-4);
-  const referredByCode = req.query.referredBy as string;
+  let referredByCode = req.query.referredBy as string;
+  if (referredByCode && referredByCode.startsWith("ref_ref_")) {
+    referredByCode = referredByCode.substring(4);
+  }
 
   const responsePayload: any = {
     dbConnected: false,
@@ -137,7 +193,12 @@ app.get("/api/startup/:userId", async (req, res) => {
     }
 
     if (user) {
-      responsePayload.user = user.state_json || user;
+      let stateJson = user.state_json || user;
+      if (typeof stateJson === "string") {
+        try { stateJson = JSON.parse(stateJson); } catch (e) {}
+      }
+      stateJson = await compileUserPayloadWithLiveReferrals(stateJson, user.referral_code);
+      responsePayload.user = stateJson;
       responsePayload.dbConnected = true;
     } else {
       // Auto register
@@ -182,17 +243,18 @@ app.get("/api/startup/:userId", async (req, res) => {
 
         if (insertError) throw insertError;
         user = newUser;
-        responsePayload.user = newUser?.state_json || seedState;
+        let stateJson = newUser?.state_json || seedState;
+        if (typeof stateJson === "string") {
+          try { stateJson = JSON.parse(stateJson); } catch (e) {}
+        }
+        stateJson = await compileUserPayloadWithLiveReferrals(stateJson, newUser?.referral_code || referralCode);
+        responsePayload.user = stateJson;
         responsePayload.dbConnected = true;
         registeredNow = true;
 
         // Referrer bonuses
         if (referredByCode) {
-          const { data: referrer } = await supabase
-            .from("users")
-            .select("*")
-            .eq("referral_code", referredByCode)
-            .maybeSingle();
+          const referrer = await findReferrerByCode(referredByCode);
 
           if (referrer) {
             const bonus = 5000;
@@ -257,10 +319,10 @@ app.get("/api/startup/:userId", async (req, res) => {
 
       if (!tasks || tasks.length === 0) {
         const defaultTasks = [
-          { title: "Deface Syndicate Access Terminal", reward: 2500, type: "social", link: "https://x.com" },
-          { title: "Subscribe to CipherNet Intel Hub", reward: 5000, type: "channel", link: "https://t.me" },
-          { title: "Authorize Safe Ledger Gateway", reward: 12000, type: "wallet", link: "https://ton.org" },
-          { title: "Solve Cryptography Riddle Challenge", reward: 15000, type: "riddle", link: "" }
+          { title: "Deface Syndicate Access Terminal", reward: 1250, type: "social", link: "https://x.com" },
+          { title: "Subscribe to CipherNet Intel Hub", reward: 2500, type: "channel", link: "https://t.me" },
+          { title: "Authorize Safe Ledger Gateway", reward: 6000, type: "wallet", link: "https://ton.org" },
+          { title: "Solve Cryptography Riddle Challenge", reward: 7500, type: "riddle", link: "" }
         ];
 
         const { data: seeded } = await supabase
@@ -400,9 +462,15 @@ app.get("/api/startup/:userId", async (req, res) => {
       }
     }
 
+    let stateJson = cachedUser.state_json;
+    if (typeof stateJson === "string") {
+      try { stateJson = JSON.parse(stateJson); } catch (e) {}
+    }
+    stateJson = await compileUserPayloadWithLiveReferrals(stateJson, cachedUser.referral_code);
+
     return res.json({
       dbConnected: false,
-      user: cachedUser.state_json,
+      user: stateJson,
       tasks: localCache.tasks,
       completedTaskIds: localCache.user_tasks.filter(ut => ut.telegram_id === userId).map(ut => ut.task_id),
       transactions: localCache.transactions.filter(t => t.telegram_id === userId).sort((a, b) => b.id - a.id),
@@ -452,11 +520,173 @@ app.get("/api/users/search", async (req, res) => {
   }
 });
 
+// Helper utilities for real-time live referrals
+async function findReferrerByCode(code: string) {
+  if (!code) return null;
+  const codesToTry = [code];
+  if (code.startsWith("ref_ref_")) {
+    codesToTry.push(code.substring(4));
+  } else if (code.startsWith("ref_")) {
+    codesToTry.push(code.substring(4));
+  } else {
+    codesToTry.push("ref_" + code);
+  }
+  
+  for (const c of codesToTry) {
+    try {
+      const { data } = await supabase
+        .from("users")
+        .select("*")
+        .eq("referral_code", c)
+        .maybeSingle();
+      if (data) return data;
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function findInMemoryReferrerByCode(code: string) {
+  if (!code) return null;
+  const codesToTry = [code];
+  if (code.startsWith("ref_ref_")) {
+    codesToTry.push(code.substring(4));
+  } else if (code.startsWith("ref_")) {
+    codesToTry.push(code.substring(4));
+  } else {
+    codesToTry.push("ref_" + code);
+  }
+
+  for (const c of codesToTry) {
+    for (const [key, value] of localCache.users.entries()) {
+      if (value.referral_code === c) return value;
+    }
+  }
+  return null;
+}
+
+async function getLiveReferrals(referralCode: string): Promise<any[]> {
+  try {
+    const { data: referredUsers, error } = await supabase
+      .from("users")
+      .select("telegram_id, username, created_at, state_json")
+      .eq("referred_by", referralCode);
+
+    if (error) {
+      console.warn("[getLiveReferrals] Failed to query live referrals:", error.message);
+      return [];
+    }
+
+    const liveReferrals: any[] = [];
+    if (referredUsers && referredUsers.length > 0) {
+      referredUsers.forEach((ru: any) => {
+        let uState = ru.state_json || {};
+        if (typeof uState === "string") {
+          try {
+            uState = JSON.parse(uState);
+          } catch (e) {
+            uState = {};
+          }
+        }
+        const uUser = uState.user || {};
+        const consecutiveDays = uUser.referredConsecutiveDays || 0;
+        const missionsToday = uUser.referredMissionsToday || 0;
+        const vaultsToday = uUser.referredVaultsToday || 0;
+        const status = consecutiveDays >= 7 ? "verified" : "unverified";
+        const crewName = uState.crew?.name || uUser.crew || null;
+
+        liveReferrals.push({
+          id: ru.telegram_id,
+          name: ru.username || uUser.name || `Agent_${ru.telegram_id.slice(-4)}`,
+          avatar: uUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${ru.telegram_id}`,
+          status: status,
+          consecutiveDays: consecutiveDays,
+          missionsToday: missionsToday,
+          vaultsToday: vaultsToday,
+          lastActiveDate: uUser.lastActiveDate || new Date().toISOString().split('T')[0],
+          joinedAt: uUser.joinedAt || ru.created_at || new Date().toISOString(),
+          crewName: crewName,
+          isSimulated: false
+        });
+      });
+    }
+
+    return liveReferrals;
+  } catch (err: any) {
+    console.warn("[getLiveReferrals] Error:", err.message || err);
+    return [];
+  }
+}
+
+function getInMemoryLiveReferrals(referralCode: string): any[] {
+  const liveReferrals: any[] = [];
+  for (const [key, value] of localCache.users.entries()) {
+    if (value.referred_by === referralCode) {
+      let uState = value.state_json || {};
+      if (typeof uState === "string") {
+        try {
+          uState = JSON.parse(uState);
+        } catch (e) {
+          uState = {};
+        }
+      }
+      const uUser = uState.user || {};
+      const consecutiveDays = uUser.referredConsecutiveDays || 0;
+      const missionsToday = uUser.referredMissionsToday || 0;
+      const vaultsToday = uUser.referredVaultsToday || 0;
+      const status = consecutiveDays >= 7 ? "verified" : "unverified";
+      const crewName = uState.crew?.name || uUser.crew || null;
+
+      liveReferrals.push({
+        id: value.telegram_id,
+        name: value.username || uUser.name || `Agent_${value.telegram_id.slice(-4)}`,
+        avatar: uUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${value.telegram_id}`,
+        status: status,
+        consecutiveDays: consecutiveDays,
+        missionsToday: missionsToday,
+        vaultsToday: vaultsToday,
+        lastActiveDate: uUser.lastActiveDate || new Date().toISOString().split('T')[0],
+        joinedAt: uUser.joinedAt || value.created_at || new Date().toISOString(),
+        crewName: crewName,
+        isSimulated: false
+      });
+    }
+  }
+  return liveReferrals;
+}
+
+async function compileUserPayloadWithLiveReferrals(stateJson: any, referralCode: string) {
+  if (!stateJson) return stateJson;
+  if (!stateJson.user) stateJson.user = {};
+  
+  const refCode = referralCode || stateJson.user.referralCode || `ref_${stateJson.user.id || ""}`;
+  const liveRefs = await getLiveReferrals(refCode);
+  const localMemoryRefs = getInMemoryLiveReferrals(refCode);
+
+  const combinedLive = [...liveRefs];
+  localMemoryRefs.forEach(mr => {
+    if (!combinedLive.some(cl => cl.id === mr.id)) {
+      combinedLive.push(mr);
+    }
+  });
+
+  const currentSimulated = (stateJson.user.referrals || []).filter((r: any) => r.isSimulated);
+  const mergedRefs = [...combinedLive, ...currentSimulated];
+  stateJson.user.referrals = mergedRefs;
+  stateJson.user.referCount = combinedLive.filter(r => !r.isSimulated).length;
+
+  return stateJson;
+}
+
 // Get User State (Auto-Registration + Referral Tracker)
 app.get("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;
   const usernameQuery = (req.query.username as string) || "Agent_" + userId.slice(-4);
-  const referredByCode = req.query.referredBy as string;
+  let referredByCode = req.query.referredBy as string;
+  if (referredByCode && referredByCode.startsWith("ref_ref_")) {
+    referredByCode = referredByCode.substring(4);
+  }
 
   try {
     // Attempt Supabase fetch
@@ -472,7 +702,12 @@ app.get("/api/user/:userId", async (req, res) => {
     }
 
     if (user) {
-      return res.json(user.state_json || user);
+      let stateJson = user.state_json || user;
+      if (typeof stateJson === "string") {
+        try { stateJson = JSON.parse(stateJson); } catch (e) {}
+      }
+      stateJson = await compileUserPayloadWithLiveReferrals(stateJson, user.referral_code);
+      return res.json(stateJson);
     }
 
     // Insert user (Auto Registration)
@@ -682,39 +917,14 @@ app.post("/api/user/:userId", async (req, res) => {
   const payload = req.body;
 
   try {
-    // 1. Fetch current database record to preserve server-created referrals!
     const { data: dbUser } = await supabase
       .from("users")
-      .select("state_json")
+      .select("referral_code")
       .eq("telegram_id", userId)
       .maybeSingle();
 
-    if (dbUser && dbUser.state_json) {
-      const dbReferrals = (dbUser.state_json.user?.referrals || []).filter((r: any) => !r.isSimulated);
-      const clientReferrals = (payload.user?.referrals || []).filter((r: any) => !r.isSimulated);
-
-      // Merge referrals by distinct ID
-      const mergedReferrals = [...clientReferrals];
-      dbReferrals.forEach((dbRef: any) => {
-        if (!mergedReferrals.some((r: any) => r.id === dbRef.id)) {
-          mergedReferrals.push(dbRef);
-        } else {
-          // Sync verification status changes
-          const idx = mergedReferrals.findIndex((r: any) => r.id === dbRef.id);
-          const clientRef = mergedReferrals[idx];
-          if (dbRef.status === "verified" && clientRef.status !== "verified") {
-            mergedReferrals[idx] = dbRef;
-          } else if (dbRef.consecutiveDays > clientRef.consecutiveDays) {
-            mergedReferrals[idx] = dbRef;
-          }
-        }
-      });
-
-      if (payload.user) {
-        payload.user.referrals = mergedReferrals;
-        payload.user.referCount = mergedReferrals.length;
-      }
-    }
+    const refCode = dbUser?.referral_code || payload.user?.referralCode || `ref_${userId.substring(0, 8)}`;
+    await compileUserPayloadWithLiveReferrals(payload, refCode);
 
     const updatedBalance = payload.ZP ?? payload.resources?.coins ?? 0;
     const updateObj: Record<string, any> = {
@@ -745,20 +955,15 @@ app.post("/api/user/:userId", async (req, res) => {
     }
     
     const cachedUser = localCache.users.get(userId) || {};
-    
-    if (cachedUser && cachedUser.state_json) {
-      const dbReferrals = (cachedUser.state_json.user?.referrals || []).filter((r: any) => !r.isSimulated);
-      const clientReferrals = (payload.user?.referrals || []).filter((r: any) => !r.isSimulated);
-      const mergedReferrals = [...clientReferrals];
-      dbReferrals.forEach((dbRef: any) => {
-        if (!mergedReferrals.some((r: any) => r.id === dbRef.id)) {
-          mergedReferrals.push(dbRef);
-        }
-      });
-      if (payload.user) {
-        payload.user.referrals = mergedReferrals;
-        payload.user.referCount = mergedReferrals.length;
-      }
+    const refCode = cachedUser.referral_code || payload.user?.referralCode || `ref_${userId.substring(0, 8)}`;
+    const localMemoryRefs = getInMemoryLiveReferrals(refCode);
+    const currentSimulated = (payload.user?.referrals || []).filter((r: any) => r.isSimulated);
+    const combinedLive = [...localMemoryRefs];
+    const mergedRefs = [...combinedLive, ...currentSimulated];
+
+    if (payload.user) {
+      payload.user.referrals = mergedRefs;
+      payload.user.referCount = combinedLive.length;
     }
 
     localCache.users.set(userId, {
@@ -786,10 +991,10 @@ app.get("/api/tasks", async (req, res) => {
     if (!tasks || tasks.length === 0) {
       // Auto Seed database with production default missions
       const defaultTasks = [
-        { title: "Deface Syndicate Access Terminal", reward: 2500, type: "social", link: "https://x.com" },
-        { title: "Subscribe to CipherNet Intel Hub", reward: 5000, type: "channel", link: "https://t.me" },
-        { title: "Authorize Safe Ledger Gateway", reward: 12000, type: "wallet", link: "https://ton.org" },
-        { title: "Solve Cryptography Riddle Challenge", reward: 15000, type: "riddle", link: "" }
+        { title: "Deface Syndicate Access Terminal", reward: 1250, type: "social", link: "https://x.com" },
+        { title: "Subscribe to CipherNet Intel Hub", reward: 2500, type: "channel", link: "https://t.me" },
+        { title: "Authorize Safe Ledger Gateway", reward: 6000, type: "wallet", link: "https://ton.org" },
+        { title: "Solve Cryptography Riddle Challenge", reward: 7500, type: "riddle", link: "" }
       ];
 
       const { data: seeded, error: seedError } = await supabase
@@ -1118,6 +1323,42 @@ app.get("/api/crews/:crewName/members", async (req, res) => {
       .filter(state => state && state.crew?.name?.toLowerCase() === crewName.toLowerCase());
     res.json(items);
   }
+});
+
+// Crews Chat Sync Protocol
+const crewChats: Record<string, Array<{ id: string; sender: string; avatar: string; message: string; timestamp: string }>> = {};
+
+app.get("/api/crews/:crewName/chat", (req, res) => {
+  const { crewName } = req.params;
+  const key = crewName.toLowerCase();
+  const messages = crewChats[key] || [];
+  res.json(messages);
+});
+
+app.post("/api/crews/:crewName/chat", (req, res) => {
+  const { crewName } = req.params;
+  const { sender, avatar, message } = req.body;
+  const key = crewName.toLowerCase();
+  
+  if (!sender || !message) {
+    return res.status(400).json({ error: "Missing identity credentials or payload messages" });
+  }
+
+  if (!crewChats[key]) {
+    crewChats[key] = [];
+  }
+
+  const dateStr = "Just now";
+  const newMsg = {
+    id: `m_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    sender,
+    avatar: avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${sender}`,
+    message,
+    timestamp: dateStr
+  };
+
+  crewChats[key].push(newMsg);
+  res.status(201).json(newMsg);
 });
 
 // Serve frontend routing nicely in production modes

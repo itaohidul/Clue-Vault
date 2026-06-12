@@ -36,16 +36,16 @@ interface TaskState {
 }
 
 const INITIAL_BATCH: TaskState[] = [
-  { id: "task_1", name: "Sponsor Broadcast Alpha [Pop]", type: "ad_pop", completed: false, rewardCoins: 1200, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_2", name: "Sponsor Broadcast Alpha [Pop] II", type: "ad_pop", completed: false, rewardCoins: 1200, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_3", name: "Sponsor Broadcast Beta [Interstitial]", type: "ad_interstitial", completed: false, rewardCoins: 1000, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_4", name: "Sponsor Broadcast Beta [Interstitial] II", type: "ad_interstitial", completed: false, rewardCoins: 1000, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_5", name: "Sponsor Broadcast Beta [Interstitial] III", type: "ad_interstitial", completed: false, rewardCoins: 1000, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_6", name: "Sponsor Broadcast Gamma [Direct]", type: "ad_gamma", completed: false, rewardCoins: 1000, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_7", name: "Sponsor Broadcast Gamma [Direct] II", type: "ad_gamma", completed: false, rewardCoins: 1000, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_8", name: "Quantum Link Access [Alpha]", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 750, rewardKeys: 0, rewardMats: 5 },
-  { id: "task_9", name: "Quantum Link Access [Alpha] II", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 750, rewardKeys: 0, rewardMats: 5 },
-  { id: "task_10", name: "Frequency Link Audit [Beta]", type: "link_beta", link: "https://omg10.com/4/6430252", completed: false, rewardCoins: 750, rewardKeys: 0, rewardMats: 5 }
+  { id: "task_1", name: "Sponsor Broadcast Alpha [Pop]", type: "ad_pop", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_2", name: "Sponsor Broadcast Alpha [Pop] II", type: "ad_pop", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_3", name: "Sponsor Broadcast Beta [Interstitial]", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_4", name: "Sponsor Broadcast Beta [Interstitial] II", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_5", name: "Sponsor Broadcast Beta [Interstitial] III", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_6", name: "Sponsor Broadcast Gamma [Direct]", type: "ad_gamma", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_7", name: "Sponsor Broadcast Gamma [Direct] II", type: "ad_gamma", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_8", name: "Quantum Link Access [Alpha]", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
+  { id: "task_9", name: "Quantum Link Access [Alpha] II", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
+  { id: "task_10", name: "Frequency Link Audit [Beta]", type: "link_beta", link: "https://omg10.com/4/6430252", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 }
 ];
 
 export default function SocialTasksScreen() {
@@ -60,6 +60,35 @@ export default function SocialTasksScreen() {
   } = useSupabaseSync();
 
   const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
+
+  // Unskippable Quest Ad state
+  const [showQuestAd, setShowQuestAd] = useState(false);
+  const [questAdCountdown, setQuestAdCountdown] = useState(5);
+  const [activeQuestTask, setActiveQuestTask] = useState<any | null>(null);
+  const [currentQuestAdIndex, setCurrentQuestAdIndex] = useState(0);
+
+  const QUEST_ADS = [
+    { title: "Defect Detector Pro Security Guard", desc: "Automate your defense grid node to block inbound packet injections. No root access keys required.", mockUrl: "guard.defector.node" },
+    { title: "Z-Alloy Synthesizer Rig 3.0", desc: "Process base metals at 99.8% precision rate to feed your local vault core memory.", mockUrl: "alloy.synthesizer.clue" },
+    { title: "Consensus VPN Multi-Hop Routing", desc: "Secure your public IP packets across 20 global nodes behind anti-firewalls.", mockUrl: "consensusvpn.encrypt" }
+  ];
+
+  // Quest unskippable ad timer countdown
+  useEffect(() => {
+    let timer: any;
+    if (showQuestAd && questAdCountdown > 0) {
+      timer = setInterval(() => {
+        setQuestAdCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [showQuestAd, questAdCountdown]);
 
   // Load or initialize persistent batch list (10 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
@@ -215,8 +244,8 @@ export default function SocialTasksScreen() {
       } catch {}
     }
     return [
-      { id: "join_tg", title: "Join Telegram Community", icon: MessageSquare, reward: 500, link: "https://t.me/Cluevaultchat", completed: false },
-      { id: "follow_news", title: "Follow Announcements", icon: Bell, reward: 300, link: "https://t.me/Cluevaultofficial", completed: false },
+      { id: "join_tg", title: "Join Telegram Community", icon: MessageSquare, reward: 250, link: "https://t.me/Cluevaultchat", completed: false },
+      { id: "follow_news", title: "Follow Announcements", icon: Bell, reward: 150, link: "https://t.me/Cluevaultofficial", completed: false },
     ];
   });
 
@@ -225,41 +254,15 @@ export default function SocialTasksScreen() {
     localStorage.setItem("cluevault_oneoff_tasks", JSON.stringify(tasks));
   };
 
-  // Handle claiming in Supabase database
+  // Handle claiming in Supabase database (Show unskippable ad instead of opening random links)
   const handleClaimSupabaseTask = async (task: any) => {
     if (completedTaskIds.includes(task.id) || !user.onboarded) return;
 
-    setClaimingTaskId(task.id);
     triggerHaptic("medium");
-
-    if (task.link) {
-      safeOpenLink(task.link);
-    }
-
-    setLinkCountdown(5);
-    const interval = setInterval(async () => {
-      setLinkCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          
-          claimSupabaseTask(task.id).then((verified) => {
-            setClaimingTaskId(null);
-            if (verified) {
-              setSuccessAnimation({ active: true, clueAwarded: Math.floor(Math.random() * 20) + 1 });
-              triggerHaptic("success");
-              // reload listings
-              loadTasksAndCompletions();
-              loadTransactions();
-            } else {
-              triggerHaptic("error");
-            }
-          });
-
-          return 5;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    setActiveQuestTask(task);
+    setCurrentQuestAdIndex(Math.floor(Math.random() * QUEST_ADS.length));
+    setQuestAdCountdown(5);
+    setShowQuestAd(true);
   };
 
   // Handle Community Tasks
@@ -516,10 +519,10 @@ export default function SocialTasksScreen() {
   return (
     <div className="p-5 pb-24 space-y-6">
       
-      {/* Dynamic Telemetry Resource Balances Header */}
+      {/* Resource Balances Header */}
       <div className="glass rounded-[2rem] border-white/5 p-4 bg-gradient-to-r from-neutral-950 via-neutral-900 to-black shadow-2xl relative overflow-hidden">
         <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-        <span className="text-[9px] font-black uppercase text-amber-500/80 tracking-widest block mb-2 px-1">🟢 TELEMETRY NODE DATA INDICATOR</span>
+        <span className="text-[9px] font-black uppercase text-amber-500/80 tracking-widest block mb-2 px-1">🟢 CURRENT DECIPHER ASSETS</span>
         
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
@@ -575,7 +578,7 @@ export default function SocialTasksScreen() {
       <header>
         <div className="flex items-center gap-2 mb-1">
            <Shield size={16} className="text-amber-500" />
-           <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Global Telemetry Hub</span>
+           <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Global Rewards Hub</span>
         </div>
         <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-1">Earn Network</h1>
         <p className="text-sm text-white/50 italic font-medium">Bypass anti-bot firewalls to sync secure decryption assets.</p>
@@ -588,7 +591,7 @@ export default function SocialTasksScreen() {
         <div className="flex items-center justify-between px-1 bg-white/[0.01] border border-white/5 py-2 px-4 rounded-3xl backdrop-blur-md">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. Active Telemetry Batch</h3>
+            <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. Active Decryption Batch</h3>
           </div>
           
           <div className="flex items-center gap-3">
@@ -1170,6 +1173,102 @@ export default function SocialTasksScreen() {
                 SYSTEM CORRELATION FEEDBACK SECURED — SAFE EXIT EMULATOR ENABLED
               </span>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Unskippable Quest Ad Overlay */}
+      <AnimatePresence>
+        {showQuestAd && activeQuestTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-left"
+          >
+            <motion.div
+              initial={{ scale: 0.9, rotateX: 10, y: 20 }}
+              animate={{ scale: 1, rotateX: 0, y: 0 }}
+              exit={{ scale: 0.9, rotateX: -10, y: -20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 180 }}
+              className="w-full max-w-sm bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-[0_0_50px_rgba(245,158,11,0.15)] overflow-hidden relative"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+              
+              {/* Ad Badge */}
+              <div className="flex justify-between items-center bg-white/5 border border-white/5 px-3.5 py-1.5 rounded-2xl">
+                <span className="text-[8px] font-black tracking-widest text-amber-500 uppercase flex items-center gap-1.5 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Sponsored Network Broadcast
+                </span>
+                <span className="text-[9px] font-mono font-black text-white/40 uppercase">
+                  Mandatory Sync Ad
+                </span>
+              </div>
+
+              {/* Video simulation placeholder */}
+              <div className="aspect-video bg-neutral-950/80 rounded-2xl border border-white/5 relative flex flex-col items-center justify-center overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 via-transparent to-transparent opacity-70" />
+                <Tv size={36} className="text-amber-500/30 animate-bounce mb-2" />
+                <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">Streaming Sponsor Feed</span>
+                <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/80 px-2.5 py-1 rounded-lg border border-white/5 text-[8px] font-mono text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> BUFFERING SECURE STREAM
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-black uppercase text-white tracking-tight flex items-center gap-2">
+                  <Sparkles size={16} className="text-amber-500 shrink-0" />
+                  {QUEST_ADS[currentQuestAdIndex].title}
+                </h3>
+                <p className="text-[10px] text-white/50 leading-relaxed font-bold uppercase">
+                  {QUEST_ADS[currentQuestAdIndex].desc}
+                </p>
+                <div className="text-[8px] font-mono text-white/30 pt-2 border-t border-white/5 flex justify-between uppercase">
+                  <span>Route Node: {QUEST_ADS[currentQuestAdIndex].mockUrl}</span>
+                  <span className="text-amber-500/60">unskippable ad flow</span>
+                </div>
+              </div>
+
+              {/* Status Actions */}
+              <div className="bg-black/40 border border-white/5 p-4 rounded-3xl space-y-3.5 text-center">
+                {questAdCountdown > 0 ? (
+                  <div className="flex flex-col items-center space-y-1">
+                    <span className="text-[11px] font-black uppercase text-amber-500 tracking-wider animate-pulse">
+                      Anti-bot security verification in progress
+                    </span>
+                    <p className="text-[20px] font-mono font-black text-white">
+                      {questAdCountdown}s remaining
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      triggerHaptic("success");
+                      setShowQuestAd(false);
+                      setClaimingTaskId(activeQuestTask.id);
+                      setLinkCountdown(5);
+                      
+                      // execute claim
+                      claimSupabaseTask(activeQuestTask.id).then((verified) => {
+                        setClaimingTaskId(null);
+                        if (verified) {
+                          setSuccessAnimation({ active: true, clueAwarded: Math.floor(Math.random() * 10) + 1 });
+                          triggerHaptic("success");
+                          loadTasksAndCompletions();
+                          loadTransactions();
+                        } else {
+                          triggerHaptic("error");
+                        }
+                        setActiveQuestTask(null);
+                      });
+                    }}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black uppercase italic tracking-wider rounded-xl text-[10px] active:scale-95 transition-all shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 size={14} /> Synchronize & Verify Quest Rewards
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

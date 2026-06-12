@@ -699,9 +699,19 @@ export default function ReferralScreen() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[8px] text-white/30 uppercase font-bold block mt-1">
-                        JOINED: {new Date(agent.joinedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </span>
+                      
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        <span className="text-[8px] text-white/30 uppercase font-black tracking-wider">
+                          JOINED: {new Date(agent.joinedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <span className="text-[8px] uppercase font-black tracking-wider font-mono">
+                          {!agent.crewName ? (
+                            <span className="text-white/20">CREW: NONE</span>
+                          ) : (
+                            <span className="text-amber-400">CREW: {agent.crewName}</span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -730,6 +740,10 @@ export default function ReferralScreen() {
                       })}
                     </div>
 
+                    <div className="flex justify-between items-center text-[9px] font-bold text-white/40 uppercase pt-2.5 border-t border-white/5 font-mono">
+                      <span>Missions today: <strong className={cn((agent.missionsToday || 0) >= 5 ? "text-emerald-400" : "text-amber-500")}>{agent.missionsToday || 0} / 5</strong></span>
+                      <span>Vaults cleared: <strong className={cn((agent.vaultsToday || 0) >= 15 ? "text-emerald-400" : "text-amber-500")}>{agent.vaultsToday || 0} / 15</strong></span>
+                    </div>
                   </div>
                 </div>
               );
@@ -742,11 +756,8 @@ export default function ReferralScreen() {
       <div className="glass rounded-[2rem] p-6 border-white/5 space-y-4">
         <div className="flex justify-between items-center px-1">
           <h3 className="text-xs font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-            <Activity size={14} className="text-emerald-400 animate-pulse" /> Recent Network Activity Logs
+            <Activity size={14} className="text-amber-500" /> Referral Activity Stream
           </h3>
-          <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/10 flex items-center gap-1.5 uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Telemetry
-          </span>
         </div>
 
         <div className="bg-black/40 border border-white/5 rounded-2xl p-4 font-mono text-[10px] text-white/70 space-y-3.5 divide-y divide-white/5">

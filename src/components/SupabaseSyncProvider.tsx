@@ -191,8 +191,8 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
   };
 
   // Push local updates back up to Supabase with debounce
-  const syncLocalToCloud = async () => {
-    if (!userId) return;
+  const syncLocalToCloud = async (): Promise<boolean> => {
+    if (!userId) return false;
     setIsSyncing(true);
     try {
       const currentState = useUserStore.getState();
@@ -201,9 +201,13 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       console.log("Supabase secure payload synchronized successfully");
       setError(null);
       lastPendingStateRef.current = null;
+      setDbConnected(true);
+      return true;
     } catch (err: any) {
       console.warn("Local storage mirror active (Supabase connection offline mode)");
       lastPendingStateRef.current = useUserStore.getState();
+      setDbConnected(false);
+      return false;
     } finally {
       setIsSyncing(false);
     }

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../../App";
-import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck } from "lucide-react";
+import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck, Database, Wifi, WifiOff, CheckCircle2, AlertTriangle, Check, Copy, Activity, Terminal } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+
 
 export default function ProfileScreen() {
   const { user, resources, crew, triggerHaptic } = useGame();
@@ -12,6 +14,48 @@ export default function ProfileScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
   const [recoveryStatus, setRecoveryStatus] = useState<string | null>(null);
+
+  const { userId, isSyncing, dbConnected, syncLocalToCloud } = useSupabaseSync();
+  const [localSyncStatus, setLocalSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>("idle");
+  const [localSyncMsg, setLocalSyncMsg] = useState("");
+  const [uidCopied, setUidCopied] = useState(false);
+
+
+
+  const handleForceSync = async () => {
+    if (isSyncing || localSyncStatus === "syncing") return;
+    
+    triggerHaptic("medium");
+    setLocalSyncStatus("syncing");
+    setLocalSyncMsg("Synchronizing encrypted credentials state...");
+    
+    // Perform syncLocalToCloud
+    const isSuccess = await syncLocalToCloud();
+    
+    if (isSuccess) {
+      setLocalSyncStatus("success");
+      setLocalSyncMsg("Synchronized! Progress successfully secured to cloud.");
+      triggerHaptic("success");
+      setTimeout(() => {
+        setLocalSyncStatus("idle");
+      }, 5000);
+    } else {
+      setLocalSyncStatus("error");
+      setLocalSyncMsg("Offline backup active: Progress safely stored in local cache.");
+      triggerHaptic("error");
+      setTimeout(() => {
+        setLocalSyncStatus("idle");
+      }, 5000);
+    }
+  };
+
+  const handleCopyUid = () => {
+    if (!userId) return;
+    navigator.clipboard.writeText(userId);
+    setUidCopied(true);
+    triggerHaptic("success");
+    setTimeout(() => setUidCopied(false), 2000);
+  };
 
   const handleSearch = async (val: string) => {
     setSearchQuery(val);
@@ -139,6 +183,127 @@ export default function ProfileScreen() {
         </div>
       </div>
 
+      {/* Supabase Core Sync Panel */}
+      <div className="space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-widest text-white/30 px-2 flex items-center gap-2">
+          <Database size={12} className="text-amber-500" />
+          Cloud Synchronization Protocol
+        </h3>
+        <div className="glass border-white/5 bg-black/40 rounded-3xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/5 text-amber-500">
+                <Database size={16} />
+              </div>
+              <div>
+                <span className="text-[7px] font-bold text-white/30 uppercase tracking-widest block">Cloud Sync Backup</span>
+                <span className="text-xs font-black text-white italic tracking-tight uppercase">Progress Backup</span>
+              </div>
+            </div>
+
+            {/* Connection Status Indicator */}
+            {dbConnected ? (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[8px] font-black uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <Wifi size={10} className="inline mr-0.5" />
+                Signal Online
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 font-mono text-[8px] font-black uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                <WifiOff size={10} className="inline mr-0.5" />
+                Offline Cache
+              </div>
+            )}
+          </div>
+
+          {/* Identity Node Row */}
+          {userId && (
+            <div className="p-3 bg-black/50 border border-white/5 rounded-2xl flex items-center justify-between text-left">
+              <div>
+                <span className="text-[7px] font-bold text-white/20 uppercase tracking-widest block">Identity Node</span>
+                <span className="text-[10px] font-mono text-amber-500/90 font-black tracking-tight uppercase truncate block max-w-[150px]">
+                  {userId}
+                </span>
+              </div>
+              <button
+                onClick={handleCopyUid}
+                className={cn(
+                  "p-2 rounded-xl transition-all border shrink-0",
+                  uidCopied 
+                    ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-400"
+                    : "bg-white/5 border-white/5 text-white/40 hover:text-white"
+                )}
+              >
+                {uidCopied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+              </button>
+            </div>
+          )}
+
+          {/* Sync status messages */}
+          <div className="text-[9px] text-white/50 leading-relaxed font-sans border-t border-white/5 pt-3 space-y-1">
+            <div className="flex items-start gap-1.5">
+              <div className="w-1 h-1 rounded-full bg-amber-500/50 mt-1" />
+              <span>Offline edits (Missions, Upgrades, crew adjustments) are automatically cached.</span>
+            </div>
+            <div className="flex items-start gap-1.5">
+              <div className="w-1 h-1 rounded-full bg-amber-500/50 mt-1" />
+              <span>State updates are synchronized securely with the cloud to preserve your progress.</span>
+            </div>
+          </div>
+
+          {/* Active status progress bar */}
+          {localSyncStatus !== "idle" && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className={cn(
+                "p-3 rounded-2xl border text-[9px] font-mono font-medium flex items-center gap-2",
+                localSyncStatus === "syncing" && "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                localSyncStatus === "success" && "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+                localSyncStatus === "error" && "bg-rose-500/10 border-rose-500/20 text-rose-400"
+              )}
+            >
+              {localSyncStatus === "syncing" && <Loader2 size={12} className="animate-spin text-blue-400 shrink-0" />}
+              {localSyncStatus === "success" && <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
+              {localSyncStatus === "error" && <AlertTriangle size={12} className="text-rose-400 shrink-0" />}
+              <span>{localSyncMsg}</span>
+            </motion.div>
+          )}
+
+          {/* Sync Trigger button */}
+          <button
+            onClick={handleForceSync}
+            disabled={isSyncing || localSyncStatus === "syncing"}
+            className={cn(
+              "w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-wider italic transition-all flex items-center justify-center gap-2 outline-none border",
+              isSyncing || localSyncStatus === "syncing"
+                ? "bg-white/5 text-white/20 border-white/5 cursor-not-allowed"
+                : localSyncStatus === "success"
+                ? "bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-400 border-emerald-500/30 glow-emerald"
+                : "bg-amber-500 hover:bg-amber-600 text-black border-amber-400/30 glow-gold active:scale-98"
+            )}
+          >
+            {(isSyncing || localSyncStatus === "syncing") ? (
+              <>
+                <RefreshCw size={12} className="animate-spin" />
+                Securing Sync Stream...
+              </>
+            ) : localSyncStatus === "success" ? (
+              <>
+                <CheckCircle2 size={12} />
+                Datastore Synced Successfully
+              </>
+            ) : (
+              <>
+                <RefreshCw size={12} />
+                Synchronize Offline Progress to Cloud
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Settings List */}
       <div className="space-y-2">
         <button 
@@ -151,7 +316,8 @@ export default function ProfileScreen() {
           </div>
           <ChevronRight size={16} className="text-white/20" />
         </button>
-        
+
+
         {/* Account Discovery & Recovery Module */}
         <button 
           onClick={() => {
@@ -189,6 +355,8 @@ export default function ProfileScreen() {
 
       {/* Account Restore Terminal Drawer */}
       <AnimatePresence>
+
+
         {showRecoveryPanel && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -299,7 +467,7 @@ export default function ProfileScreen() {
                   </div>
 
                   <p className="text-[7.5px] font-black uppercase text-center tracking-normal text-white/15 px-4 leading-normal mt-5">
-                    Terminal database synchronizer queries records in Supabase active cluster to re-route persistent session keys safely.
+                    Securely verifies progress records in the cloud to restore your persistent account safely.
                   </p>
                 </>
               )}

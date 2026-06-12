@@ -194,13 +194,46 @@ export default function VaultScreen() {
         energy: state.resources.maxEnergy || 100, // Fully restore energy!
       };
 
+      // Referred user activity tracking
+      const todayStr = new Date().toISOString().split('T')[0];
+      const userLastActive = state.user.lastActiveDate || todayStr;
+
+      let missionsToday = state.user.referredMissionsToday || 0;
+      let vaultsToday = state.user.referredVaultsToday || 0;
+      let consecutiveDays = state.user.referredConsecutiveDays || 0;
+
+      if (userLastActive !== todayStr) {
+        const metGoalYesterday = (missionsToday >= 5 && vaultsToday >= 15);
+        const isConsecutive = (new Date(todayStr).getTime() - new Date(userLastActive).getTime()) <= 86400000 + 4 * 3600000;
+
+        if (isConsecutive && metGoalYesterday) {
+          consecutiveDays = Math.min(7, consecutiveDays + 1);
+        } else {
+          consecutiveDays = 0;
+        }
+        missionsToday = 0;
+        vaultsToday = 0;
+      }
+
+      vaultsToday += 1;
+
+      const goalMetBefore = (((state.user.referredMissionsToday || 0) >= 5) && ((state.user.referredVaultsToday || 0) >= 15));
+      const goalMetNow = (missionsToday >= 5 && vaultsToday >= 15);
+      if (!goalMetBefore && goalMetNow) {
+        consecutiveDays = Math.min(7, consecutiveDays + 1);
+      }
+
       const nextUser = {
         ...state.user,
         completedToday: false, // Reset Decryption Game!
         clearanceCount: (state.user.clearanceCount || 0) + 1, // Store decrypted vault counts
         level: newLevel,
         exp: newExp,
-        maxExp: newMaxExp
+        maxExp: newMaxExp,
+        referredMissionsToday: missionsToday,
+        referredVaultsToday: vaultsToday,
+        referredConsecutiveDays: consecutiveDays,
+        lastActiveDate: todayStr
       };
 
       localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({

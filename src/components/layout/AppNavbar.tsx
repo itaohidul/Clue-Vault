@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Home, ClipboardList, Shield, Users, Warehouse } from "lucide-react";
+import { Home, ClipboardList, Shield, Users, Warehouse, Wallet } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useGame } from "../../App";
 
@@ -9,6 +9,7 @@ const navItems = [
   { icon: Shield, label: "Vault", path: "/app/vault" },
   { icon: Users, label: "Crew", path: "/app/crew" },
   { icon: Warehouse, label: "Base", path: "/app/base" },
+  { icon: Wallet, label: "Wallet", path: "/app/wallet" },
 ];
 
 export default function AppNavbar() {

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { useGame } from "../../App";
-import { Users, Star, Trophy, MessageSquare, Shield, ChevronRight, UserPlus, Flame, Palette, Circle, Hexagon, Square, Diamond, Swords, Target, Eye, Crown, Zap, User } from "lucide-react";
+import { Users, Star, Trophy, MessageSquare, Shield, ChevronRight, UserPlus, Flame, Palette, Circle, Hexagon, Square, Diamond, Swords, Target, Eye, Crown, Zap, User, Send, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import axios from "axios";
@@ -38,6 +38,13 @@ export default function CrewScreen() {
   const [crewMembers, setCrewMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
+  // Crew chat states
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
   const AVAILABLE_CREWS = [
     { name: "Phantom Operatives", desc: "Decentralized code breakers and elite network nodes.", rank: 4, points: 124500, multiplier: "1.25x Earning" },
     { name: "Acolytes of Clue", desc: "Synthesizer mining clan studying absolute game consensus.", rank: 7, points: 98000, multiplier: "1.20x Earning" },
@@ -60,11 +67,86 @@ export default function CrewScreen() {
     }
   };
 
+  const fetchChatMessages = async (crewName: string) => {
+    try {
+      const response = await axios.get(`/api/crews/${crewName}/chat`, { timeout: 10000 });
+      setChatMessages(response.data);
+    } catch (e) {
+      console.error("Failed to fetch crew chats", e);
+    }
+  };
+
+  const handleSendChat = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || sendingChat) return;
+
+    const displayedCrew = interactingCrew || crew;
+    if (!displayedCrew) return;
+
+    triggerHaptic("light");
+    const msg = chatInput.trim();
+    setChatInput("");
+    setSendingChat(true);
+
+    // Optimistic message update
+    const tempId = `temp_${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
+      sender: currentUserState.name || "Agent",
+      avatar: currentUserState.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUserState.name || "Agent"}`,
+      message: msg,
+      timestamp: "Just now"
+    };
+
+    setChatMessages(prev => [...prev, optimisticMsg]);
+
+    try {
+      const response = await axios.post(`/api/crews/${displayedCrew.name}/chat`, {
+        sender: currentUserState.name || "Agent",
+        avatar: currentUserState.avatar || "",
+        message: msg
+      });
+      setChatMessages(prev => prev.map(m => m.id === tempId ? response.data : m));
+    } catch (err) {
+      console.error("Failed to send chat", err);
+      setChatMessages(prev => prev.filter(m => m.id !== tempId));
+    } finally {
+      setSendingChat(false);
+    }
+  };
+
+  // Scroll to bottom on new chats without causing the outer browser window to scroll
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      const t = setTimeout(() => {
+        if (chatScrollRef.current) {
+          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+        }
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [chatMessages]);
+
   useEffect(() => {
     if (crew) {
       fetchCrewMembers(crew.name);
     }
   }, [crew?.name]);
+
+  // Handle live chat polling
+  useEffect(() => {
+    const displayedCrew = interactingCrew || crew;
+    const isJoined = !!crew && (!interactingCrew || interactingCrew.name === crew.name);
+    
+    if (isJoined && displayedCrew?.name) {
+      fetchChatMessages(displayedCrew.name);
+      const timer = setInterval(() => {
+        fetchChatMessages(displayedCrew.name);
+      }, 3000);
+      return () => clearInterval(timer);
+    }
+  }, [crew?.name, interactingCrew?.name]);
 
   if (!crew && !interactingCrew) {
     return (
@@ -300,6 +382,117 @@ export default function CrewScreen() {
             {!loadingMembers && crewMembers.length === 0 && (
               <div className="text-center py-12 border border-dashed border-white/5 rounded-3xl">
                 <p className="text-[10px] font-black uppercase text-white/20 tracking-widest">No agents detected in this syndicate yet.</p>
+              </div>
+            )}
+         </div>
+      </div>
+
+      {/* Realtime syndicate chat section */}
+      <div className="space-y-4">
+         <div className="flex justify-between items-center px-1">
+            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5 font-sans">
+               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+               Live Syndicate Chat Frequency
+            </h3>
+            {isJoined && (
+              <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded uppercase tracking-wider leading-none">
+                {displayedCrew.name} Channel
+              </span>
+            )}
+         </div>
+
+         <div className="glass rounded-[2rem] border border-white/5 bg-black/40 overflow-hidden flex flex-col min-h-[300px] max-h-[320px]">
+            {isJoined ? (
+              <>
+                {/* Chat message buffer */}
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 scroll-smooth select-text">
+                   {chatMessages.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center h-full py-10 text-center text-white/20 select-none">
+                        <MessageSquare size={28} className="stroke-1 mb-2 opacity-30 animate-pulse" />
+                        <span className="text-[9px] font-black uppercase tracking-widest leading-relaxed">System Link established.<br/>Frequency is clear.</span>
+                     </div>
+                   ) : (
+                     <div className="space-y-3.5">
+                       {chatMessages.map((msg) => {
+                         const isMe = msg.sender === (currentUserState.name || "Agent");
+                         return (
+                           <div 
+                             key={msg.id} 
+                             className={cn(
+                               "flex gap-2.5 items-start text-left max-w-[85%] transition-all",
+                               isMe ? "ml-auto flex-row-reverse" : "mr-auto"
+                             )}
+                           >
+                              <img 
+                                src={msg.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${msg.sender}`} 
+                                alt="Sender avatar" 
+                                className="w-7 h-7 rounded-lg border border-white/5 bg-white/5 shrink-0"
+                              />
+                              <div className="space-y-1">
+                                 <div className={cn(
+                                   "flex items-center gap-1.5",
+                                   isMe && "flex-row-reverse"
+                                 )}>
+                                    <span className="text-[10px] font-black text-amber-500 uppercase italic tracking-tight truncate max-w-[90px]">
+                                      {msg.sender === (currentUserState.name || "Agent") ? "You" : msg.sender}
+                                    </span>
+                                    <span className="text-[8px] font-bold text-white/20 font-mono mt-0.5 shrink-0">
+                                      {msg.timestamp}
+                                    </span>
+                                 </div>
+                                 <div 
+                                   className={cn(
+                                     "px-3.5 py-2 rounded-2xl text-[10px] leading-relaxed break-words font-sans",
+                                     isMe 
+                                       ? "bg-amber-500 text-black font-extrabold rounded-tr-none shadow-[0_0_10px_rgba(245,158,11,0.15)]" 
+                                       : "bg-white/5 border border-white/5 text-white/90 rounded-tl-none"
+                                   )}
+                                 >
+                                    {msg.message}
+                                 </div>
+                              </div>
+                           </div>
+                         );
+                       })}
+                       <div ref={chatEndRef} />
+                     </div>
+                   )}
+                </div>
+
+                {/* Secure broadcast input form */}
+                <form onSubmit={handleSendChat} className="p-3 border-t border-white/5 bg-black/50 flex gap-2">
+                   <input
+                     type="text"
+                     placeholder="Message Allied syndicate agents..."
+                     value={chatInput}
+                     onChange={(e) => setChatInput(e.target.value)}
+                     className="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-amber-500/30 text-white italic"
+                   />
+                   <button
+                     type="submit"
+                     disabled={sendingChat || !chatInput.trim()}
+                     className={cn(
+                       "w-10 h-10 rounded-xl flex items-center justify-center transition-all border",
+                       !chatInput.trim() || sendingChat
+                         ? "bg-white/5 text-white/20 border-white/5 cursor-not-allowed"
+                         : "bg-amber-500 hover:bg-amber-600 text-black active:scale-95 border-amber-400"
+                     )}
+                   >
+                      <Send size={12} className="shrink-0" />
+                   </button>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 my-auto">
+                 <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 text-amber-500 flex items-center justify-center shadow-lg">
+                    <Lock size={16} />
+                 </div>
+                 <div className="space-y-1 max-w-[240px]">
+                    <h4 className="text-[11px] font-black uppercase tracking-widest text-white italic">Operational channel Locked</h4>
+                    <p className="text-[9px] text-white/40 leading-relaxed font-bold uppercase font-sans">
+                       Select "Join Syndicate Register" to establish operational links and connect to Allied live communications chat frequencies.
+                    </p>
+                 </div>
               </div>
             )}
          </div>

@@ -41,6 +41,10 @@ export interface GameState {
     claimedCommission?: number;
     lastDailyClaim: number;
     referrals?: ReferralAgent[];
+    lastActiveDate?: string;
+    referredMissionsToday?: number;
+    referredVaultsToday?: number;
+    referredConsecutiveDays?: number;
   };
   resources: {
     coins: number;
@@ -219,19 +223,20 @@ export const useUserStore = create<GameState>((set, get) => ({
     // Earn and convert optimization structure 2:1 - plus some bonus clue tokens as requested (clue+)
     const clueReward = (reward.clue || 0) + randomClueBonus + 15;
 
+    // Globally halved by 50%: decrease rewards to half
     const nextResources = {
       ...resources,
-      coins: resources.coins + (reward.coins || 0) + 300, // extra ZP on clearance
-      keys: resources.keys + (reward.keys || 0),
-      fragments: resources.fragments + (reward.fragments || 0),
-      baseMaterials: resources.baseMaterials + (reward.baseMaterials || 0),
-      clue: resources.clue + clueReward,
-      activityScore: resources.activityScore + (reward.activityScore || 0) + 50,
+      coins: resources.coins + Math.round(((reward.coins || 0) + 300) / 2), 
+      keys: resources.keys + Math.round((reward.keys || 0) / 2),
+      fragments: resources.fragments + Math.round((reward.fragments || 0) / 2),
+      baseMaterials: resources.baseMaterials + Math.round((reward.baseMaterials || 0) / 2),
+      clue: resources.clue + Math.round(clueReward / 2),
+      activityScore: resources.activityScore + Math.round(((reward.activityScore || 0) + 50) / 2),
     };
 
-    // Calculate EXP award
+    // Calculate EXP award (also halved by half)
     const baseNewXp = 40 + (user.level * 5);
-    const xpAwarded = reward.xpAmount || (reward.xp ? baseNewXp : 0);
+    const xpAwarded = Math.round((reward.xpAmount || (reward.xp ? baseNewXp : 0)) / 2);
 
     let newExp = (user.exp || 0) + xpAwarded;
     let newLevel = user.level || 1;
@@ -244,6 +249,35 @@ export const useUserStore = create<GameState>((set, get) => ({
       newMaxExp = newLevel * 100;
     }
 
+    // Dynamic referred activity check
+    const todayStr = new Date().toISOString().split('T')[0];
+    const userLastActive = user.lastActiveDate || todayStr;
+
+    let missionsToday = user.referredMissionsToday || 0;
+    let vaultsToday = user.referredVaultsToday || 0;
+    let consecutiveDays = user.referredConsecutiveDays || 0;
+
+    if (userLastActive !== todayStr) {
+      const metGoalYesterday = (missionsToday >= 5 && vaultsToday >= 15);
+      const isConsecutive = (new Date(todayStr).getTime() - new Date(userLastActive).getTime()) <= 86400000 + 4 * 3600000;
+
+      if (isConsecutive && metGoalYesterday) {
+        consecutiveDays = Math.min(7, consecutiveDays + 1);
+      } else {
+        consecutiveDays = 0;
+      }
+      missionsToday = 0;
+      vaultsToday = 0;
+    }
+
+    missionsToday += 1;
+
+    const goalMetBefore = ((user.referredMissionsToday || 0) >= 5 && (user.referredVaultsToday || 0) >= 15);
+    const goalMetNow = (missionsToday >= 5 && vaultsToday >= 15);
+    if (!goalMetBefore && goalMetNow) {
+      consecutiveDays = Math.min(7, consecutiveDays + 1);
+    }
+
     const nextUser = {
       ...user,
       clearanceCount: (user.clearanceCount || 0) + 1,
@@ -252,6 +286,10 @@ export const useUserStore = create<GameState>((set, get) => ({
       level: newLevel,
       exp: newExp,
       maxExp: newMaxExp,
+      referredMissionsToday: missionsToday,
+      referredVaultsToday: vaultsToday,
+      referredConsecutiveDays: consecutiveDays,
+      lastActiveDate: todayStr
     };
 
     const nextTabs = Array.from(new Set([...unlockedTabs, 'bonus', 'crew', 'referral']));
@@ -655,11 +693,11 @@ export const useUserStore = create<GameState>((set, get) => ({
     let nextStreak = wasYesterday ? (user.streak || 0) + 1 : 1;
     if (nextStreak > 30) nextStreak = 1;
 
-    // Define rewards
-    const coinsReward = 250 + (nextStreak * 50);
-    const matsReward = nextStreak % 5 === 0 ? 20 * (nextStreak / 5) : 0;
-    const keysReward = nextStreak % 7 === 0 ? 1 : 0;
-    const scoreReward = 50 + (nextStreak * 10);
+    // Define rewards (Globally halved by 50%)
+    const coinsReward = Math.round((250 + (nextStreak * 50)) / 2);
+    const matsReward = Math.round((nextStreak % 5 === 0 ? 20 * (nextStreak / 5) : 0) / 2);
+    const keysReward = nextStreak % 7 === 0 ? 1 : 0; // keeps at 1 since keys are discrete single items
+    const scoreReward = Math.round((50 + (nextStreak * 10)) / 2);
 
     const nextUser = {
       ...user,

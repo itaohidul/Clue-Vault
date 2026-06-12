@@ -22,7 +22,9 @@ import ReferralScreen from "./components/game/ReferralScreen";
 import EventHubScreen from "./components/game/EventHubScreen";
 import SocialTasksScreen from "./components/game/SocialTasksScreen";
 import EarnScreen from "./components/game/EarnScreen";
+import WalletDexScreen from "./components/game/WalletDexScreen";
 import TelegramProvider from "./providers/TelegramProvider";
+import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
@@ -622,7 +624,7 @@ function AppContent() {
                   <span className="text-sm font-black uppercase tracking-tighter italic text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-200">ClueVault</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                  <Link to="/app/earn" onClick={() => triggerHaptic("light")} className="bg-amber-500/10 hover:bg-amber-500/25 px-2.5 py-1.5 rounded-xl text-amber-500 transition-all border border-amber-500/20 flex items-center gap-1.5">
+                  <Link to="/app/wallet" onClick={() => triggerHaptic("light")} className="bg-amber-500/10 hover:bg-amber-500/25 px-2.5 py-1.5 rounded-xl text-amber-500 transition-all border border-amber-500/20 flex items-center gap-1.5">
                     <Coins size={14} className="shrink-0 leading-none" />
                     <span className="text-[10px] font-black italic tracking-tight">{resources.clue ? resources.clue.toFixed(1) : "0.0"}</span>
                   </Link>
@@ -651,6 +653,7 @@ function AppContent() {
                 <Route path="events" element={<EventHubScreen />} />
                 <Route path="social-tasks" element={<SocialTasksScreen />} />
                 <Route path="earn" element={<EarnScreen />} />
+                <Route path="wallet" element={<WalletDexScreen />} />
                 <Route path="vaults" element={<Navigate to="/app/vault" replace />} />
                 <Route path="*" element={<Navigate to="/app/home" />} />
               </Routes>
@@ -776,37 +779,43 @@ function AppInner() {
 
   return (
     <TelegramProvider>
-      <SupabaseSyncProvider>
-        <GameContext.Provider value={{ 
-          user: store.user,
-          resources: store.resources,
-          crew: store.crew,
-          base: store.base,
-          unlockedTabs: store.unlockedTabs,
-          loading: store.isLoading,
-          updateResources: store.updateResources, 
-          consumeEnergy: store.consumeEnergy,
-          completeMission: store.completeMission, 
-          buyItem: store.buyItem,
-          claimReferralCommission: store.claimReferralCommission,
-          addMockReferral: store.addMockReferral,
-          simulateReferralDay: store.simulateReferralDay,
-          updateCrewBadge: store.updateCrewBadge,
-          joinCrew: store.joinCrew,
-          leaveCrew: store.leaveCrew,
-          claimDailyReward: store.claimDailyReward,
-          riddleState: store.riddleState,
-          updateRiddleProgression: store.updateRiddleProgression,
-          upgradeBaseRoom: store.upgradeBaseRoom,
-          setBaseStyle: store.setBaseStyle,
-          finalizeOnboarding: store.finalizeOnboarding,
-          triggerHaptic: store.triggerHaptic 
-        }}>
-          <HashRouter>
-            <AppContent />
-          </HashRouter>
-        </GameContext.Provider>
-      </SupabaseSyncProvider>
+      <TwaAnalyticsProvider
+        projectId={import.meta.env.VITE_TELEMETREE_PROJECT_ID || "cluevault-project"}
+        apiKey={import.meta.env.VITE_TELEMETREE_API_KEY || "eyJhcHBfbmFtZSI6ImNsdWV2YXVsdCIsImFwcF91cmwiOiJodHRwczovL3QubWUvY2x1ZXZhdWx0Ym90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vY2x1ZS12YXVsdC52ZXJjZWwuYXBwLyJ9!6Y2ufwQNDoAHOR3+U+W/dtYypxTxe5zw8UxBWh11OXc="}
+        appName={import.meta.env.VITE_TELEMETREE_APP_NAME || "ClueVault"}
+      >
+        <SupabaseSyncProvider>
+          <GameContext.Provider value={{ 
+            user: store.user,
+            resources: store.resources,
+            crew: store.crew,
+            base: store.base,
+            unlockedTabs: store.unlockedTabs,
+            loading: store.isLoading,
+            updateResources: store.updateResources, 
+            consumeEnergy: store.consumeEnergy,
+            completeMission: store.completeMission, 
+            buyItem: store.buyItem,
+            claimReferralCommission: store.claimReferralCommission,
+            addMockReferral: store.addMockReferral,
+            simulateReferralDay: store.simulateReferralDay,
+            updateCrewBadge: store.updateCrewBadge,
+            joinCrew: store.joinCrew,
+            leaveCrew: store.leaveCrew,
+            claimDailyReward: store.claimDailyReward,
+            riddleState: store.riddleState,
+            updateRiddleProgression: store.updateRiddleProgression,
+            upgradeBaseRoom: store.upgradeBaseRoom,
+            setBaseStyle: store.setBaseStyle,
+            finalizeOnboarding: store.finalizeOnboarding,
+            triggerHaptic: store.triggerHaptic 
+          }}>
+            <HashRouter>
+              <AppContent />
+            </HashRouter>
+          </GameContext.Provider>
+        </SupabaseSyncProvider>
+      </TwaAnalyticsProvider>
     </TelegramProvider>
   );
 }

@@ -16,9 +16,10 @@ export default function LeaderboardScreen() {
     setLoading(true);
     try {
       const response = await axios.get(`/api/leaderboard?category=${cat}`, { timeout: 10000 });
-      setLeaderboardData(response.data);
+      setLeaderboardData(Array.isArray(response.data) ? response.data : []);
     } catch (e) {
       console.error("Failed to fetch leaderboard", e);
+      setLeaderboardData([]);
     } finally {
       setLoading(false);
     }
@@ -125,7 +126,7 @@ export default function LeaderboardScreen() {
           </div>
 
           <div className="space-y-3">
-             {leaderboardData.map((item, i) => (
+             {Array.isArray(leaderboardData) && leaderboardData.map((item, i) => (
                <motion.div 
                  initial={{ opacity: 0, x: -10 }}
                  animate={{ opacity: 1, x: 0 }}

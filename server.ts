@@ -697,6 +697,96 @@ async function compileUserPayloadWithLiveReferrals(stateJson: any, referralCode:
   return stateJson;
 }
 
+// Handle local in-memory fallback for user registration and fetching
+async function handleUserFallback(req: any, res: any, userId: string, usernameQuery: string, referredByCode?: string) {
+  let cachedUser = localCache.users.get(userId);
+  if (!cachedUser) {
+    const referralCode = `ref_${userId.substring(0, 8)}`;
+    const initialBalance = referredByCode ? 2500 : 1000;
+    const seedState = {
+      user: {
+        name: usernameQuery,
+        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
+        level: 1,
+        exp: 0,
+        referCount: 0,
+        referralCode,
+        referredBy: referredByCode || null,
+        onboarded: false,
+      },
+      resources: {
+        coins: initialBalance,
+        keys: 5,
+        clue: 0,
+      },
+      purchases: [],
+      crew: null,
+      base: { level: 1, energy: 100 },
+      unlockedTabs: ["daily"],
+      riddleState: { activeRiddleId: null, unlockedParts: 0 }
+    };
+
+    cachedUser = {
+      telegram_id: userId,
+      username: usernameQuery,
+      balance: initialBalance,
+      referral_code: referralCode,
+      referred_by: referredByCode || null,
+      state_json: seedState
+    };
+    localCache.users.set(userId, cachedUser);
+
+    // Save transactions locally
+    localCache.transactions.push({
+      id: Date.now(),
+      telegram_id: userId,
+      amount: initialBalance,
+      type: "welcome_package",
+      created_at: new Date().toISOString()
+    });
+
+    if (referredByCode) {
+      for (const [key, value] of localCache.users.entries()) {
+        if (value.referral_code === referredByCode) {
+          value.balance += 5000;
+          if (value.state_json.resources) {
+            value.state_json.resources.coins += 5000;
+          }
+          if (value.state_json.user) {
+            if (!value.state_json.user.referrals) {
+              value.state_json.user.referrals = [];
+            }
+            const newAgent = {
+              id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+              name: usernameQuery,
+              avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
+              status: "unverified",
+              consecutiveDays: 0,
+              missionsToday: 0,
+              lastActiveDate: new Date().toISOString().split('T')[0],
+              joinedAt: new Date().toISOString()
+            };
+            value.state_json.user.referrals.push(newAgent);
+            value.state_json.user.referCount = value.state_json.user.referrals.length;
+          }
+          localCache.transactions.push({
+            id: Date.now() + 1,
+            telegram_id: value.telegram_id,
+            amount: 5000,
+            type: "referral_bonus",
+            created_at: new Date().toISOString()
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // Ensure live referral data is merged even in fallback mode
+  const compiledState = await compileUserPayloadWithLiveReferrals(cachedUser.state_json, cachedUser.referral_code);
+  return res.json(compiledState);
+}
+
 // Get User State (Auto-Registration + Referral Tracker)
 app.get("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -848,90 +938,7 @@ app.get("/api/user/:userId", async (req, res) => {
       console.warn(`[Supabase RLS Alert] Row Level Security (RLS) is blocking the transaction. Please disable RLS on the 'users', 'tasks', 'user_tasks', and 'transactions' tables, or use the SUPABASE_SERVICE_ROLE_KEY to bypass RLS.`);
     }
 
-    // In-memory fallback check
-    let cachedUser = localCache.users.get(userId);
-    if (!cachedUser) {
-      const referralCode = `ref_${userId.substring(0, 8)}`;
-      const initialBalance = referredByCode ? 2500 : 1000;
-      const seedState = {
-        user: {
-          name: usernameQuery,
-          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
-          level: 1,
-          exp: 0,
-          referCount: 0,
-          referralCode,
-          referredBy: referredByCode || null,
-        },
-        resources: {
-          coins: initialBalance,
-          keys: 5,
-          clue: 0,
-        },
-        purchases: [],
-        crew: null,
-        base: { level: 1, energy: 100 },
-        unlockedTabs: ["daily"],
-        riddleState: { activeRiddleId: null, unlockedParts: 0 }
-      };
-
-      cachedUser = {
-        telegram_id: userId,
-        username: usernameQuery,
-        balance: initialBalance,
-        referral_code: referralCode,
-        referred_by: referredByCode || null,
-        state_json: seedState
-      };
-      localCache.users.set(userId, cachedUser);
-
-      // Save transactions locally
-      localCache.transactions.push({
-        id: Date.now(),
-        telegram_id: userId,
-        amount: initialBalance,
-        type: "welcome_package",
-        created_at: new Date().toISOString()
-      });
-
-      if (referredByCode) {
-        for (const [key, value] of localCache.users.entries()) {
-          if (value.referral_code === referredByCode) {
-            value.balance += 5000;
-            if (value.state_json.resources) {
-              value.state_json.resources.coins += 5000;
-            }
-            if (value.state_json.user) {
-              if (!value.state_json.user.referrals) {
-                value.state_json.user.referrals = [];
-              }
-              const newAgent = {
-                id: "agent_" + Math.random().toString(36).substring(2, 9).toUpperCase(),
-                name: usernameQuery,
-                avatar: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${usernameQuery}`,
-                status: "unverified",
-                consecutiveDays: 0,
-                missionsToday: 0,
-                lastActiveDate: new Date().toISOString().split('T')[0],
-                joinedAt: new Date().toISOString()
-              };
-              value.state_json.user.referrals.push(newAgent);
-              value.state_json.user.referCount = value.state_json.user.referrals.length;
-            }
-            localCache.transactions.push({
-              id: Date.now() + 1,
-              telegram_id: value.telegram_id,
-              amount: 5000,
-              type: "referral_bonus",
-              created_at: new Date().toISOString()
-            });
-            break;
-          }
-        }
-      }
-    }
-
-    res.json(cachedUser.state_json);
+    return handleUserFallback(req, res, userId, usernameQuery, referredByCode);
   }
 });
 

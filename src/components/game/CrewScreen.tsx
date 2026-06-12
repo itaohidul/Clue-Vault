@@ -55,7 +55,7 @@ export default function CrewScreen() {
     setLoadingMembers(true);
     try {
       const response = await axios.get(`/api/crews/${crewName}/members`, { timeout: 10000 });
-      setCrewMembers(response.data);
+      setCrewMembers(Array.isArray(response.data) ? response.data : []);
     } catch (e) {
       console.error("Failed to fetch crew members", e);
       // Fallback with mock if supabase fails for some reason
@@ -70,9 +70,10 @@ export default function CrewScreen() {
   const fetchChatMessages = async (crewName: string) => {
     try {
       const response = await axios.get(`/api/crews/${crewName}/chat`, { timeout: 10000 });
-      setChatMessages(response.data);
+      setChatMessages(Array.isArray(response.data) ? response.data : []);
     } catch (e) {
       console.error("Failed to fetch crew chats", e);
+      setChatMessages([]);
     }
   };
 
@@ -354,7 +355,7 @@ export default function CrewScreen() {
               </div>
             )}
             
-            {!loadingMembers && crewMembers.map((member, i) => (
+            {!loadingMembers && Array.isArray(crewMembers) && crewMembers.map((member, i) => (
               <div 
                 key={member.id || i} 
                 className={cn(
@@ -379,7 +380,7 @@ export default function CrewScreen() {
               </div>
             ))}
             
-            {!loadingMembers && crewMembers.length === 0 && (
+            {!loadingMembers && (!Array.isArray(crewMembers) || crewMembers.length === 0) && (
               <div className="text-center py-12 border border-dashed border-white/5 rounded-3xl">
                 <p className="text-[10px] font-black uppercase text-white/20 tracking-widest">No agents detected in this syndicate yet.</p>
               </div>
@@ -406,14 +407,14 @@ export default function CrewScreen() {
               <>
                 {/* Chat message buffer */}
                 <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 scroll-smooth select-text">
-                   {chatMessages.length === 0 ? (
+                   {Array.isArray(chatMessages) && chatMessages.length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-full py-10 text-center text-white/20 select-none">
                         <MessageSquare size={28} className="stroke-1 mb-2 opacity-30 animate-pulse" />
                         <span className="text-[9px] font-black uppercase tracking-widest leading-relaxed">System Link established.<br/>Frequency is clear.</span>
                      </div>
                    ) : (
                      <div className="space-y-3.5">
-                       {chatMessages.map((msg) => {
+                       {Array.isArray(chatMessages) && chatMessages.map((msg) => {
                          const isMe = msg.sender === (currentUserState.name || "Agent");
                          return (
                            <div 

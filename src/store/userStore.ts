@@ -151,6 +151,7 @@ const getInitialState = () => {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      console.log("[State] Loaded state from localStorage:", parsed);
       return {
         ...defaults,
         ...parsed,
@@ -164,10 +165,26 @@ const getInitialState = () => {
         }
       };
     } catch (e) {
-      console.error("Local storage parse error", e);
+      console.error("[State] Local storage parse error - resetting to defaults:", e);
+      localStorage.removeItem('cluevault_game_state_zustand');
     }
   }
   return defaults;
+};
+
+// Add centralized save to avoid duplication
+const saveState = (state: GameState) => {
+  const dataToSave = {
+    user: state.user,
+    resources: state.resources,
+    crew: state.crew,
+    base: state.base,
+    unlockedTabs: state.unlockedTabs,
+    riddleState: state.riddleState,
+    purchases: state.purchases
+  };
+  console.log("[State] Saving to localStorage:", dataToSave);
+  localStorage.setItem('cluevault_game_state_zustand', JSON.stringify(dataToSave));
 };
 
 export const useUserStore = create<GameState>((set, get) => ({
@@ -177,7 +194,7 @@ export const useUserStore = create<GameState>((set, get) => ({
 
   setLoadedState: (loadedState) => {
     set({ ...loadedState });
-    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify(loadedState));
+    saveState(get());
   },
 
   updateResources: (diff) => {
@@ -194,16 +211,10 @@ export const useUserStore = create<GameState>((set, get) => ({
     });
 
     set({ resources: nextResources });
-    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
-      user: get().user,
-      resources: nextResources,
-      crew: get().crew,
-      base: get().base,
-      unlockedTabs: get().unlockedTabs,
-      riddleState: get().riddleState,
-    }));
+    saveState(get());
     get().triggerHaptic('light');
   },
+
 
   consumeEnergy: (amount) => {
     const energy = get().resources.energy;
@@ -295,14 +306,7 @@ export const useUserStore = create<GameState>((set, get) => ({
     const nextTabs = Array.from(new Set([...unlockedTabs, 'bonus', 'crew', 'referral']));
 
     set({ resources: nextResources, user: nextUser, unlockedTabs: nextTabs });
-    localStorage.setItem('cluevault_game_state_zustand', JSON.stringify({
-      user: nextUser,
-      resources: nextResources,
-      crew: get().crew,
-      base: get().base,
-      unlockedTabs: nextTabs,
-      riddleState: get().riddleState,
-    }));
+    saveState(get());
     get().triggerHaptic('success');
   },
 

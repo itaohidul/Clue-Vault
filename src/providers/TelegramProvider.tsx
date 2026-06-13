@@ -1,39 +1,40 @@
-import { useEffect, ReactNode } from 'react';
+import { useEffect, useState, ReactNode } from "react";
 
-export default function TelegramProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function TelegramProvider({ children }: { children: ReactNode }) {
+  const [telegramReady, setTelegramReady] = useState(false);
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
+    
+    // Debug logging as requested
+    if (tg) {
+       console.log("[TELEGRAM-BOOT] SDK detected:", {
+         version: tg.version,
+         platform: tg.platform,
+         hasReady: typeof tg.ready === 'function',
+         hasExpand: typeof tg.expand === 'function',
+         initDataLen: tg.initData?.length || 0,
+         hasInitData: !!tg.initData
+       });
 
-    if (!tg) return;
-
-    // Note: CloudStorage polyfill for older versions is handled early in index.html head scripts
-    // to ensure availability before any React logic or third-party SDK calls.
-
-    if (tg && typeof tg.ready === 'function') {
-      try {
-        tg.ready();
-      } catch (e) {
-        console.warn("tg.ready fail:", e);
-      }
+       try {
+         if (typeof tg.ready === 'function') tg.ready();
+         if (typeof tg.expand === 'function') tg.expand();
+         
+         // Set background to tg theme color
+         if (tg.themeParams?.bg_color) {
+           document.body.style.background = tg.themeParams.bg_color;
+         }
+       } catch (e) {
+         console.warn("Telegram init failed:", e);
+       }
+    } else {
+       console.log("[TELEGRAM-BOOT] No SDK found, assuming browser mode.");
     }
-    if (tg && typeof tg.expand === 'function') {
-      try {
-        tg.expand();
-      } catch (e) {
-        console.warn("tg.expand fail:", e);
-      }
-    }
 
-    // Set background to tg theme color
-    if (tg && tg.themeParams?.bg_color) {
-      document.body.style.background = tg.themeParams.bg_color;
-    }
-
+    setTelegramReady(true);
   }, []);
 
+  if (!telegramReady) return null;
   return <>{children}</>;
 }

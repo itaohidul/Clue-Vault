@@ -185,7 +185,14 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     try {
       const currentState = useUserStore.getState();
       const payload = mapStateToSupabasePayload(currentState);
-      await api.post(`/api/user/${userId}`, payload, { timeout: 8000 });
+      
+      const config: any = { timeout: 8000, headers: {} };
+      const tg = window.Telegram?.WebApp;
+      if (tg && tg.initData) {
+        config.headers['x-telegram-init-data'] = tg.initData;
+      }
+
+      await api.post(`/api/user/${userId}`, payload, config);
       console.log("Supabase secure payload synchronized successfully");
       setError(null);
       lastPendingStateRef.current = null;
@@ -276,14 +283,13 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       }, 25000); // 25s mobile-friendly resilient fallback handshake
 
       try {
-        // Telegram user parameters
+        const tg = window.Telegram?.WebApp;
         let queryParams = "";
-        if (
-          window.Telegram &&
-          window.Telegram.WebApp &&
-          window.Telegram.WebApp.initDataUnsafe
-        ) {
-          const utg = window.Telegram.WebApp.initDataUnsafe;
+        let initData = "";
+        
+        if (tg && tg.initData) {
+          initData = tg.initData;
+          const utg = tg.initDataUnsafe || {};
           const username = utg.user?.username || utg.user?.first_name || "";
           const startParam = utg.start_param || "";
           queryParams = `?username=${encodeURIComponent(username)}&referredBy=${encodeURIComponent(startParam)}`;
@@ -291,7 +297,16 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         }
 
         console.log(`[Startup Handshake] Executing consolidated startup payload: /api/startup/${userId}${queryParams ? ' with params' : ''}`);
-        const response = await api.get(`/api/startup/${userId}${queryParams}`, { signal: controller.signal });
+        // Send initData in a header for verification
+        const config: any = { 
+          signal: controller.signal,
+          headers: {}
+        };
+        if (initData) {
+          config.headers['x-telegram-init-data'] = initData;
+        }
+
+        const response = await api.get(`/api/startup/${userId}${queryParams}`, config);
         const { dbConnected: dbReady, user: cloudData, tasks: tasksData, completedTaskIds: completionsData, transactions: transactionsData } = response.data;
         
         clearTimeout(handshakeTimeout);
@@ -387,9 +402,16 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     setIsSyncing(true);
 
     try {
-      await api.post(`/api/user/${userId}`, payload, { 
-        timeout: isForced ? 5000 : 10000 
-      });
+      const config: any = { 
+        timeout: isForced ? 5000 : 10000,
+        headers: {}
+      };
+      const tg = window.Telegram?.WebApp;
+      if (tg && tg.initData) {
+        config.headers['x-telegram-init-data'] = tg.initData;
+      }
+
+      await api.post(`/api/user/${userId}`, payload, config);
       
       // If we just synced the state that was pending, clear the pending flag
       if (lastPendingStateRef.current === stateToSync) {

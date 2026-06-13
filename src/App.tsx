@@ -194,13 +194,30 @@ function AppContent() {
   const { userId, error: syncError, setError: setSyncError, syncLocalToCloud, isCloudLoaded } = useSupabaseSync();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [initSyncCompleted, setInitSyncCompleted] = useState(false);
   const [showBypass, setShowBypass] = useState(false);
   const [dismissedSyncError, setDismissedSyncError] = useState(false);
 
   const [firstRouteLogged, setFirstRouteLogged] = useState(false);
 
-  // Clearance Level Escalation State & Listener
+  // Use a local state for the loading screen that resolves when isCloudLoaded is true
+  const [initSyncCompleted, setInitSyncCompleted] = useState(false);
+
+  useEffect(() => {
+    if (isCloudLoaded) {
+      setInitSyncCompleted(true);
+    }
+  }, [isCloudLoaded]);
+
+  // Show bypass button after 5 seconds of loading
+  useEffect(() => {
+    if (!initSyncCompleted) {
+      const bypassTimer = setTimeout(() => {
+        setShowBypass(true);
+      }, 5000);
+      return () => clearTimeout(bypassTimer);
+    }
+  }, [initSyncCompleted]);
+
   const [levelUpData, setLevelUpData] = useState<{ oldLevel: number; newLevel: number } | null>(null);
   const prevLevelRef = useRef<number | null>(null);
 
@@ -224,46 +241,6 @@ function AppContent() {
     }
   }, [user?.level, initSyncCompleted, triggerHaptic]);
 
-  // Sync state with Telegram WebApp Backend on load
-  useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-
-    // Show bypass button after 2.5 seconds of loading
-    const bypassTimer = setTimeout(() => {
-      setShowBypass(true);
-    }, 2500);
-
-    if (tg && tg.initData) {
-      console.log("[DIAG] Telegram context detected, initiating handshake...");
-      // Extended failsafe for mobile data: reduced to 500ms so shell renders immediately while sync proceeds in background.
-      const failSafeTimer = setTimeout(() => {
-        console.log("[DIAG] Startup failsafe elapsed (500ms). Rendering shell immediately in background sync mode.");
-        setInitSyncCompleted(true);
-      }, 500);
-
-      syncWithBackend(tg.initData).then(() => {
-        clearTimeout(failSafeTimer);
-        clearTimeout(bypassTimer);
-        console.log("[DIAG] WebApp handshake success.");
-        setInitSyncCompleted(true);
-      }).catch((err) => {
-        clearTimeout(failSafeTimer);
-        console.error("[DIAG] WebApp handshake failed, continuing to shell.", err);
-        setInitSyncCompleted(true);
-      });
-    } else {
-      console.log("[DIAG] No Telegram initData, scheduling instant browser mount.");
-      const timer = setTimeout(() => {
-        setInitSyncCompleted(true);
-      }, 200);
-      return () => {
-        clearTimeout(timer);
-        clearTimeout(bypassTimer);
-      };
-    }
-    return () => clearTimeout(bypassTimer);
-  }, [syncWithBackend]);
-
   // Track and log first route rendered
   useEffect(() => {
     if (!firstRouteLogged && initSyncCompleted) {
@@ -275,7 +252,7 @@ function AppContent() {
   // Inside Telegram, automatically route from landing "/" to "/app/home"
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (tg && location.pathname === "/") {
+    if (tg && tg.initData && location.pathname === "/") {
       navigate("/app/home", { replace: true });
     }
   }, [location.pathname, navigate]);

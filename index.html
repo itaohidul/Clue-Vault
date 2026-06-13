@@ -12,15 +12,10 @@
       (function() {
         try {
           var tg = window.Telegram && window.Telegram.WebApp;
-          if (!tg) {
-            window.Telegram = window.Telegram || {};
-            window.Telegram.WebApp = window.Telegram.WebApp || {};
-            tg = window.Telegram.WebApp;
-          }
           
           // Helper to check version safely
           var isAtLeast = function(ver) {
-            if (!tg.version) return false;
+            if (!tg || !tg.version) return false;
             var v1 = tg.version.split('.');
             var v2 = ver.split('.');
             for (var i = 0; i < Math.max(v1.length, v2.length); i++) {
@@ -33,21 +28,23 @@
           };
 
         var needsPolyfill = false;
-        try {
-          // Check version safely without triggering CloudStorage getter
-          var currentVer = tg.version || '6.0';
-          var vParts = currentVer.split('.');
-          var major = parseInt(vParts[0], 10);
-          var minor = parseInt(vParts[1] || '0', 10);
-          
-          if (major < 6 || (major === 6 && minor < 9)) {
+        if (tg) {
+          try {
+            // Check version safely without triggering CloudStorage getter
+            var currentVer = tg.version || '6.0';
+            var vParts = currentVer.split('.');
+            var major = parseInt(vParts[0], 10);
+            var minor = parseInt(vParts[1] || '0', 10);
+            
+            if (major < 6 || (major === 6 && minor < 9)) {
+              needsPolyfill = true;
+            }
+          } catch(e) {
             needsPolyfill = true;
           }
-        } catch(e) {
-          needsPolyfill = true;
         }
 
-        if (needsPolyfill) {
+        if (needsPolyfill && tg) {
           var mockCloudStorage = {
             setItem: function(key, value, callback) {
               localStorage.setItem('tg_cloud_' + key, value);

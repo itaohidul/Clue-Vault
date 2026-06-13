@@ -2,7 +2,8 @@ import React, { createContext, useContext, ReactNode } from "react";
 import { TwaAnalyticsProvider as RealTwaAnalyticsProvider, useTWAEvent } from "@tonsolutions/telemetree-react";
 
 export function TwaAnalyticsProvider(props: any) {
-  const isTgWebApp = typeof window !== 'undefined' && !!(window.Telegram?.WebApp?.initData);
+  const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
+  const isTgWebApp = !!(tg?.initData);
 
   const mockTgData = {
     user: {
@@ -13,13 +14,18 @@ export function TwaAnalyticsProvider(props: any) {
       language_code: "en"
     },
     platform: "browser",
-    chat_type: "N/A"
+    chat_type: "sender"
   };
+
+  // Only use mock data if WE ARE NOT in a Telegram Web App session
+  // If we are in Telegram but initData is missing (unlikely unless misconfigured), 
+  // Telemetree will normally fail anyway, which is better than polluting with mock data.
+  const launchData = isTgWebApp ? undefined : mockTgData;
 
   return (
     <RealTwaAnalyticsProvider 
       {...props} 
-      telegramWebAppData={isTgWebApp ? undefined : mockTgData}
+      telegramWebAppData={launchData}
     >
       <RealTelemetreeWrapper>
         {props.children}

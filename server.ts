@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import cors from "cors";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { supabase, isSupabaseConfigured } from "./src/lib/supabase";
 
@@ -89,26 +90,60 @@ app.post("/api/analytics/track", (req, res) => {
   res.json({ success: true, logged: true });
 });
 
+// Helper to validate Telegram initData
+function validateTelegramInitData(initData: string): { isValid: boolean; user?: any; error?: string } {
+  if (!initData) return { isValid: false, error: "Empty initData" };
+  
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  if (!BOT_TOKEN) {
+    console.warn("[TELEGRAM-AUTH] TELEGRAM_BOT_TOKEN not configured. Validation bypassed for development.");
+    try {
+      const params = new URLSearchParams(initData);
+      const userStr = params.get("user");
+      return { isValid: true, user: userStr ? JSON.parse(userStr) : null };
+    } catch (e) {
+      return { isValid: false, error: "Malformed data" };
+    }
+  }
+
+  try {
+    const params = new URLSearchParams(initData);
+    const hash = params.get("hash");
+    params.delete("hash");
+
+    const dataCheckString = Array.from(params.entries())
+      .map(([key, value]) => `${key}=${value}`)
+      .sort()
+      .join("\n");
+
+    const secretKey = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+    const hmac = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+
+    if (hmac !== hash) {
+      return { isValid: false, error: "Signature mismatch" };
+    }
+
+    const userStr = params.get("user");
+    return { isValid: true, user: userStr ? JSON.parse(userStr) : null };
+  } catch (e) {
+    return { isValid: false, error: "Validation process failed" };
+  }
+}
+
 // Supabase Connection Status Helper
 app.post("/api/auth/telegram", async (req, res) => {
   const { initData } = req.body;
   
-  // Minimal satisfying response for the front-end userStore sync protocol
-  // In a real app, this would validate the initData via bot token hash
-  try {
-    // If we have Telegram data, extract user ID for basic handshake
-    const params = new URLSearchParams(initData);
-    const userStr = params.get("user");
-    const user = userStr ? JSON.parse(userStr) : null;
-
-    res.json({
-      success: true,
-      user: user || { id: "anon", first_name: "Guest" },
-      message: "Handshake established"
-    });
-  } catch (e) {
-    res.status(400).json({ error: "Invalid handshake signal" });
+  const result = validateTelegramInitData(initData);
+  if (!result.isValid) {
+    return res.status(401).json({ success: false, error: result.error });
   }
+
+  res.json({
+    success: true,
+    user: result.user || { id: "anon", first_name: "Guest" },
+    message: "Handshake established"
+  });
 });
 
 app.get("/api/db-verify", async (req, res) => {
@@ -175,6 +210,19 @@ app.get("/api/db-status", async (req, res) => {
 // Startup Handshake Endpoint (Consolidates 5 API requests into 1 for mobile connectivity)
 app.get("/api/startup/:userId", async (req, res) => {
   const { userId } = req.params;
+  const initData = req.headers["x-telegram-init-data"] as string;
+
+  // If initData is present, validate it and ensure userId matches
+  if (initData) {
+    const validation = validateTelegramInitData(initData);
+    if (!validation.isValid) {
+      return res.status(401).json({ error: "Invalid Telegram session" });
+    }
+    if (validation.user && String(validation.user.id) !== String(userId)) {
+      return res.status(403).json({ error: "User identity mismatch" });
+    }
+  }
+
   const usernameQuery = (req.query.username as string) || "Agent_" + userId.slice(-4);
   let referredByCode = req.query.referredBy as string;
   if (referredByCode && referredByCode.startsWith("ref_ref_")) {
@@ -946,6 +994,18 @@ app.get("/api/user/:userId", async (req, res) => {
 app.post("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;
   const payload = req.body;
+  const initData = req.headers["x-telegram-init-data"] as string;
+
+  // Securely verify writer identity if initData is available
+  if (initData) {
+    const validation = validateTelegramInitData(initData);
+    if (!validation.isValid) {
+      return res.status(401).json({ error: "Unauthorized state update" });
+    }
+    if (validation.user && String(validation.user.id) !== String(userId)) {
+      return res.status(403).json({ error: "User identity mismatch in write operation" });
+    }
+  }
 
   try {
     const { data: dbUser } = await supabase

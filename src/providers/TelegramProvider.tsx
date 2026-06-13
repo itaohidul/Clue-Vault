@@ -1,8 +1,6 @@
-import { useEffect, useState, ReactNode } from "react";
+import { useEffect, ReactNode } from "react";
 
 export default function TelegramProvider({ children }: { children: ReactNode }) {
-  const [telegramReady, setTelegramReady] = useState(false);
-
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     
@@ -31,15 +29,7 @@ export default function TelegramProvider({ children }: { children: ReactNode }) 
     } else {
        console.log("[TELEGRAM-BOOT] No SDK found, assuming browser mode.");
     }
-
-    // Small timeout to ensure SDK internal state processes ready/expand
-    const timer = setTimeout(() => {
-      setTelegramReady(true);
-    }, 100);
-
-    return () => clearTimeout(timer);
   }, []);
 
-  if (!telegramReady) return null;
   return <>{children}</>;
 }

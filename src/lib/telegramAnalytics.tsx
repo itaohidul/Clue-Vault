@@ -2,6 +2,7 @@ import React, { createContext, useContext, ReactNode } from "react";
 import { TwaAnalyticsProvider as RealTwaAnalyticsProvider, useTWAEvent } from "@tonsolutions/telemetree-react";
 
 export function TwaAnalyticsProvider(props: any) {
+  const { appName, ...rest } = props; // Strip appName to avoid prop spreading warnings/errors
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : null;
   const isTgWebApp = !!(tg?.initData);
 
@@ -17,10 +18,15 @@ export function TwaAnalyticsProvider(props: any) {
     chat_type: "sender"
   };
 
-  // Only use mock data in development if WE ARE NOT in a Telegram Web App session
-  // In production, we must only use real Telegram Launch Data.
+  // Fix 1: Pass real Telegram data explicitly if we're in TG to ensure SDK has identity immediately
   const isDev = import.meta.env.DEV;
-  const launchData = isTgWebApp ? undefined : (isDev ? mockTgData : undefined);
+  
+  // Real Telegram data payload
+  const realTgData = isTgWebApp && tg 
+    ? { ...tg.initDataUnsafe, platform: tg.platform } 
+    : undefined;
+    
+  const launchData = realTgData ?? (isDev ? mockTgData : undefined);
 
   if (typeof window !== 'undefined') {
     console.log("[TELEMETREE-READY] Init Params:", {
@@ -35,7 +41,7 @@ export function TwaAnalyticsProvider(props: any) {
 
   return (
     <RealTwaAnalyticsProvider 
-      {...props} 
+      {...rest} 
       telegramWebAppData={launchData}
     >
       <RealTelemetreeWrapper>

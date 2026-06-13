@@ -706,17 +706,25 @@ function AppInner() {
   // Diagnostic Startup Logging
   useEffect(() => {
     console.log("[DIAG] App mounted and active");
-    console.log("[DIAG] Router initialized (HashRouter active)");
     
     const tg = window.Telegram?.WebApp;
-    if (tg) {
-      console.log("[DIAG] Telegram SDK detected:", { version: tg.version, platform: tg.platform });
-    } else {
-      console.log("[DIAG] Telegram SDK not found in window context (Guest Mode)");
+    console.log("[DIAG] Environment Status:", {
+      isDev: import.meta.env.DEV,
+      telemetreeKey: !!import.meta.env.VITE_TELEMETREE_API_KEY,
+      telemetreeProject: !!import.meta.env.VITE_TELEMETREE_PROJECT_ID,
+      supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+      telegramSDK: !!tg,
+      webappInitData: !!tg?.initData,
+      initDataLen: tg?.initData?.length || 0,
+      platform: tg?.platform,
+      version: tg?.version
+    });
+    
+    if (tg && !tg.initData && !import.meta.env.DEV) {
+       console.warn("[DIAG] CRITICAL: Running in Telegram but initData is empty. Analytics and Auth will be degraded.");
     }
 
     const hasSupabase = !!(import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_ANON_KEY);
-    console.log("[DIAG] Supabase configuration status:", { configured: hasSupabase });
     console.log("[DIAG] Auth system initialized:", store.user ? "YES" : "NO");
   }, []);
 
@@ -736,8 +744,8 @@ function AppInner() {
   return (
     <TelegramProvider>
       <TwaAnalyticsProvider
-        projectId={import.meta.env.VITE_TELEMETREE_PROJECT_ID || "cluevault-project"}
-        apiKey={import.meta.env.VITE_TELEMETREE_API_KEY || "eyJhcHBfbmFtZSI6ImNsdWV2YXVsdCIsImFwcF91cmwiOiJodHRwczovL3QubWUvY2x1ZXZhdWx0Ym90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vY2x1ZS12YXVsdC52ZXJjZWwuYXBwLyJ9!6Y2ufwQNDoAHOR3+U+W/dtYypxTxe5zw8UxBWh11OXc="}
+        projectId={import.meta.env.VITE_TELEMETREE_PROJECT_ID}
+        apiKey={import.meta.env.VITE_TELEMETREE_API_KEY}
         appName={import.meta.env.VITE_TELEMETREE_APP_NAME || "ClueVault"}
       >
         <SupabaseSyncProvider>

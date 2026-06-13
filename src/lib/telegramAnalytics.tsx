@@ -17,10 +17,21 @@ export function TwaAnalyticsProvider(props: any) {
     chat_type: "sender"
   };
 
-  // Only use mock data if WE ARE NOT in a Telegram Web App session
-  // If we are in Telegram but initData is missing (unlikely unless misconfigured), 
-  // Telemetree will normally fail anyway, which is better than polluting with mock data.
-  const launchData = isTgWebApp ? undefined : mockTgData;
+  // Only use mock data in development if WE ARE NOT in a Telegram Web App session
+  // In production, we must only use real Telegram Launch Data.
+  const isDev = import.meta.env.DEV;
+  const launchData = isTgWebApp ? undefined : (isDev ? mockTgData : undefined);
+
+  if (typeof window !== 'undefined') {
+    console.log("[TELEMETREE-READY] Init Params:", {
+      isTgWebApp,
+      hasLaunchData: !!launchData,
+      isDev,
+      projectId: props.projectId,
+      apiKey: props.apiKey?.substring(0, 8) + "...",
+      initDataLen: tg?.initData?.length || 0
+    });
+  }
 
   return (
     <RealTwaAnalyticsProvider 
@@ -40,6 +51,20 @@ const MockAnalyticsContext = createContext<{ track: (evt: string, props?: any) =
 
 function RealTelemetreeWrapper({ children }: { children: ReactNode }) {
   const builder = useTWAEvent();
+  const hasTrackedLoad = React.useRef(false);
+
+  React.useEffect(() => {
+    if (builder && typeof builder.track === 'function' && !hasTrackedLoad.current) {
+      console.log("[TELEMETREE-READY] Builder active. Sending app_loaded event.");
+      try {
+        builder.track("app_loaded", { timestamp: Date.now() });
+        hasTrackedLoad.current = true;
+      } catch (e) {
+        console.warn("[TELEMETREE-READY] Failed to send initial app_loaded event:", e);
+      }
+    }
+  }, [builder]);
+
   return (
     <MockAnalyticsContext.Provider value={{
       track: (event, properties) => {

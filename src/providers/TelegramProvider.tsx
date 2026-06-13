@@ -32,7 +32,12 @@ export default function TelegramProvider({ children }: { children: ReactNode }) 
        console.log("[TELEGRAM-BOOT] No SDK found, assuming browser mode.");
     }
 
-    setTelegramReady(true);
+    // Small timeout to ensure SDK internal state processes ready/expand
+    const timer = setTimeout(() => {
+      setTelegramReady(true);
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   if (!telegramReady) return null;

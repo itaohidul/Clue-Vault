@@ -492,8 +492,31 @@ export default function WalletDexScreen() {
     triggerHaptic("heavy");
     setIsWheelSpinning(true);
     
-    // Choose random slice
-    const sliceIndex = Math.floor(Math.random() * WHEEL_SLICES.length);
+    // Determine the probability of hitting a premium slice (BTC, ETH, USDT) vs standard
+    let premiumChance = 50; // Default 3 premium / 6 total = 50%
+    if (totalWonUSDT >= 9.8) {
+      premiumChance = 0.1; // Virtually impossible
+    } else if (totalWonUSDT >= 9) {
+      premiumChance = 1;
+    } else if (totalWonUSDT >= 8) {
+      premiumChance = 5;
+    } else if (totalWonUSDT >= 5) {
+      premiumChance = 20;
+    }
+
+    const rand = Math.random() * 100;
+    let sliceIndex;
+    
+    if (rand < premiumChance) {
+      // Pick one of the premium slots: 0 (BTC), 1 (ETH), 3 (USDT)
+      const premiumIndices = [0, 1, 3];
+      sliceIndex = premiumIndices[Math.floor(Math.random() * premiumIndices.length)];
+    } else {
+      // Pick one of the standard slots: 2 (CLUE), 4 (ZP), 5 (KEY)
+      const standardIndices = [2, 4, 5];
+      sliceIndex = standardIndices[Math.floor(Math.random() * standardIndices.length)];
+    }
+
     const selectedSlice = WHEEL_SLICES[sliceIndex];
     
     // Slices are 60 degrees. Let's aim the needle at 360 minus the slice angle sector.
@@ -535,10 +558,23 @@ export default function WalletDexScreen() {
       }
 
       // Calculate dynamic reward multiplier based on proximity to the $10.00 goal
-      // As the total value accumulated approaches $10, rewards decrease to a minimum of 10% efficiency.
-      const rewardMultiplier = Math.max(0.1, 1 - (totalWonUSDT / 10.00));
+      // As the total value accumulated approaches $10, rewards decrease exponentially.
+      // This creates a "Zeno's paradox" effect where they never actually reach $10.00.
+      const rewardMultiplier = Math.max(0.001, Math.pow(1 - (totalWonUSDT / 10.00), 2.5));
       
-      const wonAmount = (minAmt + Math.random() * (maxAmt - minAmt)) * rewardMultiplier;
+      let wonAmount = (minAmt + Math.random() * (maxAmt - minAmt)) * rewardMultiplier;
+      
+      // Safety check: Ensure this reward doesn't push them over $10.00
+      if (item === "BTC" || item === "ETH" || item === "USDT") {
+        const itemVal = item === "BTC" ? 65000 : (item === "ETH" ? 3500 : 1);
+        const projectedTotal = totalWonUSDT + (wonAmount * itemVal);
+        if (projectedTotal >= 10.00) {
+          // Force reward to be only enough to reach 99.9% of the way to the remaining gap
+          const remainingGap = 10.00 - totalWonUSDT;
+          wonAmount = (remainingGap * 0.9) / itemVal;
+        }
+      }
+      
       let finalReward = 0;
       
       if (item === "ZP") {

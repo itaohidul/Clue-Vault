@@ -534,7 +534,11 @@ export default function WalletDexScreen() {
         maxAmt = 0.010;     // halved from 0.02
       }
 
-      const wonAmount = minAmt + Math.random() * (maxAmt - minAmt);
+      // Calculate dynamic reward multiplier based on proximity to the $10.00 goal
+      // As the total value accumulated approaches $10, rewards decrease to a minimum of 10% efficiency.
+      const rewardMultiplier = Math.max(0.1, 1 - (totalWonUSDT / 10.00));
+      
+      const wonAmount = (minAmt + Math.random() * (maxAmt - minAmt)) * rewardMultiplier;
       let finalReward = 0;
       
       if (item === "ZP") {

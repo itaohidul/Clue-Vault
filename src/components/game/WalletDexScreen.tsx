@@ -28,6 +28,8 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { triggerAd } from "../../lib/adEngine";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 
 // Custom type for swap pairs
 interface SwapOption {
@@ -92,6 +94,8 @@ function TiltCard({ children, className, glowColor = "rgba(245,158,11,0.15)" }: 
 export default function WalletDexScreen() {
   const { user, resources, updateResources, triggerHaptic } = useGame();
   const { track } = useTelemetree();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
   
   const getTodayStr = () => {
     const tz = user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -135,6 +139,22 @@ export default function WalletDexScreen() {
             setIsPremiumWithdrawProcessing(false);
             setPremiumWithdrawSuccess(true);
             
+            // Log transaction instantly in ledger logs
+            if (premiumWithdrawAsset) {
+              try {
+                logTransaction(-premiumWithdrawAmount, "premium_withdraw", premiumWithdrawAsset);
+                addTransaction({ 
+                  type: "premium_withdraw", 
+                  amount: -premiumWithdrawAmount, 
+                  currency: premiumWithdrawAsset.toUpperCase() as any 
+                });
+                // Trigger ad break (After a successful transaction)
+                triggerAd('rewarded');
+              } catch (txErr) {
+                console.warn("Transaction logging failed on withdraw:", txErr);
+              }
+            }
+
             setSpinWinnings(old => {
               if (!premiumWithdrawAsset) return old;
               const next = { ...old, [premiumWithdrawAsset]: 0 };
@@ -274,7 +294,7 @@ export default function WalletDexScreen() {
   const ASSETS: Record<string, { name: string; symbol: string; icon: any; color: string; glow: string; rate: number; key: string }> = {
     CLUE: { name: "Clue Token", symbol: "CLUE", icon: Coins, color: "text-amber-500", glow: "shadow-[0_0_15px_rgba(245,158,11,0.25)]", rate: 0.45, key: "clue" },
     ZP: { name: "Zenith Points", symbol: "ZP", icon: TrendingUp, color: "text-emerald-400", glow: "shadow-[0_0_15px_rgba(52,211,153,0.25)]", rate: 0.000025, key: "coins" },
-    ALLOY: { name: "Alloy Elements", symbol: "ALLOY", icon: Layers, color: "text-blue-400", glow: "shadow-[0_0_15px_rgba(96,165,250,0.25)]", rate: 0.15, key: "baseMaterials" },
+    ELEMENT: { name: "System Elements", symbol: "ELEMENT", icon: Layers, color: "text-blue-400", glow: "shadow-[0_0_15px_rgba(96,165,250,0.25)]", rate: 0.15, key: "baseMaterials" },
     KEY: { name: "Crypt Keys", symbol: "KEY", icon: Key, color: "text-violet-400", glow: "shadow-[0_0_15px_rgba(167,139,250,0.25)]", rate: 1.50, key: "keys" },
     USDT: { name: "Tether USDT", symbol: "USDT", icon: DollarSign, color: "text-teal-400", glow: "shadow-[0_0_15px_rgba(45,212,191,0.25)]", rate: 1.00, key: "usdt" },
     BTC: { name: "Bitcoin Ledger", symbol: "BTC", icon: Coins, color: "text-orange-500", glow: "shadow-[0_0_15px_rgba(249,115,22,0.25)]", rate: 65000.00, key: "btc" },
@@ -401,6 +421,16 @@ export default function WalletDexScreen() {
       }
 
       setIsSwapping(false);
+      
+      // Log the swap in transaction history (log both sides of the trade)
+      logTransaction(-amtNum, "swap", fromAsset);
+      logTransaction(finalOutput, "swap", toAsset);
+      addTransaction({ type: "swap", amount: -amtNum, currency: fromAsset as any });
+      addTransaction({ type: "swap", amount: finalOutput, currency: toAsset as any });
+
+      // Trigger ad break at natural break (After a successful transaction)
+      triggerAd('rewarded');
+      
       track("token_swap", {
         fromAsset,
         toAsset,
@@ -415,6 +445,9 @@ export default function WalletDexScreen() {
       setPopupType("swap_success");
       setFromAmount("");
       setToAmount("0.00");
+
+      // Trigger ad at the natural break (successful transaction)
+      triggerAd('rewarded');
     }, 1500);
   };
 
@@ -724,6 +757,20 @@ export default function WalletDexScreen() {
       coins: (spinGameWinnings.ZP || 0),
       keys: (spinGameWinnings.KEY || 0)
     });
+    
+    // Log spin rewards transaction for all currencies hitting main balance
+    if (spinGameWinnings.ZP > 0) {
+      logTransaction(spinGameWinnings.ZP, "spin_reward", "ZP");
+      addTransaction({ type: "spin_reward", amount: spinGameWinnings.ZP, currency: "ZP" });
+    }
+    if (spinGameWinnings.CLUE > 0) {
+      logTransaction(spinGameWinnings.CLUE, "spin_reward", "CLUE");
+      addTransaction({ type: "spin_reward", amount: spinGameWinnings.CLUE, currency: "CLUE" });
+    }
+    if (spinGameWinnings.KEY > 0) {
+      logTransaction(spinGameWinnings.KEY, "spin_reward", "KEY");
+      addTransaction({ type: "spin_reward", amount: spinGameWinnings.KEY, currency: "KEY" });
+    }
 
     // Reset game currency buffer
     setSpinGameWinnings({
@@ -853,7 +900,7 @@ export default function WalletDexScreen() {
                     USDT: "M 0 8 L 20 8 L 40 8 L 60 8 L 80 8 L 100 8",
                     ZP: "M 0 16 Q 20 4 40 18 T 70 -6 T 90 12 T 100 -18",
                     KEY: "M 0 8 Q 15 18 30 5 T 60 12 T 85 -8 T 100 -2",
-                    ALLOY: "M 0 14 Q 20 8 40 12 T 70 2 T 90 9 T 100 0",
+                    ELEMENT: "M 0 14 Q 20 8 40 12 T 70 2 T 90 9 T 100 0",
                     TICKET: "M 0 12 Q 15 3 35 15 T 65 -5 T 85 10 T 100 -8"
                   };
                   return (

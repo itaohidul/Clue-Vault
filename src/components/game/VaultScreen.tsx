@@ -6,6 +6,9 @@ import { useUserStore, getTzDateString } from "../../store/userStore";
 import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X, HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
+import { triggerAd } from "../../lib/adEngine";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 
 const VAULTS = VAULT_CONFIG.map(v => ({
   ...v,
@@ -80,6 +83,8 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
     if (newUserSeq.length === sequence.length) {
       setStatus("success");
       triggerHaptic("success");
+      // Trigger ad at the natural break (opening a reward chest)
+      triggerAd('rewarded');
       setTimeout(() => onComplete(), 1200);
     }
   };
@@ -151,6 +156,8 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
 export default function VaultScreen() {
   const navigate = useNavigate();
   const { user, resources, updateResources, crew, triggerHaptic, updateRiddleProgression } = useGame();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
   const [opening, setOpening] = useState<number | null>(null);
   const [showReward, setShowReward] = useState<any>(false);
   const [showKeyShortage, setShowKeyShortage] = useState<{ required: number; current: number } | null>(null);
@@ -252,6 +259,15 @@ export default function VaultScreen() {
       };
     });
 
+    // Log the vault reward in transaction history
+    logTransaction(rewardCoins, "vault_reward", "ZP");
+    logTransaction(rewardMats, "vault_reward", "Element");
+    addTransaction({ type: "vault_reward", amount: rewardCoins, currency: "ZP" });
+    addTransaction({ type: "vault_reward", amount: rewardMats, currency: "ELEMENT" });
+
+    // Trigger ad at the natural break (opening a reward chest)
+    triggerAd('rewarded');
+
     const riddleData = RIDDLES.find(r => r.id === riddleProg.riddleId);
     setShowReward({ 
       coins: rewardCoins, 
@@ -277,6 +293,8 @@ export default function VaultScreen() {
     if (resources.keys >= vault.cost) {
       setOpening(vault.id);
       updateResources({ keys: -vault.cost });
+      logTransaction(-vault.cost, "vault_open", "Key");
+      addTransaction({ type: "vault_open", amount: -vault.cost, currency: "KEY" });
       triggerHaptic("medium");
       
       // All vaults now have a decryption phase as per new requirement
@@ -306,6 +324,8 @@ export default function VaultScreen() {
             onCancel={() => {
               // Cancel closes terminal but refunds the key
               updateResources({ keys: activeDecryptionVault.cost });
+              logTransaction(activeDecryptionVault.cost, "vault_refund", "Key");
+              addTransaction({ type: "vault_refund", amount: activeDecryptionVault.cost, currency: "KEY" });
               setActiveDecryptionVault(null);
               triggerHaptic("error");
             }}

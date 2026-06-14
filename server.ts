@@ -24,7 +24,7 @@ const localCache = {
     { id: 4, title: "Solve Cyber Crypt Riddle Challenge", reward: 10000, type: "riddle", link: "" }
   ],
   user_tasks: [] as Array<{ telegram_id: string; task_id: number; completed: boolean }>,
-  transactions: [] as Array<{ id: number; telegram_id: string; amount: number; type: string; created_at: string }>
+  transactions: [] as Array<{ id: number; telegram_id: string; amount: number; type: string; currency: string; created_at: string }>
 };
 
 // Help seed simulated users for leaderboard fallback
@@ -204,6 +204,39 @@ app.get("/api/db-status", async (req, res) => {
       errorDetail: err.message || err.details || String(err),
       hint: err.hint || "Make sure the 'users' table is created and RLS is disabled or allowed for public anon requests."
     });
+  }
+});
+
+// Log Generic Transaction
+app.post("/api/transactions/log", async (req, res) => {
+  const { userId, amount, type, currency = "ZP" } = req.body;
+  if (!userId || amount === undefined || !type) {
+    return res.status(400).json({ error: "Missing parameters" });
+  }
+
+  try {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from("transactions").insert([{
+        telegram_id: userId,
+        amount: Number(amount),
+        type: type,
+        currency: currency
+      }]);
+      if (error) throw error;
+    } else {
+      localCache.transactions.push({
+        id: Date.now(),
+        telegram_id: userId,
+        amount: Number(amount),
+        type: type,
+        currency: currency,
+        created_at: new Date().toISOString()
+      });
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[Log Transaction API] Error:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -488,6 +521,7 @@ app.get("/api/startup/:userId", async (req, res) => {
         telegram_id: userId,
         amount: initialBalance,
         type: "welcome_package",
+        currency: "ZP",
         created_at: new Date().toISOString()
       });
 
@@ -520,6 +554,7 @@ app.get("/api/startup/:userId", async (req, res) => {
               telegram_id: value.telegram_id,
               amount: 5000,
               type: "referral_bonus",
+              currency: "ZP",
               created_at: new Date().toISOString()
             });
             break;
@@ -790,6 +825,7 @@ async function handleUserFallback(req: any, res: any, userId: string, usernameQu
       telegram_id: userId,
       amount: initialBalance,
       type: "welcome_package",
+      currency: "ZP",
       created_at: new Date().toISOString()
     });
 
@@ -822,6 +858,7 @@ async function handleUserFallback(req: any, res: any, userId: string, usernameQu
             telegram_id: value.telegram_id,
             amount: 5000,
             type: "referral_bonus",
+            currency: "ZP",
             created_at: new Date().toISOString()
           });
           break;
@@ -1231,6 +1268,7 @@ app.post("/api/tasks/claim", async (req, res) => {
       telegram_id: userId,
       amount: task.reward,
       type: "task_completion",
+      currency: "ZP",
       created_at: new Date().toISOString()
     });
 

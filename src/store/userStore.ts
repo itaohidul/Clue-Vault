@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import { RIDDLES } from '../data/gameConfig';
+import { useLedgerStore } from './ledgerStore';
 
 export interface ReferralAgent {
   id: string;
@@ -253,16 +254,34 @@ export const useUserStore = create<GameState>((set, get) => ({
     // Earn and convert optimization structure 2:1 - plus some bonus clue tokens as requested (clue+)
     const clueReward = (reward.clue || 0) + randomClueBonus + 15;
 
+    const coinGain = Math.round(((reward.coins || 0) + 300) / 2);
+    const keyGain = Math.round((reward.keys || 0) / 2);
+    const fragmentGain = Math.round((reward.fragments || 0) / 2);
+    const alloyGain = Math.round((reward.baseMaterials || 0) / 2);
+    const clueGain = Math.round(clueReward / 2);
+    const scoreGain = Math.round(((reward.activityScore || 0) + 50) / 2);
+
     // Globally halved by 50%: decrease rewards to half
     const nextResources = {
       ...resources,
-      coins: resources.coins + Math.round(((reward.coins || 0) + 300) / 2), 
-      keys: resources.keys + Math.round((reward.keys || 0) / 2),
-      fragments: resources.fragments + Math.round((reward.fragments || 0) / 2),
-      baseMaterials: resources.baseMaterials + Math.round((reward.baseMaterials || 0) / 2),
-      clue: resources.clue + Math.round(clueReward / 2),
-      activityScore: resources.activityScore + Math.round(((reward.activityScore || 0) + 50) / 2),
+      coins: resources.coins + coinGain, 
+      keys: resources.keys + keyGain,
+      fragments: resources.fragments + fragmentGain,
+      baseMaterials: resources.baseMaterials + alloyGain,
+      clue: resources.clue + clueGain,
+      activityScore: resources.activityScore + scoreGain,
     };
+
+    // Log transactions to ledger logs instantly
+    try {
+      const addTx = useLedgerStore.getState().addTransaction;
+      if (coinGain > 0) addTx({ type: "mission_reward", amount: coinGain, currency: "ZP" });
+      if (keyGain > 0) addTx({ type: "mission_reward", amount: keyGain, currency: "KEY" });
+      if (alloyGain > 0) addTx({ type: "mission_reward", amount: alloyGain, currency: "ELEMENT" });
+      if (clueGain > 0) addTx({ type: "mission_reward", amount: clueGain, currency: "CLUE" });
+    } catch (e) {
+      console.warn("Could not log mission reward to ledger store", e);
+    }
 
     // Calculate EXP award (also halved by half)
     const baseNewXp = 40 + (user.level * 5);

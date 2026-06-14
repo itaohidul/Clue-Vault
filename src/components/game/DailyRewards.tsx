@@ -1,12 +1,17 @@
 import { Calendar, CheckCircle2, ChevronRight, Gift, Lock, Timer } from "lucide-react";
 import { motion } from "motion/react";
 import { useUserStore } from "../../store/userStore";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 import { cn } from "../../lib/utils";
 
 export default function DailyRewards() {
   const { user, claimDailyReward, triggerHaptic } = useUserStore();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
   
   const lastClaim = user.lastDailyClaim || 0;
+
   const lastDate = new Date(lastClaim).toDateString();
   const nowDate = new Date().toDateString();
   const isClaimedToday = lastClaim !== 0 && lastDate === nowDate;
@@ -21,16 +26,16 @@ export default function DailyRewards() {
   const days = Array.from({ length: 7 }, (_, i) => {
     const dayNum = weekStart + i + 1;
     let reward = "ZP";
-    let amount = 250 + (dayNum * 50);
+    let amount = Math.round((250 + (dayNum * 50)) / 2);
     let icon = <Gift size={16} />;
 
     if (dayNum % 5 === 0) {
-      reward = "MATS";
-      amount = 20 * (dayNum / 5);
+      reward = "Element";
+      amount = Math.round((20 * (dayNum / 5)) / 2);
       icon = <Gift size={16} className="text-emerald-500" />;
     }
     if (dayNum % 7 === 0) {
-      reward = "KEY";
+      reward = "Key";
       amount = 1;
       icon = <Gift size={16} className="text-amber-500" />;
     }
@@ -53,6 +58,25 @@ export default function DailyRewards() {
   const handleClaim = () => {
     if (isClaimedToday) return;
     claimDailyReward();
+    
+    // Log rewards based on streak
+    const nextStreak = user.streak || 1; // Store will have incremented this if not today
+    const coinsReward = Math.round((250 + (nextStreak * 50)) / 2);
+    const elementsReward = Math.round((nextStreak % 5 === 0 ? 20 * (nextStreak / 5) : 0) / 2);
+    const keysReward = nextStreak % 7 === 0 ? 1 : 0;
+
+    if (coinsReward > 0) {
+      logTransaction(coinsReward, "daily_reward", "ZP");
+      addTransaction({ type: "daily_reward", amount: coinsReward, currency: "ZP" });
+    }
+    if (elementsReward > 0) {
+      logTransaction(elementsReward, "daily_reward", "Element");
+      addTransaction({ type: "daily_reward", amount: elementsReward, currency: "ELEMENT" });
+    }
+    if (keysReward > 0) {
+      logTransaction(keysReward, "daily_reward", "Key");
+      addTransaction({ type: "daily_reward", amount: keysReward, currency: "KEY" });
+    }
   };
 
   return (

@@ -23,6 +23,7 @@ import EventHubScreen from "./components/game/EventHubScreen";
 import SocialTasksScreen from "./components/game/SocialTasksScreen";
 import EarnScreen from "./components/game/EarnScreen";
 import WalletDexScreen from "./components/game/WalletDexScreen";
+import HistoryScreen from "./components/game/HistoryScreen";
 import TelegramProvider from "./providers/TelegramProvider";
 import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
@@ -610,6 +611,7 @@ function AppContent() {
                 <Route path="social-tasks" element={<SocialTasksScreen />} />
                 <Route path="earn" element={<EarnScreen />} />
                 <Route path="wallet" element={<WalletDexScreen />} />
+                <Route path="history" element={<HistoryScreen />} />
                 <Route path="vaults" element={<Navigate to="/app/vault" replace />} />
                 <Route path="*" element={<Navigate to="/app/home" />} />
               </Routes>

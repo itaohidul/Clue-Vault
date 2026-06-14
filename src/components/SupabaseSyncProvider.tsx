@@ -20,6 +20,7 @@ interface SupabaseTransaction {
   telegram_id: string;
   amount: number;
   type: string;
+  currency?: string;
   created_at: string;
 }
 
@@ -37,6 +38,7 @@ interface SupabaseSyncContextType {
   completedTaskIds: number[];
   transactions: SupabaseTransaction[];
   claimSupabaseTask: (taskId: number) => Promise<boolean>;
+  logTransaction: (amount: number, type: string, currency?: string) => Promise<boolean>;
   loadTransactions: () => Promise<void>;
   loadTasksAndCompletions: () => Promise<void>;
 }
@@ -269,6 +271,18 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     }
   };
 
+  const logTransaction = async (amount: number, type: string, currency: string = "ZP"): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+      await api.post("/api/transactions/log", { userId, amount, type, currency });
+      await loadTransactions();
+      return true;
+    } catch (err) {
+      console.error("Failed to log transaction:", err);
+      return false;
+    }
+  };
+
   // Pre-load state when user connects via a single consolidated Handshake HTTP request
   useEffect(() => {
     if (!userId) return;
@@ -459,6 +473,7 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
         completedTaskIds,
         transactions,
         claimSupabaseTask,
+        logTransaction,
         loadTransactions,
         loadTasksAndCompletions
       }}

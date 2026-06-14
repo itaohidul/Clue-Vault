@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../../App";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 import { 
   MessageSquare, 
   Bell, 
@@ -54,10 +55,12 @@ export default function SocialTasksScreen() {
     tasks: supabaseTasks, 
     completedTaskIds, 
     claimSupabaseTask, 
+    logTransaction,
     transactions,
     loadTransactions,
     loadTasksAndCompletions
   } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
 
   const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
 
@@ -259,10 +262,41 @@ export default function SocialTasksScreen() {
     if (completedTaskIds.includes(task.id) || !user.onboarded) return;
 
     triggerHaptic("medium");
-    setActiveQuestTask(task);
-    setCurrentQuestAdIndex(Math.floor(Math.random() * QUEST_ADS.length));
-    setQuestAdCountdown(5);
-    setShowQuestAd(true);
+    setClaimingTaskId(task.id);
+
+    try {
+      // Trigger prioritized ad flow: Rewarded -> Interstitial -> Popunder -> Direct
+      await triggerAd('rewarded');
+
+      // On successful ad engagement (or fallback success)
+      const success = await claimSupabaseTask(task.id);
+      if (success) {
+        const randomClue = Math.floor(Math.random() * 15) + 1;
+        updateResources({ clue: randomClue });
+        
+        // Log transaction to cloud and local instantly
+        const claimRewardZP = task.reward || 1000;
+        const claimRewardKeys = task.reward_keys || task.rewardKeys || 1;
+        
+        logTransaction(randomClue, "task_completion", "Clue");
+        logTransaction(claimRewardZP, "task_completion", "ZP");
+        
+        addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
+        addTransaction({ type: "task_completion", amount: claimRewardZP, currency: "ZP" });
+        addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
+        
+        // Trigger rewarded ad break at task completion
+        await triggerAd('rewarded');
+
+        loadTransactions();
+        setSuccessAnimation({ active: true, clueAwarded: randomClue });
+        triggerHaptic("success");
+      }
+    } catch (e) {
+      console.error("Ad error during task claim:", e);
+    } finally {
+      setClaimingTaskId(null);
+    }
   };
 
   // Handle Community Tasks
@@ -272,7 +306,7 @@ export default function SocialTasksScreen() {
     safeOpenLink(task.link);
     triggerHaptic("medium");
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const nextTasks = communityTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
       saveCommunityState(nextTasks);
       
@@ -280,6 +314,9 @@ export default function SocialTasksScreen() {
       const clueTokens = Math.floor(Math.random() * 20) + 1;
       completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
       
+      // Trigger ad break at natural break (completing a task)
+      await triggerAd('rewarded');
+
       setSuccessAnimation({ active: true, clueAwarded: clueTokens });
       triggerHaptic("success");
     }, 1500);
@@ -397,7 +434,8 @@ export default function SocialTasksScreen() {
            error: null
          });
 
-         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded';
+         // Prioritize rewarded interstitials for all ad tasks
+         const adType = 'rewarded';
          
          const onComplete = () => {
            const randomClue = Math.floor(Math.random() * 20) + 1;
@@ -460,6 +498,10 @@ export default function SocialTasksScreen() {
             saveBatchState(nextTasks);
             
             setLoadingTaskId(null);
+            logTransaction(task.rewardCoins, "task_completion", "ZP");
+            logTransaction(randomClue, "task_completion", "Clue");
+            addTransaction({ type: "task_completion", amount: task.rewardCoins, currency: "ZP" });
+            addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
             setSuccessAnimation({ active: true, clueAwarded: randomClue });
             triggerHaptic("success");
 
@@ -473,7 +515,7 @@ export default function SocialTasksScreen() {
   };
 
   // Convert elements & ZP to refresh the batch & bypass cooldown
-  const handleConvertRefresh = () => {
+  const handleConvertRefresh = async () => {
     const costZP = 7200;
     const costElements = 10;
 
@@ -483,6 +525,11 @@ export default function SocialTasksScreen() {
         coins: -costZP, 
         baseMaterials: -costElements 
       });
+
+      // Log the spend in transaction logs
+      logTransaction(-costZP, "task_refresh", "ZP");
+      addTransaction({ type: "task_refresh", amount: -costZP, currency: "ZP" });
+      addTransaction({ type: "task_refresh", amount: -costElements, currency: "ELEMENT" });
 
       // Reset all tasks to ready
       const resetBatch = INITIAL_BATCH.map(t => ({ ...t, completed: false }));
@@ -1238,7 +1285,24 @@ export default function SocialTasksScreen() {
                       claimSupabaseTask(activeQuestTask.id).then((verified) => {
                         setClaimingTaskId(null);
                         if (verified) {
-                          setSuccessAnimation({ active: true, clueAwarded: Math.floor(Math.random() * 10) + 1 });
+                          const randomClue = Math.floor(Math.random() * 10) + 1;
+                          updateResources({ clue: randomClue });
+                          
+                          // Log transactions to ledger (cloud and local)
+                          const claimRewardZP = activeQuestTask.reward || 1000;
+                          const claimRewardKeys = activeQuestTask.reward_keys || activeQuestTask.rewardKeys || 1;
+                          
+                          logTransaction(randomClue, "task_completion", "Clue");
+                          logTransaction(claimRewardZP, "task_completion", "ZP");
+                          
+                          addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
+                          addTransaction({ type: "task_completion", amount: claimRewardZP, currency: "ZP" });
+                          addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
+
+                          // trigger ad
+                          triggerAd('rewarded');
+
+                          setSuccessAnimation({ active: true, clueAwarded: randomClue });
                           triggerHaptic("success");
                           loadTasksAndCompletions();
                           loadTransactions();

@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import ReferralScreen from "./ReferralScreen";
 import SocialTasksScreen from "./SocialTasksScreen";
 import { RIDDLES } from "../../data/gameConfig";
+import { triggerAd } from "../../lib/adEngine";
 
 // Mini-game component for interactive missions
 function DecryptionGame({ onComplete, onCancel }: { onComplete: () => void; onCancel: () => void }) {
@@ -68,6 +69,8 @@ function DecryptionGame({ onComplete, onCancel }: { onComplete: () => void; onCa
     if (newUserSeq.length === sequence.length) {
       setStatus("success");
       triggerHaptic("success");
+      // Trigger ad at the natural break (end of game)
+      triggerAd('rewarded');
       setTimeout(() => onComplete(), 1200);
     }
   };

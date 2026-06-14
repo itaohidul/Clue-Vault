@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useGame } from "../../App";
 import { User, Shield, Trophy, Zap, Edit3, Settings, LogOut, Award, Star, ChevronRight, Search, Loader2, RefreshCw, Key, UserCheck, Database, Wifi, WifiOff, CheckCircle2, AlertTriangle, Check, Copy, Activity, Terminal, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -332,6 +333,18 @@ export default function ProfileScreen() {
 
       {/* Settings List */}
       <div className="space-y-2">
+        <Link 
+          to="/app/history"
+          onClick={() => triggerHaptic("light")}
+          className="w-full glass p-4 rounded-2xl flex items-center justify-between border-white/5 hover:bg-white/5 transition-all text-sm font-black uppercase italic tracking-tight text-white mb-2"
+        >
+          <div className="flex items-center gap-3">
+            <Activity size={18} className="text-amber-500" />
+            <span>Ledger Logs (History)</span>
+          </div>
+          <ChevronRight size={16} className="text-white/20" />
+        </Link>
+
         <button 
           onClick={handleAction}
           className="w-full glass p-4 rounded-2xl flex items-center justify-between border-white/5 hover:bg-white/5 transition-all text-sm font-black uppercase italic tracking-tight"

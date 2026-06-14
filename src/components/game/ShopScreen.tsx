@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../../App";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 import { 
   ShoppingCart, 
   Zap, 
@@ -25,6 +27,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { TonConnectUI } from "@tonconnect/ui";
 import { beginCell, Address } from "@ton/core";
+import { triggerAd } from "../../lib/adEngine";
 
 // Helper to construct jetton transfer payload cell
 function buildUsdtPayload(recipientAddress: string, amountUsdt: number, responseAddress: string): string {
@@ -77,6 +80,8 @@ interface WalletState {
 
 export default function ShopScreen() {
   const { user, resources, updateResources, buyItem, triggerHaptic } = useGame();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
 
   // Load TON Wallet State from LocalStorage
   const [wallet, setWallet] = useState<WalletState>(() => {
@@ -336,6 +341,17 @@ export default function ShopScreen() {
       // If successful, credit game resource inventory atomically!
       updateResources(activeTx.pack.reward);
 
+      // Trigger ad break (After a successful transaction)
+      triggerAd('rewarded');
+
+      // Log premium acquisition
+      Object.entries(activeTx.pack.reward).forEach(([k, v]) => {
+        const amount = typeof v === 'number' ? v : 0;
+        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
+        logTransaction(amount as number, "premium_buy", cur);
+        addTransaction({ type: "premium_buy", amount: amount as number, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
+      });
+
       // Save success
       setActiveTx(prev => prev ? { 
         ...prev, 
@@ -368,6 +384,16 @@ export default function ShopScreen() {
     // Call userStore's buyItem
     const success = buyItem(pack);
     if (success) {
+      logTransaction(-pack.cost, "shop_buy", "ZP");
+      addTransaction({ type: "shop_buy", amount: -pack.cost, currency: "ZP" });
+      Object.entries(pack.reward).forEach(([k, v]) => {
+        const amount = typeof v === 'number' ? v : 0;
+        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
+        logTransaction(amount, "shop_buy", cur);
+        addTransaction({ type: "shop_buy", amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
+      });
+      // Trigger ad break (After a successful transaction)
+      triggerAd('rewarded');
       setSwapSuccessItem(pack);
     } else {
       triggerHaptic("error");
@@ -399,10 +425,26 @@ export default function ShopScreen() {
         ...deductions,
         ...pack.reward
       });
+
+      Object.entries(pack.cost).forEach(([k, v]) => {
+        const amount = typeof v === 'number' ? v : 0;
+        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
+        logTransaction(-amount, "resource_convert", cur);
+        addTransaction({ type: "resource_convert", amount: -amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
+      });
+      Object.entries(pack.reward).forEach(([k, v]) => {
+        const amount = typeof v === 'number' ? v : 0;
+        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
+        logTransaction(amount, "resource_convert", cur);
+        addTransaction({ type: "resource_convert", amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
+      });
+
       setSwapSuccessItem({
         items: pack.rewardDesc,
         cost: pack.costDesc,
       });
+      // Trigger ad break (After a successful transaction)
+      triggerAd('rewarded');
       triggerHaptic("success");
     } else {
       triggerHaptic("error");

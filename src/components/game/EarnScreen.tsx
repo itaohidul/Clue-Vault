@@ -25,9 +25,13 @@ import {
 } from "lucide-react";
 import { cn, safeOpenLink } from "../../lib/utils";
 import { triggerAd } from "../../lib/adEngine";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 
 export default function EarnScreen() {
   const { user, resources, updateResources, crew, triggerHaptic } = useGame();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
 
   // Component UI State
   const [stakingAmount, setStakingAmount] = useState<string>("");
@@ -141,6 +145,11 @@ export default function EarnScreen() {
       clue: rewardValue,
       activityScore: -resources.activityScore // Reset score
     });
+
+    // Log the earning in transaction history
+    logTransaction(rewardValue, "earn_reward", "Clue");
+    addTransaction({ type: "earn_reward", amount: rewardValue, currency: "CLUE" });
+
     setClaimedReward(rewardValue);
     triggerHaptic("success");
     setTimeout(() => {
@@ -168,6 +177,9 @@ export default function EarnScreen() {
       activityScore: 100 // Reward +100 score for staking contribution
     });
 
+    logTransaction(-amount, "staking_stake", "Clue");
+    addTransaction({ type: "staking_stake", amount: -amount, currency: "CLUE" });
+
     setStakingAmount("");
     triggerHaptic("success");
   };
@@ -183,6 +195,8 @@ export default function EarnScreen() {
       stakedClue: -refund,
       stakingTier: "none"
     });
+    logTransaction(refund, "staking_unstake", "Clue");
+    addTransaction({ type: "staking_unstake", amount: refund, currency: "CLUE" });
     triggerHaptic("success");
   };
 
@@ -214,7 +228,8 @@ export default function EarnScreen() {
     const adType = type === 'direct' ? 'pop' : 'rewarded';
     
     try {
-      await triggerAd(adType);
+      // Force user-initiated ads to show immediately
+      await triggerAd(adType, true);
       setAdVerifying(null);
       const rewardAmount = type === 'direct' ? 100 : 50;
       updateResources({ activityScore: rewardAmount });

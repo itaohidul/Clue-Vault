@@ -1,4 +1,6 @@
 import { useGame } from "../../App";
+import { useSupabaseSync } from "../SupabaseSyncProvider";
+import { useLedgerStore } from "../../store/ledgerStore";
 import { Warehouse, Hammer, Zap, Package, Settings, ChevronRight, Globe, Lock, Palette, Layout, Terminal, Radio, Shield, Cpu, Database, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
@@ -13,6 +15,8 @@ const THEMES = [
 
 export default function BaseScreen() {
   const { user, base, resources, upgradeBaseRoom, setBaseStyle, triggerHaptic } = useGame();
+  const { logTransaction } = useSupabaseSync();
+  const { addTransaction } = useLedgerStore();
   const [isTheming, setIsTheming] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
@@ -39,6 +43,10 @@ export default function BaseScreen() {
       
       setTimeout(() => {
         upgradeBaseRoom(room.id, coinsCost, matsCost);
+        logTransaction(-coinsCost, "base_upgrade", "ZP");
+        logTransaction(-matsCost, "base_upgrade", "Element");
+        addTransaction({ type: "base_upgrade", amount: -coinsCost, currency: "ZP" });
+        addTransaction({ type: "base_upgrade", amount: -matsCost, currency: "ELEMENT" });
         setUpgrading(null);
       }, 1500);
     } else {

@@ -9,6 +9,60 @@ import {
   getNavigationCounter
 } from "./adPacer";
 
+declare global {
+  interface Window {
+    show_11030019?: any;
+  }
+}
+
+export const monetagReady = () =>
+  typeof window !== "undefined" && typeof window.show_11030019 === "function";
+
+export function isMonetagReady(): boolean {
+  return monetagReady();
+}
+
+export async function showRewardedInterstitial(onReward?: any) {
+  if (!monetagReady()) return false;
+
+  try {
+    const result = await window.show_11030019();
+    if (typeof onReward === "function") onReward();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function showRewardedPopup(onReward?: any) {
+  if (!monetagReady()) return false;
+
+  try {
+    const result = await window.show_11030019("pop");
+    if (typeof onReward === "function") onReward();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function showInAppInterstitial() {
+  if (!monetagReady()) return false;
+
+  window.show_11030019({
+    type: "inApp",
+    inAppSettings: {
+      frequency: 1,
+      capping: 0.25,
+      interval: 120,
+      timeout: 15,
+      everyPage: false
+    }
+  });
+
+  return true;
+}
+
 /**
  * Robust Ad Engine for libtl SDK (show_11030019) with Pacing Queue Support
  */
@@ -92,10 +146,10 @@ async function processNextAd(): Promise<void> {
 }
 
 async function playAdSequence(type: AdType): Promise<void> {
-  const showAd = (window as any).show_11030019;
-  if (typeof showAd !== 'function') {
+  if (!isMonetagReady()) {
     throw new Error("SDK not detected in scope (offline fallback integration active)");
   }
+  const showAd = (window as any).show_11030019;
 
   const queue: string[] = [];
   
@@ -193,8 +247,8 @@ export function triggerAd(type: AdType = 'rewarded_interstitial', force = false)
  * Initializes the global in-app frequency engine with a retry mechanism
  */
 export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
-  const showAd = (window as any).show_11030019;
-  if (typeof showAd === 'function') {
+  if (isMonetagReady()) {
+    const showAd = (window as any).show_11030019;
     try {
       showAd({
         type: 'inApp',

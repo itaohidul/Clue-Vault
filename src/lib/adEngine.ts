@@ -100,13 +100,29 @@ export async function triggerAd(type: AdType = 'rewarded_interstitial', force = 
     try {
       console.log(`Ad Engine: Attempting to trigger format [${format}]`);
       
-      // Try direct parameter string
+      // 1. Prioritize empty parameter call for rewarded interstitial family (highest CPM)
+      if (
+        format === 'rewarded_interstitial' || 
+        format === 'rewardedInterstitial' || 
+        format === 'rewinterstitial' || 
+        format === 'rewarded'
+      ) {
+        try {
+          await showAd();
+          console.log(`Ad Engine: Successful display of format [${format}] via empty-argument call (Rewarded Interstitial)`);
+          return;
+        } catch (errEmpty) {
+          console.log(`Ad Engine: Empty-argument call for ${format} failed, trying parameter-based fallbacks...`);
+        }
+      }
+      
+      // 2. Try direct parameter string
       try {
         await showAd(format);
         console.log(`Ad Engine: Successful display of format [${format}] via string arg`);
         return;
       } catch (errStr) {
-        // Try object parameter
+        // 3. Try object parameter
         try {
           await showAd({ type: format });
           console.log(`Ad Engine: Successful display of format [${format}] via object type arg`);
@@ -125,12 +141,6 @@ export async function triggerAd(type: AdType = 'rewarded_interstitial', force = 
               console.log("Ad Engine: Successful display of format [directlink] fallback");
               return;
             } catch (errDir) {}
-          } else if (format === 'rewarded') {
-            try {
-              await showAd(); // Empty parameter often defaults to rewarded
-              console.log("Ad Engine: Successful display of format [rewarded] via empty arg fallback");
-              return;
-            } catch (errEmpty) {}
           }
         }
       }

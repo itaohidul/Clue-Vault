@@ -22,6 +22,17 @@ export function isMonetagReady(): boolean {
   return monetagReady();
 }
 
+export function getLastAdClosedTime(): number {
+  if (typeof window === "undefined") return 0;
+  const val = localStorage.getItem("cluevault_last_ad_closed");
+  return val ? parseInt(val, 10) : 0;
+}
+
+export function setLastAdClosedTime(time: number): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("cluevault_last_ad_closed", time.toString());
+}
+
 export async function showRewardedInterstitial(onReward?: any) {
   if (!monetagReady() || isActiveAd()) return false;
 
@@ -41,6 +52,7 @@ export async function showRewardedInterstitial(onReward?: any) {
     return false;
   } finally {
     setActiveAd(false);
+    setLastAdClosedTime(Date.now());
   }
 }
 
@@ -63,6 +75,7 @@ export async function showRewardedPopup(onReward?: any) {
     return false;
   } finally {
     setActiveAd(false);
+    setLastAdClosedTime(Date.now());
   }
 }
 
@@ -85,6 +98,7 @@ export function showInAppInterstitial() {
     // Guard active block for 5 seconds to let the overlay initialize
     setTimeout(() => {
       setActiveAd(false);
+      setLastAdClosedTime(Date.now());
     }, 5000);
     return true;
   } catch {
@@ -181,6 +195,7 @@ async function processNextAd(): Promise<void> {
     resolve(false);
   } finally {
     setActiveAd(false);
+    setLastAdClosedTime(Date.now());
     // Cycle the queue processing with a short breather delay to keep layouts clear
     setTimeout(processNextAd, 1500);
   }

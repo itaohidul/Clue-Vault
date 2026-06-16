@@ -60,30 +60,54 @@ function RealTelemetreeWrapper({ children }: { children: ReactNode }) {
   const hasTrackedLoad = React.useRef(false);
 
   React.useEffect(() => {
-    if (builder && typeof builder.track === 'function' && !hasTrackedLoad.current) {
-      console.log("[TELEMETREE-READY] Builder active. Sending app_loaded event.");
-      try {
-        builder.track("app_loaded", { timestamp: Date.now() });
-        hasTrackedLoad.current = true;
-      } catch (e) {
-        console.warn("[TELEMETREE-READY] Failed to send initial app_loaded event:", e);
+    let active = true;
+    const checkAndTrack = () => {
+      if (!active) return;
+      
+      const isReady = builder && 
+                     typeof builder.track === 'function' && 
+                     (builder as any).config && 
+                     (builder as any).transport;
+                     
+      if (isReady) {
+        if (!hasTrackedLoad.current) {
+          console.log("[TELEMETREE-READY] Builder active and config loaded. Sending app_loaded event.");
+          try {
+            builder.track("app_loaded", { timestamp: Date.now() });
+            hasTrackedLoad.current = true;
+          } catch (e) {
+            console.warn("[TELEMETREE-READY] Failed to send initial app_loaded event:", e);
+          }
+        }
+      } else {
+        // Safe intermittent polling
+        setTimeout(checkAndTrack, 600);
       }
-    }
+    };
+
+    checkAndTrack();
+    return () => {
+      active = false;
+    };
   }, [builder]);
 
   return (
     <MockAnalyticsContext.Provider value={{
       track: (event, properties) => {
         try {
-          if (builder && typeof builder.track === 'function') {
+          const isReady = builder && 
+                         typeof builder.track === 'function' && 
+                         (builder as any).config && 
+                         (builder as any).transport;
+                         
+          if (isReady) {
              builder.track(event, properties || {});
           } else {
-             console.warn("[TELEMA-SDK] Builder not initialized yet for event:", event);
+             console.warn("[TELEMA-SDK] Telemetree config not finished loading. Event skipped in sandbox mode:", event);
           }
         } catch (e: any) {
-          // If it fails because of "transport not initialized", we just swallow it or log a quiet message
           if (e.message && e.message.includes("not initialized")) {
-             // Silence this specific initialization noise
+             // Silence specific initialization exceptions
           } else {
              console.warn("[TELEMA-SDK] Track failure:", e.message);
           }

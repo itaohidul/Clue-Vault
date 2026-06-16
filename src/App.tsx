@@ -29,7 +29,7 @@ import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
-import { initInAppAds, triggerAd } from "./lib/adEngine";
+import { initInAppAds, triggerAd, getLastAdClosedTime, showRewardedInterstitial, showInAppInterstitial } from "./lib/adEngine";
 import { trackAdAnalytics } from "./lib/adPacer";
 
 
@@ -315,10 +315,23 @@ function AppContent() {
           console.log(`[Ad Engine] Section Transition detected: ${prevSection} -> ${currentSection}. Continuous transition count: ${navigationCountRef.current}`);
 
           if (navigationCountRef.current >= 2) {
-            console.log(`[Ad Engine] Navigation limit of 2 reached. Queueing paced rewarded interstitial.`);
-            trackAdAnalytics("navigationTriggeredAds", 1);
-            triggerAd('rewarded_interstitial', false);
-            navigationCountRef.current = 0; // reset
+            navigationCountRef.current = 0; // reset counter
+            const now = Date.now();
+            const lastClosed = getLastAdClosedTime();
+            if (now - lastClosed < 60000) {
+              console.log(`[Ad Engine] Navigation trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (60s wait required).`);
+            } else {
+              console.log(`[Ad Engine] Navigation limit of 2 reached. Triggering rewarded or in-app interstitial.`);
+              trackAdAnalytics("navigationTriggeredAds", 1);
+              const useInApp = Math.random() < 0.5;
+              if (useInApp) {
+                console.log("[Ad Engine Trigger] Showing In-App Interstitial as automatic navigation ad.");
+                showInAppInterstitial();
+              } else {
+                console.log("[Ad Engine Trigger] Showing Rewarded Interstitial as automatic navigation ad.");
+                showRewardedInterstitial();
+              }
+            }
           }
         }
       }
@@ -328,9 +341,22 @@ function AppContent() {
   // 2. Continuous 90-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 90 seconds strictly."
   useEffect(() => {
     const adInterval = setInterval(() => {
-      console.log(`[Ad Engine] Strict 90s activity interval reached. Queueing paced rewarded interstitial.`);
-      trackAdAnalytics("totalIntervals", 90);
-      triggerAd('rewarded_interstitial', false);
+      const now = Date.now();
+      const lastClosed = getLastAdClosedTime();
+      if (now - lastClosed < 60000) {
+        console.log(`[Ad Engine] 90s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (60s wait required).`);
+      } else {
+        console.log(`[Ad Engine] Strict 90s activity interval reached. Triggering rewarded or in-app ad interval.`);
+        trackAdAnalytics("totalIntervals", 90);
+        const useInApp = Math.random() < 0.5;
+        if (useInApp) {
+          console.log("[Ad Engine Trigger] Showing In-App Interstitial as break ad.");
+          showInAppInterstitial();
+        } else {
+          console.log("[Ad Engine Trigger] Showing Rewarded Interstitial as break ad.");
+          showRewardedInterstitial();
+        }
+      }
     }, 90000);
 
     return () => clearInterval(adInterval);

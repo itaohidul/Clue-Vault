@@ -25,7 +25,7 @@ import EarnScreen from "./components/game/EarnScreen";
 import WalletDexScreen from "./components/game/WalletDexScreen";
 import HistoryScreen from "./components/game/HistoryScreen";
 import TelegramProvider from "./providers/TelegramProvider";
-import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
+import { TwaAnalyticsProvider, useTelemetree } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
@@ -244,12 +244,23 @@ function AppContent() {
   }, [user?.level, initSyncCompleted, triggerHaptic]);
 
   // Track and log first route rendered
+  const { track } = useTelemetree();
   useEffect(() => {
     if (!firstRouteLogged && initSyncCompleted) {
       console.log("[DIAG] First route rendered:", location.pathname);
       setFirstRouteLogged(true);
+      try {
+        track("user_start_app", {
+          path: location.pathname,
+          time: Date.now(),
+          username: user?.name || "anon"
+        });
+        console.log("[DIAG] Telemetree event user_start_app sent!");
+      } catch (e) {
+        console.warn("[DIAG] Error tracking user_start_app:", e);
+      }
     }
-  }, [location.pathname, initSyncCompleted, firstRouteLogged]);
+  }, [location.pathname, initSyncCompleted, firstRouteLogged, track, user]);
 
   // Inside Telegram, automatically route from landing "/" to "/app/home"
   useEffect(() => {

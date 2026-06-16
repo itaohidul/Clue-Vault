@@ -22,11 +22,11 @@ export function TwaAnalyticsProvider(props: any) {
   const isDev = import.meta.env.DEV;
   
   // Real Telegram data payload
-  const realTgData = isTgWebApp && tg 
+  const realTgData = isTgWebApp && tg && tg.initDataUnsafe && tg.initDataUnsafe.user
     ? { ...tg.initDataUnsafe, platform: tg.platform } 
     : undefined;
     
-  const launchData = realTgData ?? (isDev ? mockTgData : undefined);
+  const launchData = realTgData || mockTgData;
 
   if (typeof window !== 'undefined') {
     console.log("[TELEMETREE-READY] Init Params:", {

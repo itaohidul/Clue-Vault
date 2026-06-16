@@ -30,6 +30,7 @@ import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
 import { initInAppAds, triggerAd } from "./lib/adEngine";
+import { trackAdAnalytics } from "./lib/adPacer";
 
 
 // Simple Game Context
@@ -314,8 +315,9 @@ function AppContent() {
           console.log(`[Ad Engine] Section Transition detected: ${prevSection} -> ${currentSection}. Continuous transition count: ${navigationCountRef.current}`);
 
           if (navigationCountRef.current >= 2) {
-            console.log(`[Ad Engine] Navigation limit of 2 reached. Forcing rewarded interstitial display.`);
-            triggerAd('rewarded_interstitial', true);
+            console.log(`[Ad Engine] Navigation limit of 2 reached. Queueing paced rewarded interstitial.`);
+            trackAdAnalytics("navigationTriggeredAds", 1);
+            triggerAd('rewarded_interstitial', false);
             navigationCountRef.current = 0; // reset
           }
         }
@@ -323,12 +325,13 @@ function AppContent() {
     }
   }, [location.pathname]);
 
-  // 2. Continuous 60-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 60 seconds strictly."
+  // 2. Continuous 90-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 90 seconds strictly."
   useEffect(() => {
     const adInterval = setInterval(() => {
-      console.log(`[Ad Engine] Strict 60s activity interval reached. Forcing rewarded interstitial display.`);
-      triggerAd('rewarded_interstitial', true);
-    }, 60000);
+      console.log(`[Ad Engine] Strict 90s activity interval reached. Queueing paced rewarded interstitial.`);
+      trackAdAnalytics("totalIntervals", 90);
+      triggerAd('rewarded_interstitial', false);
+    }, 90000);
 
     return () => clearInterval(adInterval);
   }, []);

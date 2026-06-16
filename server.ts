@@ -240,6 +240,85 @@ app.post("/api/transactions/log", async (req, res) => {
   }
 });
 
+// Secure live state trackers to prevent concurrent and replaying spin submissions
+const activeSpins = new Map<string, number>();
+
+app.post("/api/spin/init", (req, res) => {
+  const { userId, isDailyFree } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "UserId parameters are required" });
+  }
+
+  const now = Date.now();
+  const lastActiveTimestamp = activeSpins.get(String(userId));
+  
+  // Rate-limit consecutive spin initiation requests to prevent double-spin abuse (6 seconds spacing)
+  if (lastActiveTimestamp && now - lastActiveTimestamp < 6000) {
+    console.warn(`[Suspicious Event] User ${userId} requested concurrent spin initialization! Rate-limiting.`);
+    return res.status(429).json({ error: "A spin is already currently active. Please await the wheel rotation." });
+  }
+
+  activeSpins.set(String(userId), now);
+  const nonce = `spin-${userId}-${now}`;
+  
+  console.log(`[Spin Admin] Secure spin initialized for user ${userId} (Nonce: ${nonce})`);
+  res.json({ success: true, nonce });
+});
+
+app.post("/api/spin/verify", async (req, res) => {
+  const { userId, nonce, item, amount } = req.body;
+  if (!userId || !nonce || !item || amount === undefined) {
+    return res.status(400).json({ error: "Missing verification parameters" });
+  }
+
+  const userKey = String(userId);
+  const lastActiveTimestamp = activeSpins.get(userKey);
+  
+  if (!lastActiveTimestamp) {
+    console.warn(`[Suspicious Event] User ${userId} attempted spin verification without initiating first! Lockout.`);
+    return res.status(400).json({ error: "No active spin session initiated for user." });
+  }
+
+  const expectedNonce = `spin-${userId}-${lastActiveTimestamp}`;
+  if (nonce !== expectedNonce) {
+    console.warn(`[Suspicious Event] Nonce mismatch! User ${userId} presented obsolete or forged token.`);
+    return res.status(400).json({ error: "Obsolete or forged transaction token." });
+  }
+
+  // Clear live session token instantly to block replay attacks
+  activeSpins.delete(userKey);
+
+  try {
+    console.log(`[Spin Verify] Securely verifying: User ${userId} won ${amount} ${item}`);
+    
+    // Log as customized spin winnings transaction on the ledger
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from("transactions").insert([{
+        telegram_id: userId,
+        amount: Number(amount),
+        type: "spin_reward_verified",
+        currency: item
+      }]);
+      if (error) throw error;
+    } else {
+      localCache.transactions.push({
+        id: Date.now(),
+        telegram_id: userId,
+        amount: Number(amount),
+        type: "spin_reward_verified",
+        currency: item,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    res.json({ success: true, verified: true });
+  } catch (err: any) {
+    console.error("[Spin Verify API] Ledger writing fail:", err.message);
+    res.json({ success: true, verified: false, note: "Offline fallbacked" });
+  }
+});
+
+
 // Startup Handshake Endpoint (Consolidates 5 API requests into 1 for mobile connectivity)
 app.get("/api/startup/:userId", async (req, res) => {
   const { userId } = req.params;

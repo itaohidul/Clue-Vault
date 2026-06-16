@@ -1,10 +1,81 @@
 /**
- * AdPacer: Elegant Dynamic Ad Gating Engine
- * - Show one ad instantly at session start (reboot / reload).
- * - Implements a 30 to 60 seconds basic interval (default 45s) between ads.
- * - Dynamically adapts to user engagement: if the user is tapping quickly (high visual density of task actions),
- *   reduce the cooldown down to a minimum of 8 seconds to deliver high-priority popups faster!
+ * AdPacer: Elegant Dynamic Ad Gacing & Analytics Engine
+ * - One unskippable ad allowed instantly at first launch.
+ * - Dynamic cooldown intervals between subsequent transitions (45s reduced to 8s during rapid engagements).
+ * - Tracks page layouts, active triggers, session metrics, and local analytics offline.
  */
+
+export interface AdAnalytics {
+  adsShown: number;
+  rewardedAds: number;
+  interstitials: number;
+  popunders: number;
+  sessionDuration: number;
+  spins: number;
+  tasks: number;
+  rewardedFailures: number;
+  adQueueDelays: number;
+  totalIntervals: number;
+  navigationTriggeredAds: number;
+}
+
+const sessionStart = Date.now();
+
+// Operational pacing states
+let activeAdState = false;
+let pendingAdState: string | null = null;
+let navigationCounterState = 0;
+let sessionAdsState = 0;
+let isUiBusyState = false;
+
+// Accessors & Mutators
+export function isActiveAd(): boolean {
+  return activeAdState;
+}
+
+export function setActiveAd(active: boolean): void {
+  activeAdState = active;
+}
+
+export function getPendingAd(): string | null {
+  return pendingAdState;
+}
+
+export function setPendingAd(ad: string | null): void {
+  pendingAdState = ad;
+}
+
+export function getNavigationCounter(): number {
+  return navigationCounterState;
+}
+
+export function incrementNavigationCounter(): number {
+  navigationCounterState++;
+  return navigationCounterState;
+}
+
+export function resetNavigationCounter(): void {
+  navigationCounterState = 0;
+}
+
+export function getSessionAds(): number {
+  return sessionAdsState;
+}
+
+export function incrementSessionAds(): number {
+  sessionAdsState++;
+  trackAdAnalytics("adsShown", 1);
+  return sessionAdsState;
+}
+
+export function isUiBusy(): boolean {
+  return isUiBusyState;
+}
+
+export function setUiBusy(busy: boolean): void {
+  console.log(`[Ad Pacer] UI busy channel state updated to: ${busy}`);
+  isUiBusyState = busy;
+}
 
 export function recordUserTap(): void {
   try {
@@ -12,9 +83,8 @@ export function recordUserTap(): void {
     const storedTaps = localStorage.getItem("cluevault_user_taps");
     let tapTimestamps: number[] = storedTaps ? JSON.parse(storedTaps) : [];
     
-    // Filter out taps older than 30 seconds to focus on immediate rapid engagement
+    // Filter out old taps
     tapTimestamps = tapTimestamps.filter(t => now - t < 30000);
-    // Add current action timestamp
     tapTimestamps.push(now);
     
     localStorage.setItem("cluevault_user_taps", JSON.stringify(tapTimestamps));
@@ -27,30 +97,32 @@ export function checkAdEligibility(): { allowed: boolean; reason: string } {
   try {
     const now = Date.now();
     
-    // 1. Show one at start: Check sessionStorage first.
-    // sessionStorage resets on reload / restart, guaranteeing that they get an instant ad on first view of the run.
+    // UI Busy locks (e.g. spinning, shop payment, vault decryption)
+    if (isUiBusyState) {
+      return { allowed: false, reason: "Interruption Protected: Core user interface is processing critical rewards." };
+    }
+
+    // 1. Show instantly at first launch check session flag set inside frame
     const runAdShown = sessionStorage.getItem("cluevault_session_ad_shown");
     if (!runAdShown) {
       sessionStorage.setItem("cluevault_session_ad_shown", "true");
       localStorage.setItem("cluevault_last_ad_trigger", now.toString());
-      return { allowed: true, reason: "First ad of the session allowed instantly." };
+      return { allowed: true, reason: "First cold start session allocation allowed instantly." };
     }
 
     const lastAdTimeStr = localStorage.getItem("cluevault_last_ad_trigger");
     if (!lastAdTimeStr) {
       localStorage.setItem("cluevault_last_ad_trigger", now.toString());
-      return { allowed: true, reason: "Ad allowed (initialized last ad marker)." };
+      return { allowed: true, reason: "First ad initialization fallback allowed." };
     }
 
-    // 2. Fetch recent tap metrics for dynamic scaling
+    // Fetch dynamic tap frequency mapping
     const storedTaps = localStorage.getItem("cluevault_user_taps");
     let tapTimestamps: number[] = storedTaps ? JSON.parse(storedTaps) : [];
     tapTimestamps = tapTimestamps.filter(t => now - t < 30000);
     const tapCount = tapTimestamps.length;
 
-    // 3. Cooldown math matching "medium" speed with acceleration
-    // Standard cooldown is 45s. Each recent tap (action) shrinks the cooldown by 6s.
-    // If the user is tapping very quickly (e.g. 6 actions), cooldown decreases to 45 - 36 = 9 seconds!
+    // Fast-pacing scaling (45 seconds baseline decreased down to 8s by user action tap metrics)
     const baseCooldownMs = 45000;
     const reductionPerTapMs = 6000;
     const dynamicCooldownMs = Math.max(8000, baseCooldownMs - (tapCount * reductionPerTapMs));
@@ -60,15 +132,69 @@ export function checkAdEligibility(): { allowed: boolean; reason: string } {
 
     if (elapsed >= dynamicCooldownMs) {
       localStorage.setItem("cluevault_last_ad_trigger", now.toString());
-      return { allowed: true, reason: `Ad allowed, cooled down in ${elapsed}ms (dynamic cooldown was ${dynamicCooldownMs}ms)` };
+      return { allowed: true, reason: `Ad allowed, cooled down in ${elapsed}ms (dynamic cooldown thresholds was ${dynamicCooldownMs}ms)` };
     }
 
     return { 
       allowed: false, 
-      reason: `Ad suppressed of minimum wait limits. Dynamic Cooldown: ${Math.round(dynamicCooldownMs / 1000)}s. Elapsed: ${Math.round(elapsed / 1000)}s.` 
+      reason: `Ad pacing suppressed of interval cooldown limitation. Cooldown: ${Math.round(dynamicCooldownMs / 1000)}s. Elapsed: ${Math.round(elapsed / 1000)}s.` 
     };
   } catch (e) {
     console.warn("Ad eligibility check fallback:", e);
-    return { allowed: true, reason: "Fallback allowance on system error." };
+    return { allowed: true, reason: "Fallback allowed on metrics parser exception." };
   }
+}
+
+// Lightweight Offline analytics ledger stores
+export function trackAdAnalytics(key: keyof AdAnalytics, val: number = 1): void {
+  try {
+    const raw = localStorage.getItem("cluevault_ad_analytics");
+    const analytics: AdAnalytics = raw ? JSON.parse(raw) : {
+      adsShown: 0,
+      rewardedAds: 0,
+      interstitials: 0,
+      popunders: 0,
+      sessionDuration: 0,
+      spins: 0,
+      tasks: 0,
+      rewardedFailures: 0,
+      adQueueDelays: 0,
+      totalIntervals: 0,
+      navigationTriggeredAds: 0
+    };
+
+    analytics[key] = (analytics[key] || 0) + val;
+    
+    // Sync session duration dynamically on any track invocation
+    analytics.sessionDuration = Math.round((Date.now() - sessionStart) / 1000);
+    
+    localStorage.setItem("cluevault_ad_analytics", JSON.stringify(analytics));
+  } catch (e) {
+    console.warn("Failed to update ad analytics Ledger:", e);
+  }
+}
+
+export function getAdAnalytics(): AdAnalytics {
+  try {
+    const raw = localStorage.getItem("cluevault_ad_analytics");
+    if (raw) {
+      const parsed: AdAnalytics = JSON.parse(raw);
+      parsed.sessionDuration = Math.round((Date.now() - sessionStart) / 1000);
+      return parsed;
+    }
+  } catch (e) {}
+
+  return {
+    adsShown: 0,
+    rewardedAds: 0,
+    interstitials: 0,
+    popunders: 0,
+    sessionDuration: Math.round((Date.now() - sessionStart) / 1000),
+    spins: 0,
+    tasks: 0,
+    rewardedFailures: 0,
+    adQueueDelays: 0,
+    totalIntervals: 0,
+    navigationTriggeredAds: 0
+  };
 }

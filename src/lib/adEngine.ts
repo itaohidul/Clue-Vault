@@ -1,7 +1,16 @@
+import { 
+  isActiveAd, 
+  setActiveAd, 
+  checkAdEligibility, 
+  incrementSessionAds,
+  trackAdAnalytics,
+  isUiBusy,
+  incrementNavigationCounter,
+  getNavigationCounter
+} from "./adPacer";
 
 /**
- * Robust Ad Engine for libtl SDK (show_11030019)
- * Priority: Rewarded Interstitial -> Rewarded -> Interstitial -> Popunder -> Direct Link
+ * Robust Ad Engine for libtl SDK (show_11030019) with Pacing Queue Support
  */
 
 export type AdType = 
@@ -21,86 +30,92 @@ interface InAppSettings {
   everyPage: boolean;
 }
 
-let lastTriggerTime = 0;
-const MANUAL_TRIGGER_INTERVAL = 30000; // 30 seconds (Aim for 1 interstitial every 30-60 seconds of active use)
+interface AdRequest {
+  type: AdType;
+  force: boolean;
+  resolve: (success: boolean) => void;
+  reject: (err: any) => void;
+}
 
-export async function triggerAd(type: AdType = 'rewarded_interstitial', force = false): Promise<void> {
-  const showAd = (window as any).show_11030019;
-  
-  if (typeof showAd !== 'function') {
-    console.warn("Ad Engine: SDK not detected in window scope (fallback enabled)");
-    return; // Resolve silently instead of throwing to prevent crashing the gameplay
-  }
+const adQueue: AdRequest[] = [];
 
-  // Throttle manual triggers unless forced
-  const now = Date.now();
-  if (!force && now - lastTriggerTime < MANUAL_TRIGGER_INTERVAL) {
-    console.log("Ad Engine: Throttling trigger, last ad showed recently.");
+// Clean ad queue executor sequentially guaranteeing only ONE active ad at any moment
+async function processNextAd(): Promise<void> {
+  if (isActiveAd() || adQueue.length === 0) {
     return;
   }
 
-  lastTriggerTime = now;
-
-  // Build fallback queue starting with requested format family, descending in CPM
-  const queue: string[] = [];
+  const nextAd = adQueue[0];
   
-  if (
-    type === 'rewarded_interstitial' || 
-    type === 'rewardedInterstitial' || 
-    type === 'rewinterstitial' || 
-    type === 'rewarded'
-  ) {
-    queue.push(
-      'rewarded_interstitial',
-      'rewardedInterstitial',
-      'rewinterstitial',
-      'rewarded',
-      'interstitial',
-      'pop',
-      'direct'
-    );
-  } else if (type === 'interstitial') {
-    queue.push(
-      'interstitial',
-      'rewarded_interstitial',
-      'rewardedInterstitial',
-      'rewinterstitial',
-      'rewarded',
-      'pop',
-      'direct'
-    );
-  } else if (type === 'pop') {
-    queue.push(
-      'pop',
-      'popunder',
-      'rewarded_interstitial',
-      'rewardedInterstitial',
-      'rewinterstitial',
-      'rewarded',
-      'interstitial',
-      'direct'
-    );
+  // Verify eligibility for non-forced ads (e.g., periodic interval or navigation-triggered)
+  if (!nextAd.force) {
+    const eligibility = checkAdEligibility();
+    if (!eligibility.allowed) {
+      console.log(`[Ad Engine] Non-forced request shelved: ${eligibility.reason}`);
+      trackAdAnalytics("adQueueDelays", 1);
+      
+      // Re-evaluate queue safely in 4 seconds
+      setTimeout(processNextAd, 4000);
+      return;
+    }
   } else {
-    queue.push(
-      'direct',
-      'directlink',
-      'rewarded_interstitial',
-      'rewardedInterstitial',
-      'rewinterstitial',
-      'rewarded',
-      'interstitial',
-      'pop'
-    );
+    // If forced but the interface is locked doing critical reward distributions, delay briefly
+    if (isUiBusy()) {
+      console.log(`[Ad Engine] Urgently requested ad delayed slightly—UI currently busy with critical gameplay rewards.`);
+      setTimeout(processNextAd, 1500);
+      return;
+    }
   }
 
-  // Deduplicate queue
+  // Remove matching from the operational queue since we are running it
+  adQueue.shift();
+  setActiveAd(true);
+
+  const { type, resolve, reject } = nextAd;
+
+  try {
+    console.log(`[Ad Engine] Dequeueing and booting format: ${type}`);
+    await playAdSequence(type);
+    
+    // Post reward tracking
+    incrementSessionAds();
+    resolve(true);
+  } catch (error) {
+    console.warn(`[Ad Engine Event] Play sequence failed or bypassed on fallback. Resolving successfully to prevent game locks.`, error);
+    // Resolve anyway to guarantee offline mode continuation without locking the game interface
+    resolve(false);
+  } finally {
+    setActiveAd(false);
+    // Cycle the queue processing with a short breather delay to keep layouts clear
+    setTimeout(processNextAd, 1500);
+  }
+}
+
+async function playAdSequence(type: AdType): Promise<void> {
+  const showAd = (window as any).show_11030019;
+  if (typeof showAd !== 'function') {
+    throw new Error("SDK not detected in scope (offline fallback integration active)");
+  }
+
+  const queue: string[] = [];
+  
+  // Whichever ad is triggered, we prefer rewarded interstitial first for maximum delivery
+  queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
+  
+  // If needed to mix formats, use standard minimal interstitial next
+  queue.push('interstitial');
+  
+  // Popunders and direct links as the absolute lowest possible backup formats
+  queue.push('pop', 'popunder', 'direct', 'directlink');
+
   const finalQueue = Array.from(new Set(queue));
+  let success = false;
 
   for (const format of finalQueue) {
     try {
-      console.log(`Ad Engine: Attempting to trigger format [${format}]`);
+      console.log(`[SDK Cascade] Attempting Monetag format: [${format}]`);
       
-      // 1. Prioritize empty parameter call for rewarded interstitial family (highest CPM)
+      // 1. empty parameter trial for rewarded interstitial formats
       if (
         format === 'rewarded_interstitial' || 
         format === 'rewardedInterstitial' || 
@@ -109,47 +124,69 @@ export async function triggerAd(type: AdType = 'rewarded_interstitial', force = 
       ) {
         try {
           await showAd();
-          console.log(`Ad Engine: Successful display of format [${format}] via empty-argument call (Rewarded Interstitial)`);
-          return;
+          console.log(`[SDK Cascade] Success - empty args rewarded format: [${format}]`);
+          success = true;
+          break;
         } catch (errEmpty) {
-          console.log(`Ad Engine: Empty-argument call for ${format} failed, trying parameter-based fallbacks...`);
+          console.log(`[SDK Cascade] Empty-parameter reward call failed for [${format}]. Trying variations...`);
         }
       }
-      
+
       // 2. Try direct parameter string
       try {
         await showAd(format);
-        console.log(`Ad Engine: Successful display of format [${format}] via string arg`);
-        return;
+        console.log(`[SDK Cascade] Success - string argument format: [${format}]`);
+        success = true;
+        break;
       } catch (errStr) {
-        // 3. Try object parameter
+        // 3. Try object type package
         try {
           await showAd({ type: format });
-          console.log(`Ad Engine: Successful display of format [${format}] via object type arg`);
-          return;
+          console.log(`[SDK Cascade] Success - object parameter format: [${format}]`);
+          success = true;
+          break;
         } catch (errObj) {
-          // Additional fallback strings for common Monetag / WebTigers formats
           if (format === 'pop') {
             try {
               await showAd('popunder');
-              console.log("Ad Engine: Successful display of format [popunder] fallback");
-              return;
+              console.log("[SDK Cascade] Success - popunder fallback");
+              success = true;
+              break;
             } catch (errPop) {}
           } else if (format === 'direct') {
             try {
               await showAd('directlink');
-              console.log("Ad Engine: Successful display of format [directlink] fallback");
-              return;
+              console.log("[SDK Cascade] Success - directlink fallback");
+              success = true;
+              break;
             } catch (errDir) {}
           }
         }
       }
-    } catch (error) {
-      console.warn(`Ad Engine: ${format} trigger failed/ignored`, error);
+    } catch (e) {
+      console.warn(`[SDK Cascade Warn] Format trial error on [${format}]:`, e);
     }
   }
-  
-  console.log("Ad Engine: Fallback ad chain completed.");
+
+  if (!success) {
+    throw new Error("All cascade format options reported loading failure");
+  }
+}
+
+export function triggerAd(type: AdType = 'rewarded_interstitial', force = false): Promise<boolean> {
+  return new Promise<boolean>((resolve, reject) => {
+    // Audit log trackers based on requested category
+    if (type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial') {
+      trackAdAnalytics("rewardedAds", 1);
+    } else if (type === 'pop') {
+      trackAdAnalytics("popunders", 1);
+    } else if (type === 'interstitial') {
+      trackAdAnalytics("interstitials", 1);
+    }
+    
+    adQueue.push({ type, force, resolve, reject });
+    processNextAd();
+  });
 }
 
 /**

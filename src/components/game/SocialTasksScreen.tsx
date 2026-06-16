@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGame } from "../../App";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
@@ -63,6 +63,10 @@ export default function SocialTasksScreen() {
   const { addTransaction } = useLedgerStore();
 
   const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
+
+  // Synchronous atomic lockouts to prevent rapid dual clicking
+  const isClaimingSupabaseRef = useRef(false);
+  const claimingCommunityIdsRef = useRef<string[]>([]);
 
   // Unskippable Quest Ad state
   const [showQuestAd, setShowQuestAd] = useState(false);
@@ -259,8 +263,9 @@ export default function SocialTasksScreen() {
 
   // Handle claiming in Supabase database (Show unskippable ad instead of opening random links)
   const handleClaimSupabaseTask = async (task: any) => {
-    if (completedTaskIds.includes(task.id) || !user.onboarded) return;
+    if (completedTaskIds.includes(task.id) || !user.onboarded || isClaimingSupabaseRef.current) return;
 
+    isClaimingSupabaseRef.current = true;
     triggerHaptic("medium");
     setClaimingTaskId(task.id);
 
@@ -284,9 +289,6 @@ export default function SocialTasksScreen() {
         addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
         addTransaction({ type: "task_completion", amount: claimRewardZP, currency: "ZP" });
         addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
-        
-        // Trigger rewarded ad break at task completion
-        await triggerAd('rewarded');
 
         loadTransactions();
         setSuccessAnimation({ active: true, clueAwarded: randomClue });
@@ -296,29 +298,35 @@ export default function SocialTasksScreen() {
       console.error("Ad error during task claim:", e);
     } finally {
       setClaimingTaskId(null);
+      isClaimingSupabaseRef.current = false;
     }
   };
 
   // Handle Community Tasks
   const handleCommunityAction = (task: any) => {
-    if (task.completed || !user.onboarded) return;
+    if (task.completed || !user.onboarded || claimingCommunityIdsRef.current.includes(task.id)) return;
 
+    claimingCommunityIdsRef.current.push(task.id);
     safeOpenLink(task.link);
     triggerHaptic("medium");
 
     setTimeout(async () => {
-      const nextTasks = communityTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-      saveCommunityState(nextTasks);
-      
-      // Calculate random clue reward
-      const clueTokens = Math.floor(Math.random() * 20) + 1;
-      completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
-      
-      // Trigger ad break at natural break (completing a task)
-      await triggerAd('rewarded');
+      try {
+        const nextTasks = communityTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+        saveCommunityState(nextTasks);
+        
+        // Calculate random clue reward
+        const clueTokens = Math.floor(Math.random() * 20) + 1;
+        completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
+        
+        // Trigger ad break at natural break (completing a task)
+        await triggerAd('rewarded');
 
-      setSuccessAnimation({ active: true, clueAwarded: clueTokens });
-      triggerHaptic("success");
+        setSuccessAnimation({ active: true, clueAwarded: clueTokens });
+        triggerHaptic("success");
+      } finally {
+        claimingCommunityIdsRef.current = claimingCommunityIdsRef.current.filter(id => id !== task.id);
+      }
     }, 1500);
   };
 
@@ -455,7 +463,7 @@ export default function SocialTasksScreen() {
            setSuccessAnimation({ active: true, clueAwarded: randomClue });
            triggerHaptic("success");
            startTaskCooldown(task.id);
-           alert('You have seen an ad!');
+           // Verified ad viewed successful
          };
 
          const onError = (e: any) => {

@@ -7,6 +7,7 @@ import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTrian
 import { cn } from "../../lib/utils";
 import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
 import { triggerAd } from "../../lib/adEngine";
+import { setUiBusy } from "../../lib/adPacer";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 
@@ -81,10 +82,13 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
     }
 
     if (newUserSeq.length === sequence.length) {
+      setUiBusy(true);
       setStatus("success");
       triggerHaptic("success");
       // Trigger ad at the natural break (opening a reward chest)
-      triggerAd('rewarded');
+      triggerAd('rewarded').finally(() => {
+        setUiBusy(false);
+      });
       setTimeout(() => onComplete(), 1200);
     }
   };
@@ -102,7 +106,11 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
             VAULT BYPASS SYSTEM PROTOCOL
           </span>
         </div>
-        <button onClick={onCancel} className="w-10 h-10 glass rounded-xl flex items-center justify-center text-white/20">
+        <button 
+          onClick={() => { if (status === "playing") onCancel(); }} 
+          disabled={status !== "playing"}
+          className={cn("w-10 h-10 glass rounded-xl flex items-center justify-center text-white/20 active:scale-95 transition-all", status !== "playing" && "opacity-20 pointer-events-none")}
+        >
           <X size={20} />
         </button>
       </div>
@@ -265,8 +273,11 @@ export default function VaultScreen() {
     addTransaction({ type: "vault_reward", amount: rewardCoins, currency: "ZP" });
     addTransaction({ type: "vault_reward", amount: rewardMats, currency: "ELEMENT" });
 
+    setUiBusy(true);
     // Trigger ad at the natural break (opening a reward chest)
-    triggerAd('rewarded');
+    triggerAd('rewarded').finally(() => {
+      setUiBusy(false);
+    });
 
     const riddleData = RIDDLES.find(r => r.id === riddleProg.riddleId);
     setShowReward({ 

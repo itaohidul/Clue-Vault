@@ -234,7 +234,11 @@ export default function EarnScreen() {
       const rewardAmount = type === 'direct' ? 100 : 50;
       updateResources({ activityScore: rewardAmount });
       triggerHaptic("success");
-      alert('You have seen an ad!');
+      setPacerAlert({
+        title: "Aether Link Established",
+        desc: "AD TRANSMISSION COMPLETE — CREDITING REWARD POINTS"
+      });
+      setTimeout(() => setPacerAlert(null), 3500);
     } catch (err) {
       console.error("Ad Engine Execution Error:", err);
       setAdVerifying(null);

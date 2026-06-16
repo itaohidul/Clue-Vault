@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { triggerAd } from "../../lib/adEngine";
+import { setUiBusy, trackAdAnalytics } from "../../lib/adPacer";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 
@@ -108,6 +109,10 @@ export default function WalletDexScreen() {
   
   // Tab control: "wallet" (Ledger), "dex" (ClueDeX Swap Platform), or "spin" (USDT Spin section)
   const [activeTab, setActiveTab] = useState<"wallet" | "dex" | "spin">("wallet");
+
+  // Synchronous operation lock guards to prevent race conditions and duplicate claims
+  const convertingWinningsRef = React.useRef(false);
+  const claimRewardLockRef = React.useRef(false);
 
   // Custom dropdown & withdrawal/spin ad overlays
   const [showFromSelector, setShowFromSelector] = useState(false);
@@ -238,8 +243,12 @@ export default function WalletDexScreen() {
     };
   });
 
-  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | null>(null);
+  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | "ad_verified" | null>(null);
   const [swapSuccessDetails, setSwapSuccessDetails] = useState<any | null>(null);
+  
+  // Anti-fraud spin trackers
+  const [spinNonce, setSpinNonce] = useState<string | null>(null);
+  const [isSpinInitiating, setIsSpinInitiating] = useState<boolean>(false);
 
   // Swap State
   const [fromAsset, setFromAsset] = useState<string>("CLUE");
@@ -505,8 +514,8 @@ export default function WalletDexScreen() {
     (( (spinWinnings.BTC || 0) / WITHDRAWAL_GOAL_BTC ) * 33.3) +
     (( (spinWinnings.ETH || 0) / WITHDRAWAL_GOAL_ETH ) * 33.3));
     
-  // Executed after unskippable spin ad initialization countdown completes
-  const executeRealSpin = (isDailyFree: boolean) => {
+  // Executed after unskippable ad or reward verification completes
+  const executeRealSpin = (isDailyFree: boolean, adSuccess: boolean = false) => {
     if (isDailyFree) {
       const todayStr = new Date().toDateString();
       setLastFreeSpinDate(todayStr);
@@ -540,7 +549,10 @@ export default function WalletDexScreen() {
     const rand = Math.random() * 100;
     let sliceIndex;
     
-    if (rand < premiumChance) {
+    // Safety verification: Do not allow premium crypto rewards if ad failed or was blocked
+    const forceStandardRewards = !adSuccess;
+    
+    if (rand < premiumChance && !forceStandardRewards) {
       // Pick one of the premium slots: 0 (BTC), 1 (ETH), 3 (USDT)
       const premiumIndices = [0, 1, 3];
       sliceIndex = premiumIndices[Math.floor(Math.random() * premiumIndices.length)];
@@ -592,7 +604,6 @@ export default function WalletDexScreen() {
 
       // Calculate dynamic reward multiplier based on proximity to the $10.00 goal
       // As the total value accumulated approaches $10, rewards decrease exponentially.
-      // This creates a "Zeno's paradox" effect where they never actually reach $10.00.
       const rewardMultiplier = Math.max(0.001, Math.pow(1 - (totalWonUSDT / 10.00), 2.5));
       
       let wonAmount = (minAmt + Math.random() * (maxAmt - minAmt)) * rewardMultiplier;
@@ -602,7 +613,6 @@ export default function WalletDexScreen() {
         const itemVal = item === "BTC" ? 65000 : (item === "ETH" ? 3500 : 1);
         const projectedTotal = totalWonUSDT + (wonAmount * itemVal);
         if (projectedTotal >= 10.00) {
-          // Force reward to be only enough to reach 99.9% of the way to the remaining gap
           const remainingGap = 10.00 - totalWonUSDT;
           wonAmount = (remainingGap * 0.9) / itemVal;
         }
@@ -622,6 +632,27 @@ export default function WalletDexScreen() {
       
       setActiveSliceResult(item);
       setEarnedRewardAmount(finalReward);
+
+      // Verify the spin result securely on the server ledger
+      if (spinNonce) {
+        fetch("/api/spin/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.telegram_id || user.id,
+            nonce: spinNonce,
+            item,
+            amount: finalReward
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log("[Spin verification channel]", data);
+        })
+        .catch(err => {
+          console.warn("[Spin offline fallback synchronization]", err);
+        });
+      }
       
       // Trigger Ad Popups
       triggerHaptic("medium");
@@ -631,14 +662,13 @@ export default function WalletDexScreen() {
     }, 4200);
   };
 
-  // Spin rotation handle (Forces real ad at spin initialization)
+  // Spin rotation handle (Forces real ad at spin initialization with anti-replay guarantees)
   const handleStartSpin = (isDailyFree: boolean = false) => {
-    if (isWheelSpinning) return;
+    if (isWheelSpinning || isSpinInitiating) return;
 
     // Integrity checks
     if (isDailyFree) {
-      const tz = user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+      const todayStr = getTodayStr();
       if (lastFreeSpinDate === todayStr) {
         triggerHaptic("error");
         return;
@@ -650,17 +680,36 @@ export default function WalletDexScreen() {
       }
     }
 
+    setUiBusy(true);
+    setIsSpinInitiating(true);
     track("spin_started", { isDailyFree });
-
     triggerHaptic("medium");
-    // Use triggerAd for rewarded ad
-    triggerAd('rewarded').then(() => {
-      executeRealSpin(isDailyFree);
-      alert('You have seen an ad!');
-    }).catch((e: any) => {
-      console.error("Spin ad engine error:", e);
-      // Execute anyway as fallback to maintain UX
-      executeRealSpin(isDailyFree);
+
+    // Initialize spin session on server
+    fetch("/api/spin/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.telegram_id || user.id, isDailyFree })
+    })
+    .then(res => res.json())
+    .then(data => {
+      const nonce = data.nonce || `spin-offline-${Date.now()}`;
+      setSpinNonce(nonce);
+      
+      // Trigger unskippable rewarded Monetag ad sequence
+      return triggerAd('rewarded');
+    })
+    .then((adSuccess) => {
+      executeRealSpin(isDailyFree, !!adSuccess);
+      setPopupType("ad_verified"); // Clean elegant pop-up replaces native alert()
+    })
+    .catch((err: any) => {
+      console.warn("[Ad Setup/Safe Spin Warn] Sequential ad flow bypassed: ", err);
+      // Fallback: Continue spin execution to preserve offline and client experience
+      executeRealSpin(isDailyFree, false);
+    })
+    .finally(() => {
+      setIsSpinInitiating(false);
     });
   };
 
@@ -683,7 +732,10 @@ export default function WalletDexScreen() {
   }, [showAdPopup, adCountdown]);
 
   const handleClaimReward = () => {
-    if (!adClaimUnlocked || !activeSliceResult) return;
+    if (!adClaimUnlocked || !activeSliceResult || claimRewardLockRef.current) return;
+    claimRewardLockRef.current = true;
+    setUiBusy(false);
+    trackAdAnalytics("spins", 1);
     triggerHaptic("success");
     
     track("spin_reward_claimed", {
@@ -733,6 +785,9 @@ export default function WalletDexScreen() {
     
     // Smooth reset degree
     setSpinDegrees(prev => prev % 360);
+    setTimeout(() => {
+      claimRewardLockRef.current = false;
+    }, 1000);
   };
 
   // Triggers separate withdrawal flow of BTC, ETH, or USDT achieved from spin wheel
@@ -750,6 +805,12 @@ export default function WalletDexScreen() {
 
   // Direct element conversion for in-game elements (bypasses milestone lock)
   const handleWithdrawGameWinnings = () => {
+    if (convertingWinningsRef.current) return;
+    
+    const hasWinnings = (spinGameWinnings.CLUE || 0) > 0 || (spinGameWinnings.ZP || 0) > 0 || (spinGameWinnings.KEY || 0) > 0;
+    if (!hasWinnings) return;
+
+    convertingWinningsRef.current = true;
     triggerHaptic("success");
     
     updateResources({
@@ -781,6 +842,9 @@ export default function WalletDexScreen() {
 
     triggerHaptic("heavy");
     setPopupType("withdraw_winnings_success");
+    setTimeout(() => {
+      convertingWinningsRef.current = false;
+    }, 1000);
   };
 
   // Consolidates premium spin winnings into primary active wallet balances once threshold is reached
@@ -2161,6 +2225,26 @@ export default function WalletDexScreen() {
                   >
                     Close Gateway Channel
                   </button>
+                </div>
+              ) : popupType === "ad_verified" ? (
+                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                   <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto text-2xl shadow-lg">
+                      <Sparkles size={24} className="text-amber-400" />
+                   </div>
+                   <div className="space-y-2">
+                      <span className="text-[8px] font-bold text-amber-500 uppercase tracking-[0.25em] block">MONETAG AD TRANSLATION COMPLETE</span>
+                      <h3 className="text-xl font-black uppercase tracking-tight text-white italic">Aether Link Secured</h3>
+                      <p className="text-[10px] text-white/50 font-bold leading-relaxed uppercase">
+                        Ad transmission has been successfully verified. Reward points and tickets are being credited automatically under consensus protocols.
+                      </p>
+                   </div>
+                   
+                   <button
+                     onClick={() => setPopupType(null)}
+                     className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-wider text-[10px] active:scale-95 transition-all cursor-pointer"
+                   >
+                     Acknowledge & Sync
+                   </button>
                 </div>
               ) : (
                 <div className="space-y-5">

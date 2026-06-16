@@ -23,44 +23,74 @@ export function isMonetagReady(): boolean {
 }
 
 export async function showRewardedInterstitial(onReward?: any) {
-  if (!monetagReady()) return false;
+  if (!monetagReady() || isActiveAd()) return false;
 
+  setActiveAd(true);
+  const startTime = Date.now();
   try {
     const result = await window.show_11030019();
     if (typeof onReward === "function") onReward();
+
+    const elapsed = Date.now() - startTime;
+    const minAdDuration = 20000; // 20s minimum display duration
+    if (elapsed < minAdDuration) {
+      await new Promise(resolve => setTimeout(resolve, minAdDuration - elapsed));
+    }
     return true;
   } catch {
     return false;
+  } finally {
+    setActiveAd(false);
   }
 }
 
 export async function showRewardedPopup(onReward?: any) {
-  if (!monetagReady()) return false;
+  if (!monetagReady() || isActiveAd()) return false;
 
+  setActiveAd(true);
+  const startTime = Date.now();
   try {
     const result = await window.show_11030019("pop");
     if (typeof onReward === "function") onReward();
+
+    const elapsed = Date.now() - startTime;
+    const minAdDuration = 20000; // 20s minimum display duration
+    if (elapsed < minAdDuration) {
+      await new Promise(resolve => setTimeout(resolve, minAdDuration - elapsed));
+    }
     return true;
   } catch {
     return false;
+  } finally {
+    setActiveAd(false);
   }
 }
 
 export function showInAppInterstitial() {
-  if (!monetagReady()) return false;
+  if (!monetagReady() || isActiveAd()) return false;
 
-  window.show_11030019({
-    type: "inApp",
-    inAppSettings: {
-      frequency: 1,
-      capping: 0.25,
-      interval: 120,
-      timeout: 15,
-      everyPage: false
-    }
-  });
+  setActiveAd(true);
+  try {
+    window.show_11030019({
+      type: "inApp",
+      inAppSettings: {
+        frequency: 1,
+        capping: 0.25,
+        interval: 120,
+        timeout: 15,
+        everyPage: false
+      }
+    });
 
-  return true;
+    // Guard active block for 5 seconds to let the overlay initialize
+    setTimeout(() => {
+      setActiveAd(false);
+    }, 5000);
+    return true;
+  } catch {
+    setActiveAd(false);
+    return false;
+  }
 }
 
 /**
@@ -126,6 +156,7 @@ async function processNextAd(): Promise<void> {
   setActiveAd(true);
 
   const { type, resolve, reject } = nextAd;
+  const startTime = Date.now();
 
   try {
     console.log(`[Ad Engine] Dequeueing and booting format: ${type}`);
@@ -134,6 +165,16 @@ async function processNextAd(): Promise<void> {
     // Post reward tracking
     incrementSessionAds();
     resolve(true);
+
+    // Hold the active lock for at least 20 seconds to guarantee the first ad 
+    // is closed before any subsequent ad in the queue starts loading in the background
+    const elapsed = Date.now() - startTime;
+    const minAdDuration = 20000; // 20 seconds
+    if (elapsed < minAdDuration) {
+      const waitTime = minAdDuration - elapsed;
+      console.log(`[Ad Engine] Holding active ad lock for remaining ${waitTime}ms to prevent concurrent background loading.`);
+      await new Promise(resolveTime => setTimeout(resolveTime, waitTime));
+    }
   } catch (error) {
     console.warn(`[Ad Engine Event] Play sequence failed or bypassed on fallback. Resolving successfully to prevent game locks.`, error);
     // Resolve anyway to guarantee offline mode continuation without locking the game interface

@@ -29,7 +29,7 @@ import { TwaAnalyticsProvider } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
-import { initInAppAds } from "./lib/adEngine";
+import { initInAppAds, triggerAd } from "./lib/adEngine";
 
 
 // Simple Game Context
@@ -289,6 +289,48 @@ function AppContent() {
       timeout: 30,  // 30 seconds initial delay on app start
       everyPage: false
     });
+  }, []);
+
+  // Track navigations and 60-second activity loops for rewarded interstitial ads
+  const prevPathRef = useRef<string>(location.pathname);
+  const navigationCountRef = useRef<number>(0);
+
+  // 1. Navigation transition ad trigger: "Place rewarded ads on navigations if theres 2 navigations between sections in app then show 1 rewarded interstitial"
+  useEffect(() => {
+    const prevPath = prevPathRef.current;
+    const currentPath = location.pathname;
+
+    if (currentPath !== prevPath) {
+      prevPathRef.current = currentPath;
+
+      // Count only valid app section transitions
+      if (currentPath.startsWith("/app") && prevPath.startsWith("/app")) {
+        const prevSection = prevPath.split("/")[2] || "";
+        const currentSection = currentPath.split("/")[2] || "";
+
+        // Only transition between distinct main screens counts
+        if (prevSection && currentSection && prevSection !== currentSection) {
+          navigationCountRef.current += 1;
+          console.log(`[Ad Engine] Section Transition detected: ${prevSection} -> ${currentSection}. Continuous transition count: ${navigationCountRef.current}`);
+
+          if (navigationCountRef.current >= 2) {
+            console.log(`[Ad Engine] Navigation limit of 2 reached. Forcing rewarded interstitial display.`);
+            triggerAd('rewarded_interstitial', true);
+            navigationCountRef.current = 0; // reset
+          }
+        }
+      }
+    }
+  }, [location.pathname]);
+
+  // 2. Continuous 60-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 60 seconds strictly."
+  useEffect(() => {
+    const adInterval = setInterval(() => {
+      console.log(`[Ad Engine] Strict 60s activity interval reached. Forcing rewarded interstitial display.`);
+      triggerAd('rewarded_interstitial', true);
+    }, 60000);
+
+    return () => clearInterval(adInterval);
   }, []);
 
   // Handle BackButton click callbacks

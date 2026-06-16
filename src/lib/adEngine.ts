@@ -1,10 +1,17 @@
 
 /**
  * Robust Ad Engine for libtl SDK (show_11030019)
- * Priority: Rewarded Interstitial -> Interstitial -> Popunder -> Direct Link
+ * Priority: Rewarded Interstitial -> Rewarded -> Interstitial -> Popunder -> Direct Link
  */
 
-export type AdType = 'rewarded' | 'interstitial' | 'pop' | 'direct';
+export type AdType = 
+  | 'rewarded_interstitial' 
+  | 'rewardedInterstitial' 
+  | 'rewinterstitial' 
+  | 'rewarded' 
+  | 'interstitial' 
+  | 'pop' 
+  | 'direct';
 
 interface InAppSettings {
   frequency: number;
@@ -15,9 +22,9 @@ interface InAppSettings {
 }
 
 let lastTriggerTime = 0;
-const MANUAL_TRIGGER_INTERVAL = 30000; // 30 seconds
+const MANUAL_TRIGGER_INTERVAL = 30000; // 30 seconds (Aim for 1 interstitial every 30-60 seconds of active use)
 
-export async function triggerAd(type: AdType = 'rewarded', force = false): Promise<void> {
+export async function triggerAd(type: AdType = 'rewarded_interstitial', force = false): Promise<void> {
   const showAd = (window as any).show_11030019;
   
   if (typeof showAd !== 'function') {
@@ -34,64 +41,101 @@ export async function triggerAd(type: AdType = 'rewarded', force = false): Promi
 
   lastTriggerTime = now;
 
-  // Fallback chain logic: Rewarded -> Interstitial -> Popunder -> Direct
-  // Always prioritize 'rewarded' first as per highest directive, then seek fallback modes.
-  const typesToTry: AdType[] = ['rewarded', 'interstitial', 'pop', 'direct'];
+  // Build fallback queue starting with requested format family, descending in CPM
+  const queue: string[] = [];
+  
+  if (
+    type === 'rewarded_interstitial' || 
+    type === 'rewardedInterstitial' || 
+    type === 'rewinterstitial' || 
+    type === 'rewarded'
+  ) {
+    queue.push(
+      'rewarded_interstitial',
+      'rewardedInterstitial',
+      'rewinterstitial',
+      'rewarded',
+      'interstitial',
+      'pop',
+      'direct'
+    );
+  } else if (type === 'interstitial') {
+    queue.push(
+      'interstitial',
+      'rewarded_interstitial',
+      'rewardedInterstitial',
+      'rewinterstitial',
+      'rewarded',
+      'pop',
+      'direct'
+    );
+  } else if (type === 'pop') {
+    queue.push(
+      'pop',
+      'popunder',
+      'rewarded_interstitial',
+      'rewardedInterstitial',
+      'rewinterstitial',
+      'rewarded',
+      'interstitial',
+      'direct'
+    );
+  } else {
+    queue.push(
+      'direct',
+      'directlink',
+      'rewarded_interstitial',
+      'rewardedInterstitial',
+      'rewinterstitial',
+      'rewarded',
+      'interstitial',
+      'pop'
+    );
+  }
 
-  for (const t of typesToTry) {
+  // Deduplicate queue
+  const finalQueue = Array.from(new Set(queue));
+
+  for (const format of finalQueue) {
     try {
-      console.log(`Ad Engine: Attempting to trigger ${t}`);
+      console.log(`Ad Engine: Attempting to trigger format [${format}]`);
       
-      if (t === 'rewarded') {
+      // Try direct parameter string
+      try {
+        await showAd(format);
+        console.log(`Ad Engine: Successful display of format [${format}] via string arg`);
+        return;
+      } catch (errStr) {
+        // Try object parameter
         try {
-          await showAd('rewarded');
+          await showAd({ type: format });
+          console.log(`Ad Engine: Successful display of format [${format}] via object type arg`);
           return;
-        } catch (e1) {
-          try {
-            await showAd({ type: 'rewarded' });
-            return;
-          } catch (e2) {
-            await showAd(); // Empty call as final fallback for rewarded
-            return;
-          }
-        }
-      } else if (t === 'interstitial') {
-        try {
-          await showAd('interstitial');
-          return;
-        } catch (e1) {
-          await showAd({ type: 'interstitial' });
-          return;
-        }
-      } else if (t === 'pop') {
-        try {
-          await showAd('pop');
-          return;
-        } catch (e1) {
-          try {
-            await showAd('popunder');
-            return;
-          } catch (e2) {
-            await showAd({ type: 'pop' });
-            return;
-          }
-        }
-      } else if (t === 'direct') {
-        try {
-          await showAd('direct');
-          return;
-        } catch (e1) {
-          try {
-            await showAd('directlink');
-            return;
-          } catch (e2) {
-            await showAd({ type: 'direct' });
-            return;
+        } catch (errObj) {
+          // Additional fallback strings for common Monetag / WebTigers formats
+          if (format === 'pop') {
+            try {
+              await showAd('popunder');
+              console.log("Ad Engine: Successful display of format [popunder] fallback");
+              return;
+            } catch (errPop) {}
+          } else if (format === 'direct') {
+            try {
+              await showAd('directlink');
+              console.log("Ad Engine: Successful display of format [directlink] fallback");
+              return;
+            } catch (errDir) {}
+          } else if (format === 'rewarded') {
+            try {
+              await showAd(); // Empty parameter often defaults to rewarded
+              console.log("Ad Engine: Successful display of format [rewarded] via empty arg fallback");
+              return;
+            } catch (errEmpty) {}
           }
         }
       }
     } catch (error) {
-      console.warn(`Ad Engine: ${t} trigger failed/ignored`, error);
+      console.warn(`Ad Engine: ${format} trigger failed/ignored`, error);
     }
   }
   

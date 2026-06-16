@@ -516,8 +516,8 @@ export default function SocialTasksScreen() {
 
   // Convert elements & ZP to refresh the batch & bypass cooldown
   const handleConvertRefresh = async () => {
-    const costZP = 7200;
-    const costElements = 10;
+    const costZP = 12000;
+    const costElements = 50;
 
     if (resources.coins >= costZP && resources.baseMaterials >= costElements) {
       // Deduct resources
@@ -849,25 +849,25 @@ export default function SocialTasksScreen() {
             <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block">OVERRIDE FEE REQ</span>
             <div className="flex gap-3">
               <span className="text-[10px] font-mono font-black text-amber-500 flex items-center gap-1">
-                <Coins size={11} /> 7200 ZP
+                <Coins size={11} /> 12000 ZP
               </span>
               <span className="text-[10px] font-mono font-black text-emerald-400 flex items-center gap-1">
-                <Cpu size={11} /> 10 Elements
+                <Cpu size={11} /> 50 Elements
               </span>
             </div>
           </div>
 
           <button
             onClick={handleConvertRefresh}
-            disabled={resources.coins < 7200 || resources.baseMaterials < 10}
+            disabled={resources.coins < 12000 || resources.baseMaterials < 50}
             className={cn(
               "px-5 py-3 rounded-xl font-black uppercase text-[10px] italic active:scale-95 transition-all text-black",
-              (resources.coins >= 7200 && resources.baseMaterials >= 10)
+              (resources.coins >= 12000 && resources.baseMaterials >= 50)
                 ? "bg-gradient-to-r from-amber-500 to-amber-600 glow-gold hover:from-amber-400 hover:to-amber-500"
                 : "bg-white/5 text-white/20 border border-white/5 cursor-default"
             )}
           >
-            {(resources.coins >= 7200 && resources.baseMaterials >= 10) ? "Force Refresh Batch" : "Insufficient Assets"}
+            {(resources.coins >= 12000 && resources.baseMaterials >= 50) ? "Force Refresh Batch" : "Insufficient Assets"}
           </button>
         </div>
       </section>

@@ -697,7 +697,7 @@ export default function WalletDexScreen() {
       setSpinNonce(nonce);
       
       // Trigger unskippable rewarded Monetag ad sequence
-      return triggerAd('rewarded');
+      return triggerAd('rewarded', true);
     })
     .then((adSuccess) => {
       executeRealSpin(isDailyFree, !!adSuccess);

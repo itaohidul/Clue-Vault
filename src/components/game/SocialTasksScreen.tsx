@@ -271,7 +271,7 @@ export default function SocialTasksScreen() {
 
     try {
       // Trigger prioritized ad flow: Rewarded -> Interstitial -> Popunder -> Direct
-      await triggerAd('rewarded');
+      await triggerAd('rewarded', true);
 
       // On successful ad engagement (or fallback success)
       const success = await claimSupabaseTask(task.id);
@@ -320,7 +320,7 @@ export default function SocialTasksScreen() {
         completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
         
         // Trigger ad break at natural break (completing a task)
-        await triggerAd('rewarded');
+        await triggerAd('rewarded', true);
 
         setSuccessAnimation({ active: true, clueAwarded: clueTokens });
         triggerHaptic("success");
@@ -443,7 +443,7 @@ export default function SocialTasksScreen() {
          });
 
          // Prioritize rewarded interstitials for all ad tasks
-         const adType = 'rewarded';
+         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded';
          
          const onComplete = () => {
            const randomClue = Math.floor(Math.random() * 20) + 1;
@@ -474,7 +474,7 @@ export default function SocialTasksScreen() {
          };
 
          try {
-           triggerAd(adType).then(onComplete).catch(onError);
+            triggerAd(adType, true).then(onComplete).catch(onError);
          } catch (err) {
            console.error("SDK Call Exception:", err);
            onError(err);
@@ -1308,7 +1308,7 @@ export default function SocialTasksScreen() {
                           addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
 
                           // trigger ad
-                          triggerAd('rewarded');
+                          triggerAd('rewarded', true);
 
                           setSuccessAnimation({ active: true, clueAwarded: randomClue });
                           triggerHaptic("success");

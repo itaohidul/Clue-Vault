@@ -53,6 +53,7 @@ export async function showRewardedInterstitial(onReward?: any) {
   } finally {
     setActiveAd(false);
     setLastAdClosedTime(Date.now());
+    setTimeout(processNextAd, 1500);
   }
 }
 
@@ -76,6 +77,7 @@ export async function showRewardedPopup(onReward?: any) {
   } finally {
     setActiveAd(false);
     setLastAdClosedTime(Date.now());
+    setTimeout(processNextAd, 1500);
   }
 }
 
@@ -99,10 +101,12 @@ export function showInAppInterstitial() {
     setTimeout(() => {
       setActiveAd(false);
       setLastAdClosedTime(Date.now());
+      setTimeout(processNextAd, 1500);
     }, 5000);
     return true;
   } catch {
     setActiveAd(false);
+    setTimeout(processNextAd, 1500);
     return false;
   }
 }
@@ -209,14 +213,18 @@ async function playAdSequence(type: AdType): Promise<void> {
 
   const queue: string[] = [];
   
-  // Whichever ad is triggered, we prefer rewarded interstitial first for maximum delivery
-  queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
-  
-  // If needed to mix formats, use standard minimal interstitial next
-  queue.push('interstitial');
-  
-  // Popunders and direct links as the absolute lowest possible backup formats
-  queue.push('pop', 'popunder', 'direct', 'directlink');
+  if (type === 'pop') {
+    // Prioritize pop/popunder formats for pop type requests
+    queue.push('pop', 'popunder');
+    queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
+    queue.push('interstitial');
+    queue.push('direct', 'directlink');
+  } else {
+    // Whichever ad is triggered, we prefer rewarded interstitial first for maximum delivery
+    queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
+    queue.push('interstitial');
+    queue.push('pop', 'popunder', 'direct', 'directlink');
+  }
 
   const finalQueue = Array.from(new Set(queue));
   let success = false;

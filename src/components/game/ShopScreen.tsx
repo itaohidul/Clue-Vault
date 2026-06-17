@@ -225,13 +225,6 @@ export default function ShopScreen() {
     { name: "Material Crate", cost: 500, reward: { baseMaterials: 20 }, items: "20 Construction Mats", icon: Package },
   ];
 
-  // 2:1 swap converters for optimized user-level resource distribution
-  const convertPacks = [
-    { id: "convert_zp", name: "ZP swap Elements", costDesc: "200 ZP", rewardDesc: "100 Elements", ratio: "2:1 Swap Ratio", cost: { coins: 200 }, reward: { baseMaterials: 100 }, icon: Cpu },
-    { id: "convert_mats", name: "Elements swap Clue", costDesc: "20 Elements", rewardDesc: "10 Clue", ratio: "2:1 Swap Ratio", cost: { baseMaterials: 20 }, reward: { clue: 10 }, icon: Sparkles },
-    { id: "convert_keys", name: "key swap Clue", costDesc: "2 key", rewardDesc: "1 Clue", ratio: "2:1 Swap Ratio", cost: { keys: 2 }, reward: { clue: 1 }, icon: Key },
-  ];
-
   // Connect to a TON Wallet (using real TON Connect)
   const connectWallet = async () => {
     if (!user.onboarded) {
@@ -409,59 +402,7 @@ export default function ShopScreen() {
     }
   };
 
-  // Process 2:1 optimized exchange converts
-  const handleConvertSwap = (pack: any) => {
-    if (!user.onboarded || isUiBusy()) {
-      triggerHaptic("error");
-      return;
-    }
 
-    const currentRes = resources;
-    let hasEnough = true;
-    const deductions: any = {};
-    
-    Object.entries(pack.cost).forEach(([k, v]) => {
-      const field = k as keyof typeof resources;
-      if (currentRes[field] < (v as number)) {
-        hasEnough = false;
-      } else {
-        deductions[field] = -(v as number);
-      }
-    });
-
-    if (hasEnough) {
-      setUiBusy(true);
-      updateResources({
-        ...deductions,
-        ...pack.reward
-      });
-
-      Object.entries(pack.cost).forEach(([k, v]) => {
-        const amount = typeof v === 'number' ? v : 0;
-        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
-        logTransaction(-amount, "resource_convert", cur);
-        addTransaction({ type: "resource_convert", amount: -amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
-      });
-      Object.entries(pack.reward).forEach(([k, v]) => {
-        const amount = typeof v === 'number' ? v : 0;
-        const cur = k === 'coins' ? 'ZP' : k === 'baseMaterials' ? 'Element' : k === 'keys' ? 'Key' : k;
-        logTransaction(amount, "resource_convert", cur);
-        addTransaction({ type: "resource_convert", amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
-      });
-
-      setSwapSuccessItem({
-        items: pack.rewardDesc,
-        cost: pack.costDesc,
-      });
-      // Trigger ad break (After a successful transaction)
-      triggerAd('rewarded').finally(() => {
-        setUiBusy(false);
-      });
-      triggerHaptic("success");
-    } else {
-      triggerHaptic("error");
-    }
-  };
 
   return (
     <div className="p-5 pb-24 space-y-6">
@@ -719,42 +660,6 @@ export default function ShopScreen() {
                  <div className="text-right">
                     <div className="text-xs font-black italic mb-0.5 text-amber-500">{pack.cost} ZP</div>
                     <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">Swap</span>
-                 </div>
-              </motion.div>
-            ))}
-         </div>
-      </div>
-
-      {/* Balanced 2:1 Conversion Area */}
-      <div className="space-y-4">
-         <div className="flex justify-between items-center px-1">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-400 italic">III. Consensus Convert Hub</h3>
-            <span className="text-[8px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">Optimized 2:1</span>
-         </div>
-         <div className="grid grid-cols-1 gap-3">
-            {convertPacks.map((pack) => (
-              <motion.div 
-                key={pack.id}
-                onClick={() => handleConvertSwap(pack)}
-                whileTap={{ scale: 0.98 }}
-                className="glass rounded-3xl p-5 flex items-center justify-between border-white/5 cursor-pointer hover:border-emerald-500/15 hover:bg-emerald-500/[0.01] transition-all"
-              >
-                 <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/10">
-                       <pack.icon size={22} />
-                    </div>
-                    <div className="text-left">
-                       <h4 className="text-xs font-black uppercase tracking-tight">{pack.name}</h4>
-                       <span className="text-[9px] text-emerald-400/70 font-bold uppercase block flex items-center gap-1">
-                         <span>{pack.costDesc}</span>
-                         <ArrowRight size={10} />
-                         <span>{pack.rewardDesc}</span>
-                       </span>
-                    </div>
-                 </div>
-                 <div className="text-right">
-                    <div className="text-xs font-black italic mb-0.5 text-emerald-400 font-mono">{pack.ratio}</div>
-                    <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-widest block">Convert</span>
                  </div>
               </motion.div>
             ))}

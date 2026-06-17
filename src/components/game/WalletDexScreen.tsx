@@ -365,7 +365,11 @@ export default function WalletDexScreen() {
 
     // Live validation
     const currentBal = getAssetBalance(fromAsset);
-    if (amt > currentBal) {
+    if (toAsset === "CLUE") {
+      setSwapError("Buying or exchanging other currencies into Clue Token is suspended.");
+    } else if (fromAsset === "CLUE" && toAsset !== "TICKET") {
+      setSwapError("Clue Token can only be sold for USDT Spin Tickets.");
+    } else if (amt > currentBal) {
       setSwapError(`Insufficient ${fromAsset} payload in physical vault memory.`);
     } else {
       setSwapError(null);
@@ -380,6 +384,18 @@ export default function WalletDexScreen() {
   const executeSwap = () => {
     const amtNum = parseFloat(fromAmount);
     if (isNaN(amtNum) || amtNum <= 0) return;
+
+    if (toAsset === "CLUE") {
+      triggerHaptic("error");
+      setSwapError("Buying or exchanging other currencies into Clue Token is suspended.");
+      return;
+    }
+
+    if (fromAsset === "CLUE" && toAsset !== "TICKET") {
+      triggerHaptic("error");
+      setSwapError("Clue Token can only be sold for USDT Spin Tickets.");
+      return;
+    }
 
     const currentBal = getAssetBalance(fromAsset);
     if (amtNum > currentBal) {
@@ -461,6 +477,10 @@ export default function WalletDexScreen() {
   };
 
   const handleSwapAssets = () => {
+    if (toAsset === "CLUE" || fromAsset === "CLUE") {
+      triggerHaptic("error");
+      return;
+    }
     triggerHaptic("light");
     const temp = fromAsset;
     setFromAsset(toAsset);
@@ -1216,7 +1236,7 @@ export default function WalletDexScreen() {
                 </div>
 
                 {/* SWAP TOGGLE / SECURITY GATE LOCK */}
-                {!(fromAsset === "USDT" || fromAsset === "BTC" || fromAsset === "ETH") ? (
+                {!(fromAsset === "USDT" || fromAsset === "BTC" || fromAsset === "ETH" || fromAsset === "CLUE" || toAsset === "CLUE") ? (
                   <div className="flex justify-center -my-1.5 relative z-10">
                     <button
                       onClick={handleSwapAssets}
@@ -1228,7 +1248,7 @@ export default function WalletDexScreen() {
                 ) : (
                   <div className="flex justify-center -my-1.5 relative z-10">
                     <div 
-                      title="USDT, BTC and ETH can only be swapped out, not into."
+                      title="This asset cannot be swapped into or has fixed directional restrictions."
                       className="w-8 h-8 rounded-full bg-neutral-900 border border-white/10 flex items-center justify-center text-rose-500 shadow-xl"
                     >
                       <Lock size={12} className="animate-pulse" />
@@ -2302,7 +2322,15 @@ export default function WalletDexScreen() {
                 {Object.keys(ASSETS)
                   .filter(sym => {
                     if (showToSelector) {
-                      return sym !== "USDT" && sym !== "BTC" && sym !== "ETH";
+                      // Cannot exchange into USDT, BTC, ETH
+                      if (sym === "USDT" || sym === "BTC" || sym === "ETH") return false;
+                      // Buying or exchanging into Clue Token is suspended
+                      if (sym === "CLUE") return false;
+                      // If selling CLUE, it can ONLY be sold for TICKET
+                      if (fromAsset === "CLUE") {
+                        return sym === "TICKET";
+                      }
+                      return true;
                     }
                     return true;
                   })
@@ -2315,8 +2343,10 @@ export default function WalletDexScreen() {
                           triggerHaptic("medium");
                           if (showFromSelector) {
                             setFromAsset(sym);
-                            if (sym === toAsset) {
-                              setToAsset(sym === "TICKET" ? "CLUE" : "TICKET");
+                            if (sym === "CLUE") {
+                              setToAsset("TICKET");
+                            } else if (sym === toAsset) {
+                              setToAsset(sym === "TICKET" ? "ZP" : "TICKET");
                             }
                             setFromAmount("");
                             setToAmount("0.00");

@@ -33,13 +33,58 @@ export function setLastAdClosedTime(time: number): void {
   localStorage.setItem("cluevault_last_ad_closed", time.toString());
 }
 
+export async function safeShowAdWith5sTimeout(param?: any): Promise<any> {
+  const showAd = typeof window !== "undefined" ? (window as any).show_11030019 : null;
+  if (typeof showAd !== "function") {
+    throw new Error("SDK not loaded");
+  }
+
+  return new Promise<any>((resolve) => {
+    let resolved = false;
+
+    const done = (val: any) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(val);
+      }
+    };
+
+    // Auto-resolve after 5 seconds to guarantee reward integration within 5 seconds of ad load/view
+    const timer = setTimeout(() => {
+      console.log(`[Ad Engine] 5-second maximum ad view duration reached. Auto-verifying and rewarding user.`);
+      done(true);
+    }, 5000);
+
+    try {
+      const p = param !== undefined ? showAd(param) : showAd();
+      if (p && typeof p.then === "function") {
+        p.then((res: any) => {
+          clearTimeout(timer);
+          done(res);
+        }).catch((err: any) => {
+          console.warn("[Ad Engine] showAd promise rejected, but auto-resolving to reward user anyway:", err);
+          clearTimeout(timer);
+          done(true);
+        });
+      } else {
+        clearTimeout(timer);
+        done(true);
+      }
+    } catch (e) {
+      console.warn("[Ad Engine] showAd invocation threw exception, but auto-resolving for reward anyway:", e);
+      clearTimeout(timer);
+      done(true);
+    }
+  });
+}
+
 export async function showRewardedInterstitial(onReward?: any) {
   if (!monetagReady() || isActiveAd()) return false;
 
   setActiveAd(true);
   const startTime = Date.now();
   try {
-    const result = await window.show_11030019();
+    const result = await safeShowAdWith5sTimeout();
     if (typeof onReward === "function") onReward();
 
     const elapsed = Date.now() - startTime;
@@ -63,7 +108,7 @@ export async function showRewardedPopup(onReward?: any) {
   setActiveAd(true);
   const startTime = Date.now();
   try {
-    const result = await window.show_11030019("pop");
+    const result = await safeShowAdWith5sTimeout("pop");
     if (typeof onReward === "function") onReward();
 
     const elapsed = Date.now() - startTime;
@@ -209,7 +254,6 @@ async function playAdSequence(type: AdType): Promise<void> {
   if (!isMonetagReady()) {
     throw new Error("SDK not detected in scope (offline fallback integration active)");
   }
-  const showAd = (window as any).show_11030019;
 
   const queue: string[] = [];
   
@@ -241,7 +285,7 @@ async function playAdSequence(type: AdType): Promise<void> {
         format === 'rewarded'
       ) {
         try {
-          await showAd();
+          await safeShowAdWith5sTimeout();
           console.log(`[SDK Cascade] Success - empty args rewarded format: [${format}]`);
           success = true;
           break;
@@ -252,28 +296,28 @@ async function playAdSequence(type: AdType): Promise<void> {
 
       // 2. Try direct parameter string
       try {
-        await showAd(format);
+        await safeShowAdWith5sTimeout(format);
         console.log(`[SDK Cascade] Success - string argument format: [${format}]`);
         success = true;
         break;
       } catch (errStr) {
         // 3. Try object type package
         try {
-          await showAd({ type: format });
+          await safeShowAdWith5sTimeout({ type: format });
           console.log(`[SDK Cascade] Success - object parameter format: [${format}]`);
           success = true;
           break;
         } catch (errObj) {
           if (format === 'pop') {
             try {
-              await showAd('popunder');
+              await safeShowAdWith5sTimeout('popunder');
               console.log("[SDK Cascade] Success - popunder fallback");
               success = true;
               break;
             } catch (errPop) {}
           } else if (format === 'direct') {
             try {
-              await showAd('directlink');
+              await safeShowAdWith5sTimeout('directlink');
               console.log("[SDK Cascade] Success - directlink fallback");
               success = true;
               break;

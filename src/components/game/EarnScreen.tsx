@@ -229,8 +229,17 @@ export default function EarnScreen() {
     
     try {
       // Force user-initiated ads to show immediately
-      await triggerAd(adType, true);
+      const adSuccess = await triggerAd(adType, true);
       setAdVerifying(null);
+      if (!adSuccess) {
+        triggerHaptic("error");
+        setPacerAlert({
+          title: "Signal Link Offline",
+          desc: "AD COULD NOT BE CONFIRMED — PLEASE TRY AGAIN"
+        });
+        setTimeout(() => setPacerAlert(null), 3000);
+        return;
+      }
       const rewardAmount = type === 'direct' ? 100 : 50;
       updateResources({ activityScore: rewardAmount });
       triggerHaptic("success");

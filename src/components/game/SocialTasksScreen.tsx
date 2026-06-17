@@ -271,7 +271,14 @@ export default function SocialTasksScreen() {
 
     try {
       // Trigger prioritized ad flow: Rewarded -> Interstitial -> Popunder -> Direct
-      await triggerAd('rewarded', true);
+      const adSuccess = await triggerAd('rewarded', true);
+      if (!adSuccess) {
+        console.warn("[Social Tasks] Ad was not completed successfully. Aborting claim.");
+        triggerHaptic("error");
+        setClaimingTaskId(null);
+        isClaimingSupabaseRef.current = false;
+        return;
+      }
 
       // On successful ad engagement (or fallback success)
       const success = await claimSupabaseTask(task.id);

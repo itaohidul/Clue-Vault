@@ -33,132 +33,70 @@ export function setLastAdClosedTime(time: number): void {
   localStorage.setItem("cluevault_last_ad_closed", time.toString());
 }
 
-export async function safeShowAdWith5sTimeout(param?: any): Promise<any> {
+export interface AdAttempt {
+  id: string;
+  type: AdType;
+  status: "pending" | "completed" | "failed" | "expired" | "rewarded";
+  timestamp: number;
+}
+
+export const adAttemptsMap = new Map<string, AdAttempt>();
+let activeAdAttemptId: string | null = null;
+let activeAdPromise: Promise<boolean> | null = null;
+
+export async function safeShowAdWithTimeout(param?: any, timeoutMs: number = 20000): Promise<boolean> {
   const showAd = typeof window !== "undefined" ? (window as any).show_11030019 : null;
   if (typeof showAd !== "function") {
     throw new Error("SDK not loaded");
   }
 
-  return new Promise<any>((resolve) => {
+  return new Promise<boolean>((resolve) => {
     let resolved = false;
 
-    const done = (val: any) => {
+    const done = (val: boolean) => {
       if (!resolved) {
         resolved = true;
         resolve(val);
       }
     };
 
-    // Auto-resolve after 5 seconds to guarantee reward integration within 5 seconds of ad load/view
+    // 1. REMOVE AUTO-SUCCESS TIMEOUT BEHAVIOR & 6. SAFE TIMEOUT BEHAVIOR
+    // Do not mark success, do not reward on timeout, fail safely and release locks
     const timer = setTimeout(() => {
-      console.log(`[Ad Engine] 5-second maximum ad view duration reached. Auto-verifying and rewarding user.`);
-      done(true);
-    }, 5000);
+      console.warn(`[Ad SDK] Playback verification timed out after ${timeoutMs}ms. Safe timeout triggered without award.`);
+      done(false);
+    }, timeoutMs);
 
     try {
       const p = param !== undefined ? showAd(param) : showAd();
       if (p && typeof p.then === "function") {
         p.then((res: any) => {
           clearTimeout(timer);
-          done(res);
+          // Reward only on confirmed completion (standard SDK behavior)
+          const isComplete = res !== false;
+          done(isComplete);
         }).catch((err: any) => {
-          console.warn("[Ad Engine] showAd promise rejected, but auto-resolving to reward user anyway:", err);
+          console.warn("[Ad SDK] Ad promise rejected by SDK:", err);
           clearTimeout(timer);
-          done(true);
+          done(false); // Do not reward on failure or cancel
         });
       } else {
+        console.warn("[Ad SDK] No completion promise returned by SDK during call.");
         clearTimeout(timer);
-        done(true);
+        done(false); // Fail safely without reliable signal
       }
     } catch (e) {
-      console.warn("[Ad Engine] showAd invocation threw exception, but auto-resolving for reward anyway:", e);
+      console.warn("[Ad SDK] Execution exception during window.showAd call:", e);
       clearTimeout(timer);
-      done(true);
+      done(false);
     }
   });
 }
 
-export async function showRewardedInterstitial(onReward?: any) {
-  if (!monetagReady() || isActiveAd()) return false;
-
-  setActiveAd(true);
-  const startTime = Date.now();
-  try {
-    const result = await safeShowAdWith5sTimeout();
-    if (typeof onReward === "function") onReward();
-
-    const elapsed = Date.now() - startTime;
-    const minAdDuration = 20000; // 20s minimum display duration
-    if (elapsed < minAdDuration) {
-      await new Promise(resolve => setTimeout(resolve, minAdDuration - elapsed));
-    }
-    return true;
-  } catch {
-    return false;
-  } finally {
-    setActiveAd(false);
-    setLastAdClosedTime(Date.now());
-    setTimeout(processNextAd, 1500);
-  }
+// Backwards-compatible signature wrapper mapping 5s timeout to a secure 20s failure-prone timeout
+export async function safeShowAdWith5sTimeout(param?: any): Promise<boolean> {
+  return safeShowAdWithTimeout(param, 20000);
 }
-
-export async function showRewardedPopup(onReward?: any) {
-  if (!monetagReady() || isActiveAd()) return false;
-
-  setActiveAd(true);
-  const startTime = Date.now();
-  try {
-    const result = await safeShowAdWith5sTimeout("pop");
-    if (typeof onReward === "function") onReward();
-
-    const elapsed = Date.now() - startTime;
-    const minAdDuration = 20000; // 20s minimum display duration
-    if (elapsed < minAdDuration) {
-      await new Promise(resolve => setTimeout(resolve, minAdDuration - elapsed));
-    }
-    return true;
-  } catch {
-    return false;
-  } finally {
-    setActiveAd(false);
-    setLastAdClosedTime(Date.now());
-    setTimeout(processNextAd, 1500);
-  }
-}
-
-export function showInAppInterstitial() {
-  if (!monetagReady() || isActiveAd()) return false;
-
-  setActiveAd(true);
-  try {
-    window.show_11030019({
-      type: "inApp",
-      inAppSettings: {
-        frequency: 1,
-        capping: 0.25,
-        interval: 120,
-        timeout: 15,
-        everyPage: false
-      }
-    });
-
-    // Guard active block for 5 seconds to let the overlay initialize
-    setTimeout(() => {
-      setActiveAd(false);
-      setLastAdClosedTime(Date.now());
-      setTimeout(processNextAd, 1500);
-    }, 5000);
-    return true;
-  } catch {
-    setActiveAd(false);
-    setTimeout(processNextAd, 1500);
-    return false;
-  }
-}
-
-/**
- * Robust Ad Engine for libtl SDK (show_11030019) with Pacing Queue Support
- */
 
 export type AdType = 
   | 'rewarded_interstitial' 
@@ -177,94 +115,155 @@ interface InAppSettings {
   everyPage: boolean;
 }
 
-interface AdRequest {
-  type: AdType;
-  force: boolean;
-  resolve: (success: boolean) => void;
-  reject: (err: any) => void;
-}
+// Core unified sequential trigger engine with active sessions, collision detection, and anti-overlap
+export function triggerAd(type: AdType = 'rewarded_interstitial', force = false): Promise<boolean> {
+  const isRewarded = type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial';
 
-const adQueue: AdRequest[] = [];
-
-// Clean ad queue executor sequentially guaranteeing only ONE active ad at any moment
-async function processNextAd(): Promise<void> {
-  if (isActiveAd() || adQueue.length === 0) {
-    return;
+  if (isRewarded) {
+    trackAdAnalytics("rewardedAds", 1);
+  } else if (type === 'pop') {
+    trackAdAnalytics("popunders", 1);
+  } else if (type === 'interstitial') {
+    trackAdAnalytics("interstitials", 1);
   }
 
-  const nextAd = adQueue[0];
-  
-  // Verify eligibility for non-forced ads (e.g., periodic interval or navigation-triggered)
-  if (!nextAd.force) {
+  // 2. ADD ONE ACTIVE AD SESSION ONLY & 5. QUEUE OR BLOCK OVERLAPPING REQUESTS
+  // Block any concurrent or stacked ad requests from route changes, intervals, tasks, or spins
+  if (activeAdAttemptId !== null || isActiveAd()) {
+    console.warn(`[Ad Engine] Blocked overlapping ad request (${type}) because another ad is already showing or pending.`);
+    trackAdAnalytics("adQueueDelays", 1);
+    return Promise.resolve(false);
+  }
+
+  // Double-protect check against dynamic eligibility limitations for automated ads
+  if (!force) {
     const eligibility = checkAdEligibility();
     if (!eligibility.allowed) {
-      console.log(`[Ad Engine] Non-forced request shelved: ${eligibility.reason}`);
-      trackAdAnalytics("adQueueDelays", 1);
-      
-      // Re-evaluate queue safely in 4 seconds
-      setTimeout(processNextAd, 4000);
-      return;
+      console.log(`[Ad Engine] Non-forced request suppressed by Pacing rules: ${eligibility.reason}`);
+      return Promise.resolve(false);
     }
   } else {
-    // If forced but the interface is locked doing critical reward distributions, delay briefly
+    // If forced but the interface is locked doing critical reward distributions, delay/fail safely
     if (isUiBusy()) {
-      console.log(`[Ad Engine] Urgently requested ad delayed slightly—UI currently busy with critical gameplay rewards.`);
-      setTimeout(processNextAd, 1500);
-      return;
+      console.log(`[Ad Engine] Trigger suppressed because UI is busy with critical gameplay rewards.`);
+      return Promise.resolve(false);
     }
   }
 
-  // Remove matching from the operational queue since we are running it
-  adQueue.shift();
+  // 3. USE A UNIQUE AD ATTEMPT ID
+  const attemptId = "attempt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+  const attempt: AdAttempt = {
+    id: attemptId,
+    type,
+    status: "pending",
+    timestamp: Date.now()
+  };
+  adAttemptsMap.set(attemptId, attempt);
+  
+  // Set guards
+  activeAdAttemptId = attemptId;
   setActiveAd(true);
 
-  const { type, resolve, reject } = nextAd;
-  const startTime = Date.now();
+  activeAdPromise = (async () => {
+    const startTime = Date.now();
+    let success = false;
+    try {
+      console.log(`[Ad Engine] Initializing ad attempt [${attemptId}] for format: ${type}`);
+      success = await playAdSequence(type, attemptId);
+      
+      // 4. REWARD ONLY ON VERIFIED COMPLETION
+      if (success) {
+        attempt.status = "completed";
+        incrementSessionAds();
+        console.log(`[Ad Engine] Ad attempt [${attemptId}] completed successfully.`);
+      } else {
+        attempt.status = "failed";
+        console.warn(`[Ad Engine] Ad attempt [${attemptId}] failed or timed out.`);
+      }
+    } catch (error) {
+      attempt.status = "failed";
+      console.error(`[Ad Engine] Exception in ad play cascade [${attemptId}]:`, error);
+    } finally {
+      // Release UI block/lock strictly after completion to guarantee no overlapping,
+      // maintaining a sensible minimum duration lock for CPM and pacing reasons (15 seconds)
+      const elapsed = Date.now() - startTime;
+      const minAdDuration = 15000; 
+      if (elapsed < minAdDuration) {
+        await new Promise(resolveHold => setTimeout(resolveHold, minAdDuration - elapsed));
+      }
 
-  try {
-    console.log(`[Ad Engine] Dequeueing and booting format: ${type}`);
-    await playAdSequence(type);
-    
-    // Post reward tracking
-    incrementSessionAds();
-    resolve(true);
-
-    // Hold the active lock for at least 20 seconds to guarantee the first ad 
-    // is closed before any subsequent ad in the queue starts loading in the background
-    const elapsed = Date.now() - startTime;
-    const minAdDuration = 20000; // 20 seconds
-    if (elapsed < minAdDuration) {
-      const waitTime = minAdDuration - elapsed;
-      console.log(`[Ad Engine] Holding active ad lock for remaining ${waitTime}ms to prevent concurrent background loading.`);
-      await new Promise(resolveTime => setTimeout(resolveTime, waitTime));
+      // 8. FIX UI LOCK RELEASE LOGIC
+      activeAdAttemptId = null;
+      activeAdPromise = null;
+      setActiveAd(false);
+      setLastAdClosedTime(Date.now());
     }
-  } catch (error) {
-    console.warn(`[Ad Engine Event] Play sequence failed or bypassed on fallback. Resolving successfully to prevent game locks.`, error);
-    // Resolve anyway to guarantee offline mode continuation without locking the game interface
-    resolve(false);
-  } finally {
+
+    return success;
+  })();
+
+  return activeAdPromise;
+}
+
+// 5. Centralized delegated show routines
+export async function showRewardedInterstitial(onReward?: any): Promise<boolean> {
+  const success = await triggerAd('rewarded_interstitial', false);
+  if (success && typeof onReward === "function") {
+    onReward();
+  }
+  return success;
+}
+
+export async function showRewardedPopup(onReward?: any): Promise<boolean> {
+  const success = await triggerAd('pop', false);
+  if (success && typeof onReward === "function") {
+    onReward();
+  }
+  return success;
+}
+
+export function showInAppInterstitial(): boolean {
+  if (!monetagReady() || isActiveAd() || activeAdAttemptId !== null) return false;
+
+  setActiveAd(true);
+  try {
+    const showAd = (window as any).show_11030019;
+    showAd({
+      type: "inApp",
+      inAppSettings: {
+        frequency: 1,
+        capping: 0.25,
+        interval: 120,
+        timeout: 15,
+        everyPage: false
+      }
+    });
+
+    // Guard active block for 5 seconds to let the overlay initialize
+    setTimeout(() => {
+      setActiveAd(false);
+      setLastAdClosedTime(Date.now());
+    }, 5000);
+    return true;
+  } catch {
     setActiveAd(false);
-    setLastAdClosedTime(Date.now());
-    // Cycle the queue processing with a short breather delay to keep layouts clear
-    setTimeout(processNextAd, 1500);
+    return false;
   }
 }
 
-async function playAdSequence(type: AdType): Promise<void> {
+async function playAdSequence(type: AdType, attemptId: string): Promise<boolean> {
   if (!isMonetagReady()) {
-    throw new Error("SDK not detected in scope (offline fallback integration active)");
+    throw new Error("SDK not detected in scope");
   }
 
   const queue: string[] = [];
   
   if (type === 'pop') {
-    // Prioritize pop/popunder formats for pop type requests
     queue.push('pop', 'popunder');
     queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
     queue.push('interstitial');
     queue.push('direct', 'directlink');
   } else {
-    // Whichever ad is triggered, we prefer rewarded interstitial first for maximum delivery
     queue.push('rewarded_interstitial', 'rewardedInterstitial', 'rewinterstitial', 'rewarded');
     queue.push('interstitial');
     queue.push('pop', 'popunder', 'direct', 'directlink');
@@ -275,9 +274,8 @@ async function playAdSequence(type: AdType): Promise<void> {
 
   for (const format of finalQueue) {
     try {
-      console.log(`[SDK Cascade] Attempting Monetag format: [${format}]`);
+      console.log(`[SDK Cascade] Attempting Monetag format: [${format}] for attempt: ${attemptId}`);
       
-      // 1. empty parameter trial for rewarded interstitial formats
       if (
         format === 'rewarded_interstitial' || 
         format === 'rewardedInterstitial' || 
@@ -285,70 +283,33 @@ async function playAdSequence(type: AdType): Promise<void> {
         format === 'rewarded'
       ) {
         try {
-          await safeShowAdWith5sTimeout();
-          console.log(`[SDK Cascade] Success - empty args rewarded format: [${format}]`);
-          success = true;
-          break;
+          success = await safeShowAdWithTimeout(undefined, 20000);
+          if (success) {
+            console.log(`[SDK Cascade] Success - empty args rewarded format: [${format}]`);
+            break;
+          }
         } catch (errEmpty) {
           console.log(`[SDK Cascade] Empty-parameter reward call failed for [${format}]. Trying variations...`);
         }
       }
 
-      // 2. Try direct parameter string
-      try {
-        await safeShowAdWith5sTimeout(format);
+      success = await safeShowAdWithTimeout(format, 20000);
+      if (success) {
         console.log(`[SDK Cascade] Success - string argument format: [${format}]`);
-        success = true;
         break;
-      } catch (errStr) {
-        // 3. Try object type package
-        try {
-          await safeShowAdWith5sTimeout({ type: format });
-          console.log(`[SDK Cascade] Success - object parameter format: [${format}]`);
-          success = true;
-          break;
-        } catch (errObj) {
-          if (format === 'pop') {
-            try {
-              await safeShowAdWith5sTimeout('popunder');
-              console.log("[SDK Cascade] Success - popunder fallback");
-              success = true;
-              break;
-            } catch (errPop) {}
-          } else if (format === 'direct') {
-            try {
-              await safeShowAdWith5sTimeout('directlink');
-              console.log("[SDK Cascade] Success - directlink fallback");
-              success = true;
-              break;
-            } catch (errDir) {}
-          }
-        }
+      }
+
+      success = await safeShowAdWithTimeout({ type: format }, 20000);
+      if (success) {
+        console.log(`[SDK Cascade] Success - object parameter format: [${format}]`);
+        break;
       }
     } catch (e) {
-      console.warn(`[SDK Cascade Warn] Format trial error on [${format}]:`, e);
+      console.warn(`[SDK Cascade Warn] Format trial error on [${format}] for attempt: ${attemptId}`, e);
     }
   }
 
-  if (!success) {
-    throw new Error("All cascade format options reported loading failure");
-  }
-}
-
-export function triggerAd(type: AdType = 'rewarded_interstitial', force = false): Promise<boolean> {
-  return new Promise<boolean>((resolve, reject) => {
-    // Audit log trackers based on requested category
-    if (type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial') {
-      trackAdAnalytics("rewardedAds", 1);
-    } else if (type === 'pop') {
-      trackAdAnalytics("popunders", 1);
-    } else if (type === 'interstitial') {
-      trackAdAnalytics("interstitials", 1);
-    }
-    
-    adQueue.push({ type, force, resolve, reject });
-    processNextAd();
-  });
+  return success;
 }
 
 /**

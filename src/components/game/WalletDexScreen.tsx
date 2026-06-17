@@ -243,7 +243,7 @@ export default function WalletDexScreen() {
     };
   });
 
-  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | "ad_verified" | null>(null);
+  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | "ad_verified" | "ad_failed" | null>(null);
   const [swapSuccessDetails, setSwapSuccessDetails] = useState<any | null>(null);
   
   // Anti-fraud spin trackers
@@ -720,13 +720,21 @@ export default function WalletDexScreen() {
       return triggerAd('rewarded', true);
     })
     .then((adSuccess) => {
-      executeRealSpin(isDailyFree, !!adSuccess);
+      if (!adSuccess) {
+        setPopupType("ad_failed");
+        setUiBusy(false);
+        setIsSpinInitiating(false);
+        return;
+      }
+      executeRealSpin(isDailyFree, true);
       setPopupType("ad_verified"); // Clean elegant pop-up replaces native alert()
     })
     .catch((err: any) => {
-      console.warn("[Ad Setup/Safe Spin Warn] Sequential ad flow bypassed: ", err);
-      // Fallback: Continue spin execution to preserve offline and client experience
-      executeRealSpin(isDailyFree, false);
+      console.warn("[Ad Setup/Safe Spin Warn] Sequential ad flow bypassed due to error: ", err);
+      // Fallback: Ad failed or timed out on spin initiation, do not reward or spin, let retry
+      setPopupType("ad_failed");
+      setUiBusy(false);
+      setIsSpinInitiating(false);
     })
     .finally(() => {
       setIsSpinInitiating(false);
@@ -2264,6 +2272,26 @@ export default function WalletDexScreen() {
                      className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-wider text-[10px] active:scale-95 transition-all cursor-pointer"
                    >
                      Acknowledge & Sync
+                   </button>
+                </div>
+              ) : popupType === "ad_failed" ? (
+                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                   <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto text-2xl shadow-lg">
+                      <AlertTriangle size={24} className="text-rose-400" />
+                   </div>
+                   <div className="space-y-2">
+                      <span className="text-[8px] font-bold text-rose-500 uppercase tracking-[0.25em] block">MONETAG AD FAULT</span>
+                      <h3 className="text-xl font-black uppercase tracking-tight text-white italic">Aether Link Suppressed</h3>
+                      <p className="text-[10px] text-white/50 font-bold leading-relaxed uppercase">
+                        The ad transmission could not be verified successfully or was closed early. Please try again.
+                      </p>
+                   </div>
+                   
+                   <button
+                     onClick={() => setPopupType(null)}
+                     className="w-full bg-rose-500 text-black py-4 rounded-xl font-black uppercase italic tracking-wider text-[10px] active:scale-95 transition-all cursor-pointer"
+                   >
+                     Acknowledge & Retry
                    </button>
                 </div>
               ) : (

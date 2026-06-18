@@ -307,48 +307,6 @@ function AppContent() {
   const prevPathRef = useRef<string>(location.pathname);
   const navigationCountRef = useRef<number>(0);
 
-  // 1. Navigation transition ad trigger: "Place rewarded ads on navigations if theres 2 navigations between sections in app then show 1 rewarded interstitial"
-  useEffect(() => {
-    const prevPath = prevPathRef.current;
-    const currentPath = location.pathname;
-
-    if (currentPath !== prevPath) {
-      prevPathRef.current = currentPath;
-
-      // Count only valid app section transitions
-      if (currentPath.startsWith("/app") && prevPath.startsWith("/app")) {
-        const prevSection = prevPath.split("/")[2] || "";
-        const currentSection = currentPath.split("/")[2] || "";
-
-        // Only transition between distinct main screens counts
-        if (prevSection && currentSection && prevSection !== currentSection) {
-          navigationCountRef.current += 1;
-          console.log(`[Ad Engine] Section Transition detected: ${prevSection} -> ${currentSection}. Continuous transition count: ${navigationCountRef.current}`);
-
-          if (navigationCountRef.current >= 2) {
-            navigationCountRef.current = 0; // reset counter
-            const now = Date.now();
-            const lastClosed = getLastAdClosedTime();
-            if (now - lastClosed < 60000) {
-              console.log(`[Ad Engine] Navigation trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (60s wait required).`);
-            } else {
-              console.log(`[Ad Engine] Navigation limit of 2 reached. Triggering rewarded or in-app interstitial.`);
-              trackAdAnalytics("navigationTriggeredAds", 1);
-              const useInApp = Math.random() < 0.5;
-              if (useInApp) {
-                console.log("[Ad Engine Trigger] Showing In-App Interstitial as automatic navigation ad.");
-                showInAppInterstitial();
-              } else {
-                console.log("[Ad Engine Trigger] Showing Rewarded Interstitial as automatic navigation ad.");
-                showRewardedInterstitial();
-              }
-            }
-          }
-        }
-      }
-    }
-  }, [location.pathname]);
-
   // 2. Continuous 90-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 90 seconds strictly."
   useEffect(() => {
     const adInterval = setInterval(() => {
@@ -364,8 +322,10 @@ function AppContent() {
           console.log("[Ad Engine Trigger] Showing In-App Interstitial as break ad.");
           showInAppInterstitial();
         } else {
-          console.log("[Ad Engine Trigger] Showing Rewarded Interstitial as break ad.");
-          showRewardedInterstitial();
+          const runPop = Math.random() < 0.5;
+          const format = runPop ? 'pop' : 'interstitial';
+          console.log(`[Ad Engine Trigger] Showing ${format === 'pop' ? 'Popunder' : 'Interstitial'} as break ad.`);
+          triggerAd(format, false, false);
         }
       }
     }, 90000);

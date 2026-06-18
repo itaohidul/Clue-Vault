@@ -39,8 +39,12 @@ export function TwaAnalyticsProvider(props: any) {
     });
   }
 
+  // Force re-create EventBuilder on key change when real user identity becomes available
+  const pKey = launchData?.user?.id ? `telemetree-${launchData.user.id}` : "telemetree-default";
+
   return (
     <RealTwaAnalyticsProvider 
+      key={pKey}
       {...rest} 
       telegramWebAppData={launchData}
     >
@@ -64,14 +68,11 @@ function RealTelemetreeWrapper({ children }: { children: ReactNode }) {
     const checkAndTrack = () => {
       if (!active) return;
       
-      const isReady = builder && 
-                     typeof builder.track === 'function' && 
-                     (builder as any).config && 
-                     (builder as any).transport;
+      const isReady = builder && typeof builder.track === 'function';
                      
       if (isReady) {
         if (!hasTrackedLoad.current) {
-          console.log("[TELEMETREE-READY] Builder active and config loaded. Sending app_loaded event.");
+          console.log("[TELEMETREE-READY] Builder active. Sending app_loaded event.");
           try {
             builder.track("app_loaded", { timestamp: Date.now() });
             hasTrackedLoad.current = true;
@@ -95,15 +96,12 @@ function RealTelemetreeWrapper({ children }: { children: ReactNode }) {
     <MockAnalyticsContext.Provider value={{
       track: (event, properties) => {
         try {
-          const isReady = builder && 
-                         typeof builder.track === 'function' && 
-                         (builder as any).config && 
-                         (builder as any).transport;
+          const isReady = builder && typeof builder.track === 'function';
                          
           if (isReady) {
              builder.track(event, properties || {});
           } else {
-             console.warn("[TELEMA-SDK] Telemetree config not finished loading. Event skipped in sandbox mode:", event);
+             console.warn("[TELEMA-SDK] Telemetree event builder not found. Event skipped:", event);
           }
         } catch (e: any) {
           if (e.message && e.message.includes("not initialized")) {

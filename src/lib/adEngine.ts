@@ -506,15 +506,15 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
     
     try {
       let p: any;
-      if (type === 'pop' || type === 'direct') {
-        console.log(`[Ad Engine] Triggering single-shot popunder ad for format: ${type}`);
+      if (type === 'pop' || type === 'direct' || type === 'rewarded' || type === 'rewarded_interstitial' || type === 'rewinterstitial') {
+        console.log(`[Ad Engine] Triggering prioritized popunder (onclick) ad for format: ${type}`);
         p = showAd('pop');
       } else if (type === 'interstitial') {
         console.log(`[Ad Engine] Triggering single-shot interstitial ad for format: ${type}`);
         p = showAd('interstitial');
       } else {
-        // Rewarded/Rewarded Interstitial formats
-        console.log(`[Ad Engine] Triggering single-shot rewarded ad for format: ${type}`);
+        // Fallback standard
+        console.log(`[Ad Engine] Triggering standard ad for format: ${type}`);
         p = showAd();
       }
 
@@ -616,13 +616,17 @@ export async function triggerBreakAd(force = false): Promise<boolean> {
   
   console.log(`[Ad Break Engine] Break triggered. Interstitials count: ${count}/${threshold}`);
   
-  if (count >= threshold) {
-    console.log(`[Ad Break Engine] Popunder trigger: limits of ${threshold} break interstitials reached. Routing popunder.`);
-    // Reset counter
-    localStorage.setItem("cluevault_break_interstitial_count", "0");
-    // Pick next threshold (1 or 2)
-    const nextThreshold = Math.random() < 0.5 ? 1 : 2;
-    localStorage.setItem("cluevault_break_threshold", String(nextThreshold));
+  // High-probability override to prioritize Onclick/Popunder ads ('pop') in breaks too
+  const shouldPrioritizePop = Math.random() < 0.85;
+
+  if (count >= threshold || shouldPrioritizePop) {
+    console.log(`[Ad Break Engine] Prioritized Popunder trigger: limits count reached (${count >= threshold}) or 85% high-probability popunder active (${shouldPrioritizePop}). Routing popunder.`);
+    // Reset counter if limits were met
+    if (count >= threshold) {
+      localStorage.setItem("cluevault_break_interstitial_count", "0");
+      const nextThreshold = Math.random() < 0.5 ? 1 : 2;
+      localStorage.setItem("cluevault_break_threshold", String(nextThreshold));
+    }
     
     // Trigger Popunder!
     return triggerAd('pop', force, false);

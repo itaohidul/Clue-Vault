@@ -121,6 +121,15 @@ export function TwaAnalyticsProvider(props: any) {
       apiKey: props.apiKey ? props.apiKey.substring(0, 8) + "..." : "missing",
       initDataLen: tg?.initData?.length || 0
     });
+
+    const isPrIdGeneric = props.projectId === "ClueVault" || !props.projectId || !props.projectId.includes("-") || props.projectId.length < 16;
+    if (isPrIdGeneric) {
+      console.warn(
+        `%c [TELEMETREE CONFIG WARNING] %c\nYour Telemetree Project ID ("${props.projectId}") is configured as a generic name instead of a UUID.\nTo track analytics successfully with your Telemetree Developer Dashboard, make sure to replace it with your registered Project ID UUID (e.g., "9caafff9-ae99-42ca-b794-b88002ebe65e") within your developer settings menu.`,
+        "color: white; background: #e11d48; font-weight: bold; padding: 4px; border-radius: 4px;",
+        "color: #e11d48; font-weight: 50s;"
+      );
+    }
   }, [isTgWebApp, isDev, isDebugEnabled, props.projectId, props.apiKey, tg?.initData]);
 
   // Re-render key dynamically if user parameters change so the EventBuilder is refreshed

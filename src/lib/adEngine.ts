@@ -262,6 +262,11 @@ export function triggerAd(
   force = false,
   isUserInitiated = true // Distinguish user actions vs passive background navigation/timers
 ): Promise<boolean> {
+  // Map standard rewarded format to the higher value rewarded_interstitial to resolve low CPM
+  if (type === 'rewarded') {
+    type = 'rewarded_interstitial';
+  }
+
   const isRewarded = type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial';
 
   if (isRewarded) {
@@ -595,5 +600,37 @@ export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
     if (attempts < 30) {
       setTimeout(() => initInAppAds(settings, attempts + 1), 1000);
     }
+  }
+}
+
+// Orchestrated break ad handler: Show Interstitial on break, and Popunder after 1-2 Interstitials shown.
+export async function triggerBreakAd(force = false): Promise<boolean> {
+  const count = Number(localStorage.getItem("cluevault_break_interstitial_count") || "0");
+  
+  // Decide threshold (1 or 2)
+  let threshold = Number(localStorage.getItem("cluevault_break_threshold") || "0");
+  if (threshold !== 1 && threshold !== 2) {
+    threshold = Math.random() < 0.5 ? 1 : 2;
+    localStorage.setItem("cluevault_break_threshold", String(threshold));
+  }
+  
+  console.log(`[Ad Break Engine] Break triggered. Interstitials count: ${count}/${threshold}`);
+  
+  if (count >= threshold) {
+    console.log(`[Ad Break Engine] Popunder trigger: limits of ${threshold} break interstitials reached. Routing popunder.`);
+    // Reset counter
+    localStorage.setItem("cluevault_break_interstitial_count", "0");
+    // Pick next threshold (1 or 2)
+    const nextThreshold = Math.random() < 0.5 ? 1 : 2;
+    localStorage.setItem("cluevault_break_threshold", String(nextThreshold));
+    
+    // Trigger Popunder!
+    return triggerAd('pop', force, false);
+  } else {
+    console.log(`[Ad Break Engine] Rest break interstitial trigger. Displaying interstitial.`);
+    localStorage.setItem("cluevault_break_interstitial_count", String(count + 1));
+    
+    // Trigger Interstitial!
+    return triggerAd('interstitial', force, false);
   }
 }

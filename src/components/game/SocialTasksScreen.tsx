@@ -271,7 +271,7 @@ export default function SocialTasksScreen() {
 
     try {
       // Trigger prioritized ad flow: Rewarded -> Interstitial -> Popunder -> Direct
-      const adSuccess = await triggerAd('rewarded', true);
+      const adSuccess = await triggerAd('rewarded_interstitial', true);
       if (!adSuccess) {
         console.warn("[Social Tasks] Ad was not completed successfully. Aborting claim.");
         triggerHaptic("error");
@@ -327,7 +327,7 @@ export default function SocialTasksScreen() {
         completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
         
         // Trigger ad break at natural break (completing a task)
-        await triggerAd('rewarded', true);
+        await triggerAd('rewarded_interstitial', true);
 
         setSuccessAnimation({ active: true, clueAwarded: clueTokens });
         triggerHaptic("success");
@@ -450,7 +450,7 @@ export default function SocialTasksScreen() {
          });
 
          // Prioritize rewarded interstitials for all ad tasks
-         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded';
+         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded_interstitial';
          
          const onComplete = () => {
            const randomClue = Math.floor(Math.random() * 20) + 1;
@@ -1315,7 +1315,7 @@ export default function SocialTasksScreen() {
                           addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
 
                           // trigger ad
-                          triggerAd('rewarded', true);
+                          triggerAd('rewarded_interstitial', true);
 
                           setSuccessAnimation({ active: true, clueAwarded: randomClue });
                           triggerHaptic("success");

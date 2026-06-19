@@ -29,7 +29,7 @@ import { TwaAnalyticsProvider, useTelemetree } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
-import { initInAppAds, triggerAd, getLastAdClosedTime, showRewardedInterstitial, showInAppInterstitial } from "./lib/adEngine";
+import { initInAppAds, triggerAd, getLastAdClosedTime, showRewardedInterstitial, showInAppInterstitial, triggerBreakAd } from "./lib/adEngine";
 import { trackAdAnalytics } from "./lib/adPacer";
 
 
@@ -315,18 +315,9 @@ function AppContent() {
       if (now - lastClosed < 60000) {
         console.log(`[Ad Engine] 90s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (60s wait required).`);
       } else {
-        console.log(`[Ad Engine] Strict 90s activity interval reached. Triggering rewarded or in-app ad interval.`);
+        console.log(`[Ad Engine] Strict 90s activity interval reached. Triggering orchestrated break ad.`);
         trackAdAnalytics("totalIntervals", 90);
-        const useInApp = Math.random() < 0.5;
-        if (useInApp) {
-          console.log("[Ad Engine Trigger] Showing In-App Interstitial as break ad.");
-          showInAppInterstitial();
-        } else {
-          const runPop = Math.random() < 0.5;
-          const format = runPop ? 'pop' : 'interstitial';
-          console.log(`[Ad Engine Trigger] Showing ${format === 'pop' ? 'Popunder' : 'Interstitial'} as break ad.`);
-          triggerAd(format, false, false);
-        }
+        triggerBreakAd(false);
       }
     }, 90000);
 

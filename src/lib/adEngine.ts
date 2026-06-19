@@ -256,6 +256,7 @@ export async function safeShowAdWithTimeout(
 // New intelligent ad rotation manager tracking usage counts for balanced distribution to protect/grow CPM
 export function logAdRotationStats(selectedFormat: AdType): void {
   try {
+    // Restore full 4 formats in logs
     const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
     const distribution: Record<string, number> = {};
     let total = 0;
@@ -288,6 +289,7 @@ export function logAdRotationStats(selectedFormat: AdType): void {
 }
 
 export function getNextAdType(): AdType {
+  // Restore all 4 original formats
   const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
   
   // Retrieve current usage counts from localStorage
@@ -301,7 +303,7 @@ export function getNextAdType(): AdType {
   let lowestFormat: AdType = 'pop';
   let lowestScore = Infinity;
 
-  counts.forEach(item => {
+  for (const item of counts) {
     // Pop/Onclick has a multiplier of 2, meaning it gets selected 2x as often before other formats catch up
     const weight = item.format === 'pop' ? 2 : 1;
     const score = item.count / weight;
@@ -311,9 +313,9 @@ export function getNextAdType(): AdType {
       lowestScore = score;
       lowestFormat = item.format;
     }
-  });
+  }
 
-  const selectedFormat = lowestFormat;
+  const selectedFormat: AdType = lowestFormat;
   const currentRecord = counts.find(c => c.format === selectedFormat);
   const newCount = (currentRecord ? currentRecord.count : 0) + 1;
   localStorage.setItem(`cluevault_ad_count_${selectedFormat}`, String(newCount));
@@ -322,6 +324,15 @@ export function getNextAdType(): AdType {
   
   // Log and export analytical stats to Telemetree
   logAdRotationStats(selectedFormat);
+  
+  // Replace in_app_interstitial with 'pop', 'rewarded_interstitial', or 'direct' to give it a rest
+  if (selectedFormat === 'in_app_interstitial') {
+    const replacements: AdType[] = ['pop', 'rewarded_interstitial', 'direct'];
+    const rIndex = Math.floor(Math.random() * replacements.length);
+    const replacement: AdType = replacements[rIndex];
+    console.log(`[Ad Rotation Manager] Swap selected in_app_interstitial with: "${replacement}"`);
+    return replacement;
+  }
   
   return selectedFormat;
 }

@@ -80,7 +80,9 @@ export type AdType =
   | 'rewarded' 
   | 'interstitial' 
   | 'pop' 
-  | 'direct';
+  | 'direct'
+  | 'in_app_interstitial'
+  | 'inApp';
 
 interface InAppSettings {
   frequency: number;
@@ -251,6 +253,42 @@ export async function safeShowAdWithTimeout(
   });
 }
 
+// New intelligent ad rotation manager tracking usage counts for balanced distribution to protect/grow CPM
+export function getNextAdType(): AdType {
+  const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
+  
+  // Retrieve current usage counts from localStorage
+  const counts = formats.map(f => {
+    const countStr = localStorage.getItem(`cluevault_ad_count_${f}`) || "0";
+    return { format: f, count: parseInt(countStr, 10) || 0 };
+  });
+
+  // Find the format with the absolute lowest usage count to guarantee perfect balance
+  let lowest = counts[0];
+  for (let i = 1; i < counts.length; i++) {
+    if (counts[i].count < lowest.count) {
+      lowest = counts[i];
+    }
+  }
+
+  const selectedFormat = lowest.format;
+  const newCount = lowest.count + 1;
+  localStorage.setItem(`cluevault_ad_count_${selectedFormat}`, String(newCount));
+  
+  console.log(`[Ad Rotation Manager] Current Usage Stats:`, counts.reduce((acc: any, c) => {
+    acc[c.format] = c.count;
+    return acc;
+  }, {}));
+  console.log(`[Ad Rotation Manager] Selected lowest-usage format: "${selectedFormat}" (Updated Count: ${newCount})`);
+  
+  return selectedFormat;
+}
+
+// Juggling helper to guarantee equal distribution across all formats to preserve and grow CPM
+export function getNextJuggleFormat(): AdType {
+  return getNextAdType();
+}
+
 // Backwards-compatible signature wrapper mapping 5s timeout to a secure 15s failure-prone timeout
 export async function safeShowAdWith5sTimeout(param?: any): Promise<boolean> {
   return safeShowAdWithTimeout(param, 15000);
@@ -262,19 +300,21 @@ export function triggerAd(
   force = false,
   isUserInitiated = true // Distinguish user actions vs passive background navigation/timers
 ): Promise<boolean> {
-  // Map standard rewarded format to the higher value rewarded_interstitial to resolve low CPM
-  if (type === 'rewarded') {
-    type = 'rewarded_interstitial';
-  }
+  // Always select the next rotated dynamic format to ensure completely equal views across formats
+  const requestedType = type;
+  type = getNextAdType();
+  console.log(`[Ad Rotation Manager] Trigger active. Overriding requested format "${requestedType}" with rotated format: "${type}"`);
 
-  const isRewarded = type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial';
+  const isRewarded = type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial' || type === 'in_app_interstitial' || type === 'inApp';
 
   if (isRewarded) {
     trackAdAnalytics("rewardedAds", 1);
   } else if (type === 'pop') {
     trackAdAnalytics("popunders", 1);
-  } else if (type === 'interstitial') {
+  } else if (type === 'interstitial' || type === 'in_app_interstitial') {
     trackAdAnalytics("interstitials", 1);
+  } else if (type === 'direct') {
+    trackAdAnalytics("popunders", 1); // direct link maps to popunder analytics track
   }
 
   trackAdEvent(type, 'ad_requested');
@@ -506,15 +546,45 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
     
     try {
       let p: any;
-      if (type === 'pop' || type === 'direct' || type === 'rewarded' || type === 'rewarded_interstitial' || type === 'rewinterstitial') {
-        console.log(`[Ad Engine] Triggering prioritized popunder (onclick) ad for format: ${type}`);
+      if (type === 'pop') {
+        console.log(`[Ad Engine] Triggering single-shot popunder (onclick) ad for format: ${type}`);
         p = showAd('pop');
-      } else if (type === 'interstitial') {
-        console.log(`[Ad Engine] Triggering single-shot interstitial ad for format: ${type}`);
+      } else if (type === 'in_app_interstitial' || type === 'inApp') {
+        console.log(`[Ad Engine] Triggering immersive in-app interstitial ad for format: ${type}`);
+        p = showAd({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 1,
+            capping: 0.05,
+            interval: 10,
+            timeout: 10,
+            everyPage: false
+          }
+        });
+      } else if (type === 'rewarded_interstitial' || type === 'rewarded' || type === 'rewinterstitial' || type === 'interstitial') {
+        console.log(`[Ad Engine] Triggering premium rewarded interstitial format: ${type}`);
         p = showAd('interstitial');
+      } else if (type === 'direct') {
+        console.log(`[Ad Engine] Triggering popunder and background direct link for format: ${type}`);
+        p = showAd('pop');
+        
+        // Safely trigger high-value direct link URL in a blur-focus background pattern
+        setTimeout(() => {
+          try {
+            const directLink = "https://omg10.com/4/11030019";
+            console.log(`[Ad Engine] Background direct link opened to boost CPM: ${directLink}`);
+            const tab = window.open(directLink, '_blank');
+            if (tab) {
+              tab.blur();
+              window.focus();
+            }
+          } catch (err) {
+            console.warn("[Ad Engine] Non-blocking background direct link block gracefully bypassed:", err);
+          }
+        }, 150);
       } else {
         // Fallback standard
-        console.log(`[Ad Engine] Triggering standard ad for format: ${type}`);
+        console.log(`[Ad Engine] Triggering standard fallback ad for format: ${type}`);
         p = showAd();
       }
 
@@ -603,38 +673,8 @@ export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
   }
 }
 
-// Orchestrated break ad handler: Show Interstitial on break, and Popunder after 1-2 Interstitials shown.
+// Orchestrated break ad handler: delegates directly to the Juggler-driven triggerAd to schedule the next format
 export async function triggerBreakAd(force = false): Promise<boolean> {
-  const count = Number(localStorage.getItem("cluevault_break_interstitial_count") || "0");
-  
-  // Decide threshold (1 or 2)
-  let threshold = Number(localStorage.getItem("cluevault_break_threshold") || "0");
-  if (threshold !== 1 && threshold !== 2) {
-    threshold = Math.random() < 0.5 ? 1 : 2;
-    localStorage.setItem("cluevault_break_threshold", String(threshold));
-  }
-  
-  console.log(`[Ad Break Engine] Break triggered. Interstitials count: ${count}/${threshold}`);
-  
-  // High-probability override to prioritize Onclick/Popunder ads ('pop') in breaks too
-  const shouldPrioritizePop = Math.random() < 0.85;
-
-  if (count >= threshold || shouldPrioritizePop) {
-    console.log(`[Ad Break Engine] Prioritized Popunder trigger: limits count reached (${count >= threshold}) or 85% high-probability popunder active (${shouldPrioritizePop}). Routing popunder.`);
-    // Reset counter if limits were met
-    if (count >= threshold) {
-      localStorage.setItem("cluevault_break_interstitial_count", "0");
-      const nextThreshold = Math.random() < 0.5 ? 1 : 2;
-      localStorage.setItem("cluevault_break_threshold", String(nextThreshold));
-    }
-    
-    // Trigger Popunder!
-    return triggerAd('pop', force, false);
-  } else {
-    console.log(`[Ad Break Engine] Rest break interstitial trigger. Displaying interstitial.`);
-    localStorage.setItem("cluevault_break_interstitial_count", String(count + 1));
-    
-    // Trigger Interstitial!
-    return triggerAd('interstitial', force, false);
-  }
+  console.log(`[Ad Break Engine] Break triggered. Handing over to Juggler to process next sequence format.`);
+  return triggerAd('interstitial', force, false);
 }

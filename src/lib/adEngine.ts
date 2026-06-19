@@ -7,6 +7,7 @@ import {
   isUiBusy,
   setUiBusy
 } from "./adPacer";
+import { trackTelemetry } from "./telegramAnalytics";
 
 declare global {
   interface Window {
@@ -149,6 +150,15 @@ export function trackAdEvent(
     }
     localStorage.setItem("cluevault_ad_lifecycle_metrics", JSON.stringify(metrics));
     console.log(`[Ad Lifecycle Metric] ${event} for attempt ${attemptId || "N/A"} (Type: ${type})`);
+
+    // Dispatch to Telemetree network
+    trackTelemetry("ad_lifecycle", {
+      ad_lifecycle_event: event,
+      ad_type: type,
+      attempt_id: attemptId,
+      details: details || "",
+      timestamp: Date.now()
+    });
   } catch (e) {
     console.warn("Failed to track ad event metric:", e);
   }

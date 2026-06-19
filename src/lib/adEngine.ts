@@ -254,6 +254,39 @@ export async function safeShowAdWithTimeout(
 }
 
 // New intelligent ad rotation manager tracking usage counts for balanced distribution to protect/grow CPM
+export function logAdRotationStats(selectedFormat: AdType): void {
+  try {
+    const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
+    const distribution: Record<string, number> = {};
+    let total = 0;
+
+    formats.forEach(f => {
+      const cnt = parseInt(localStorage.getItem(`cluevault_ad_count_${f}`) || "0", 10) || 0;
+      distribution[f] = cnt;
+      total += cnt;
+    });
+
+    const frequency: Record<string, number> = {};
+    formats.forEach(f => {
+      frequency[f] = total > 0 ? parseFloat(((distribution[f] / total) * 100).toFixed(2)) : 0;
+    });
+
+    console.log(`[Ad Rotation Stats Logger] Current Distribution:`, distribution);
+    console.log(`[Ad Rotation Stats Logger] Current Frequency (%):`, frequency);
+
+    // Export rotation distribution metrics to Telemetree to monitor balance and weighting effectiveness
+    trackTelemetry("ad_rotation_distribution_log", {
+      selected_format: selectedFormat,
+      total_ad_rotations: total,
+      distribution_counts: distribution,
+      frequency_percentages: frequency,
+      timestamp: Date.now()
+    });
+  } catch (err: any) {
+    console.warn("[Ad Rotation Stats Logger] Log export bypass:", err.message || err);
+  }
+}
+
 export function getNextAdType(): AdType {
   const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
   
@@ -263,23 +296,32 @@ export function getNextAdType(): AdType {
     return { format: f, count: parseInt(countStr, 10) || 0 };
   });
 
-  // Find the format with the absolute lowest usage count to guarantee perfect balance
-  let lowest = counts[0];
-  for (let i = 1; i < counts.length; i++) {
-    if (counts[i].count < lowest.count) {
-      lowest = counts[i];
-    }
-  }
+  // Find the format with the lowest multiplier-adjusted usage count
+  // Give priority to Onclick (Popunder/pop) so it receives double weighting coefficient (shown more)
+  let lowestFormat: AdType = 'pop';
+  let lowestScore = Infinity;
 
-  const selectedFormat = lowest.format;
-  const newCount = lowest.count + 1;
+  counts.forEach(item => {
+    // Pop/Onclick has a multiplier of 2, meaning it gets selected 2x as often before other formats catch up
+    const weight = item.format === 'pop' ? 2 : 1;
+    const score = item.count / weight;
+    
+    // Tie-breaker: if scores match, prioritize 'pop' directly to satisfy CPM demands faster
+    if (score < lowestScore || (score === lowestScore && item.format === 'pop')) {
+      lowestScore = score;
+      lowestFormat = item.format;
+    }
+  });
+
+  const selectedFormat = lowestFormat;
+  const currentRecord = counts.find(c => c.format === selectedFormat);
+  const newCount = (currentRecord ? currentRecord.count : 0) + 1;
   localStorage.setItem(`cluevault_ad_count_${selectedFormat}`, String(newCount));
   
-  console.log(`[Ad Rotation Manager] Current Usage Stats:`, counts.reduce((acc: any, c) => {
-    acc[c.format] = c.count;
-    return acc;
-  }, {}));
-  console.log(`[Ad Rotation Manager] Selected lowest-usage format: "${selectedFormat}" (Updated Count: ${newCount})`);
+  console.log(`[Ad Rotation Manager] Selection: "${selectedFormat}" (New Count: ${newCount})`);
+  
+  // Log and export analytical stats to Telemetree
+  logAdRotationStats(selectedFormat);
   
   return selectedFormat;
 }

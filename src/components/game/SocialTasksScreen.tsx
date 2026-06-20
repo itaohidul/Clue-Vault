@@ -434,99 +434,96 @@ export default function SocialTasksScreen() {
     setLoadingTaskId(task.id);
     triggerHaptic("medium");
 
-     // Handle ads format with immersive custom activeAd frame
-     if (task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma') {
-       if (task.type === 'ad_gamma') {
-         // ad_gamma: Open safe interactive activeAd frame nicely
-         setActiveAd(task);
-         setLoadingTaskId(null);
-       } else {
-         
-         setAdWatchState({
-           active: true,
-           task,
-           countdown: 0,
-           error: null
-         });
+    const isAdTask = task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma';
 
-         // Prioritize rewarded interstitials for all ad tasks
-         const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded_interstitial';
-         
-         const onComplete = () => {
-           const randomClue = Math.floor(Math.random() * 20) + 1;
-           completeMission({
-             coins: task.rewardCoins,
-             keys: task.rewardKeys,
-             baseMaterials: task.rewardMats,
-             clue: randomClue,
-             xp: true
-           });
+    if (isAdTask && task.type === 'ad_gamma') {
+      // ad_gamma: Open safe interactive activeAd frame nicely
+      setActiveAd(task);
+      setLoadingTaskId(null);
+      return;
+    }
 
-           const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-           saveBatchState(nextTasks);
-           
-           setAdWatchState({ active: false, task: null, countdown: 0, error: null });
-           setLoadingTaskId(null);
-           setSuccessAnimation({ active: true, clueAwarded: randomClue });
-           triggerHaptic("success");
-           startTaskCooldown(task.id);
-           // Verified ad viewed successful
-         };
+    setAdWatchState({
+      active: true,
+      task,
+      countdown: 0,
+      error: null
+    });
 
-         const onError = (e: any) => {
-           console.error("Ad Engine Execution Error:", e);
-           setAdWatchState({ active: false, task: null, countdown: 0, error: "SIGNAL TRANSMISSION FAILED" });
-           setLoadingTaskId(null);
-           triggerHaptic("error");
-         };
+    // If it's a pop task, use 'pop', otherwise let the rotate manager pick ('rewarded_interstitial' / 'in_app_interstitial' etc)
+    const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded_interstitial';
 
-         try {
-            triggerAd(adType, true).then(onComplete).catch(onError);
-         } catch (err) {
-           console.error("SDK Call Exception:", err);
-           onError(err);
-         }
-       }
-       return;
-     }
-
-    // Handle Link matching
-      if (task.link) {
+    const onComplete = () => {
+      if (task.link && !isAdTask) {
+        // Link task countdown with verification
+        setAdWatchState({ active: false, task: null, countdown: 0, error: null });
         safeOpenLink(task.link);
-      }
+        
+        setLinkCountdown(5);
+        const interval = setInterval(() => {
+          setLinkCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              
+              completeMission({
+                coins: task.rewardCoins,
+                keys: task.rewardKeys,
+                baseMaterials: task.rewardMats,
+                clue: randomClue,
+                xp: true
+              });
 
-      setLinkCountdown(5);
-      const interval = setInterval(() => {
-        setLinkCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            
-            completeMission({
-              coins: task.rewardCoins,
-              keys: task.rewardKeys,
-              baseMaterials: task.rewardMats,
-              clue: randomClue,
-              xp: true
-            });
+              const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+              saveBatchState(nextTasks);
+              
+              setLoadingTaskId(null);
+              logTransaction(task.rewardCoins, "task_completion", "ZP");
+              logTransaction(randomClue, "task_completion", "Clue");
+              addTransaction({ type: "task_completion", amount: task.rewardCoins, currency: "ZP" });
+              addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
+              setSuccessAnimation({ active: true, clueAwarded: randomClue });
+              triggerHaptic("success");
 
-            const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-            saveBatchState(nextTasks);
-            
-            setLoadingTaskId(null);
-            logTransaction(task.rewardCoins, "task_completion", "ZP");
-            logTransaction(randomClue, "task_completion", "Clue");
-            addTransaction({ type: "task_completion", amount: task.rewardCoins, currency: "ZP" });
-            addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
-            setSuccessAnimation({ active: true, clueAwarded: randomClue });
-            triggerHaptic("success");
-
-            // Cooldown starts for links too
-            startTaskCooldown(task.id);
-            return 5;
-          }
-          return prev - 1;
+              // Cooldown starts for links too
+              startTaskCooldown(task.id);
+              return 5;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        // Simple ad format task completes immediately upon ad view success
+        completeMission({
+          coins: task.rewardCoins,
+          keys: task.rewardKeys,
+          baseMaterials: task.rewardMats,
+          clue: randomClue,
+          xp: true
         });
-      }, 1000);
+
+        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+        saveBatchState(nextTasks);
+        
+        setAdWatchState({ active: false, task: null, countdown: 0, error: null });
+        setLoadingTaskId(null);
+        setSuccessAnimation({ active: true, clueAwarded: randomClue });
+        triggerHaptic("success");
+        startTaskCooldown(task.id);
+      }
+    };
+
+    const onError = (e: any) => {
+      console.error("Ad Engine Execution Error on task:", e);
+      // Fallback: Continue sequence after rotation retries are exhausted to preserve perfect UX
+      onComplete();
+    };
+
+    try {
+      triggerAd(adType, true).then(onComplete).catch(onError);
+    } catch (err) {
+      console.error("SDK Call Exception in batch task:", err);
+      onError(err);
+    }
   };
 
   // Convert elements & ZP to refresh the batch & bypass cooldown

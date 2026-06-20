@@ -312,27 +312,35 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Track navigations and 60-second activity loops for rewarded interstitial ads
-  const prevPathRef = useRef<string>(location.pathname);
-  const navigationCountRef = useRef<number>(0);
-
-  // 2. Continuous activity loop ad trigger: Trigger break ad every 25 seconds (within the 20-30 seconds range)
+  // 60-second interval trigger for rewarded or in-app interstitial ads
   useEffect(() => {
+    let adFormatToggle = true; // true = rewarded_interstitial, false = in_app_interstitial
+
     const adInterval = setInterval(() => {
       const now = Date.now();
       const lastClosed = getLastAdClosedTime();
-      // Use a much shorter 5s limit instead of 60s to ensure 20-30s intervals are never blocked
+      
+      // Prevent spamming ads in rapid succession (e.g. if another ad was manually closed 2 seconds ago)
       if (now - lastClosed < 5000) {
-        console.log(`[Ad Engine] 25s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (5s minimum wait required).`);
-      } else {
-        console.log(`[Ad Engine] Strict 25s activity interval reached. Triggering orchestrated break ad.`);
-        trackAdAnalytics("totalIntervals", 25);
-        triggerBreakAd(true); // Force = true to guarantee delivery
+        console.log(`[Ad Engine] 60s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (5s minimum wait required).`);
+        return;
       }
-    }, 25000); // Trigger every 25 seconds
+
+      const selectedFormat = adFormatToggle ? 'rewarded_interstitial' : 'in_app_interstitial';
+      console.log(`[Ad Engine] 60s activity interval reached. Triggering orchestrated break ad with format: ${selectedFormat}`);
+      
+      triggerBreakAd(true, selectedFormat);
+      
+      // Toggle for the next cycle
+      adFormatToggle = !adFormatToggle;
+    }, 60000); // every 60 seconds
 
     return () => clearInterval(adInterval);
   }, []);
+
+  // Track navigations and 60-second activity loops for rewarded interstitial ads
+  const prevPathRef = useRef<string>(location.pathname);
+  const navigationCountRef = useRef<number>(0);
 
   // Handle BackButton click callbacks
   useEffect(() => {

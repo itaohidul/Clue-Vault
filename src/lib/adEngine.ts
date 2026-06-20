@@ -351,7 +351,11 @@ export function triggerAd(
     type = getNextAdType();
     console.log(`[Ad Rotation Manager] Trigger active. Overriding requested format "${requestedType}" with rotated format: "${type}"`);
   } else {
-    type = 'rewarded_interstitial';
+    if (requestedType === 'in_app_interstitial' || requestedType === 'inApp') {
+      type = 'in_app_interstitial';
+    } else {
+      type = 'rewarded_interstitial';
+    }
     console.log(`[Ad Rotation Manager] Break ad triggered. Using explicit format: "${type}"`);
   }
 
@@ -583,8 +587,8 @@ async function processNextQueuedAd(): Promise<void> {
   nextAd.resolve(result);
 }
 
-// Play exactly one ad format as requested (single-shot, no cascades/loops of other formats)
-async function playAdSequence(type: AdType, attemptId: string): Promise<boolean> {
+// Play exactly one ad format as requested (single-shot, with dynamic ad rotation callback if the ad fails to load)
+async function playAdSequence(type: AdType, attemptId: string, rotAttemptCount = 0): Promise<boolean> {
   if (!isMonetagReady()) {
     console.log(`[Ad Engine] SDK not available. Sandbox bypass instant success triggered.`);
     return true;
@@ -595,6 +599,19 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
   return new Promise<boolean>((resolve) => {
     const showAd = (window as any).show_11030019;
     
+    const handleAdFailure = async (err: any) => {
+      console.warn(`[Ad Engine] Format "${type}" failed to load:`, err);
+      if (rotAttemptCount < 3) {
+        const nextRotatedFormat = getNextAdType();
+        console.log(`[Ad Engine] Retrying with rotated format: "${nextRotatedFormat}" (rotation attempt ${rotAttemptCount + 1}/3)`);
+        const retrySuccess = await playAdSequence(nextRotatedFormat, attemptId, rotAttemptCount + 1);
+        resolve(retrySuccess);
+      } else {
+        console.warn("[Ad Engine] All rotated formats exhausted or failed to load. Resolving with success fallback.");
+        resolve(true); // Always reward after exhausts to prevent being stuck
+      }
+    };
+
     try {
       let p: any;
       if (type === 'pop') {
@@ -641,19 +658,18 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
 
       if (p && typeof p.then === "function") {
         p.then(() => {
-          console.log("[Ad Engine] SDK promise resolved successfully.");
+          console.log(`[Ad Engine] Format "${type}" resolved successfully.`);
           resolve(true);
         }).catch((err: any) => {
-          console.warn("[Ad Engine] SDK promise rejected, but verifying task completion to reward user instantly anyway:", err);
-          resolve(true); // Always reward on resolution to prevent being stuck
+          handleAdFailure(err);
         });
       } else {
-        console.log("[Ad Engine] SDK called without promise or completed synchronously. Rewarding instantly.");
+        console.log(`[Ad Engine] Format "${type}" called without promise or completed synchronously. Rewarding instantly.`);
         resolve(true);
       }
     } catch (e) {
-      console.error("[Ad Engine] Exception triggering ad SDK, rewarding instantly to prevent stuck UI:", e);
-      resolve(true);
+      console.error(`[Ad Engine] Exception triggering format "${type}":`, e);
+      handleAdFailure(e);
     }
   });
 }
@@ -725,7 +741,7 @@ export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
 }
 
 // Orchestrated break ad handler: delegates directly to the Juggler-driven triggerAd to schedule the next format
-export async function triggerBreakAd(force = false): Promise<boolean> {
-  console.log(`[Ad Break Engine] Break triggered. Handing over to Juggler to process rewarded_interstitial.`);
-  return triggerAd('rewarded_interstitial', force, false, true);
+export async function triggerBreakAd(force = false, format: AdType = 'rewarded_interstitial'): Promise<boolean> {
+  console.log(`[Ad Break Engine] Break triggered. Handing over to Juggler to process ${format}.`);
+  return triggerAd(format, force, false, true);
 }

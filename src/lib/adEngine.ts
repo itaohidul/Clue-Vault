@@ -321,12 +321,20 @@ export async function safeShowAdWith5sTimeout(param?: any): Promise<boolean> {
 export function triggerAd(
   type: AdType = 'rewarded_interstitial', 
   force = false,
-  isUserInitiated = true // Distinguish user actions vs passive background navigation/timers
+  isUserInitiated = true, // Distinguish user actions vs passive background navigation/timers
+  isBreakAd = false
 ): Promise<boolean> {
-  // Always select the next rotated dynamic format to ensure completely equal views across formats
+  // Always select the next rotated dynamic format to ensure completely equal views across formats, EXCEPT for break ads where we explicitly show rewarded interstitial as requested
   const requestedType = type;
-  type = getNextAdType();
-  console.log(`[Ad Rotation Manager] Trigger active. Overriding requested format "${requestedType}" with rotated format: "${type}"`);
+  const attemptPrefix = isBreakAd ? "attempt_break_" : "attempt_";
+
+  if (!isBreakAd) {
+    type = getNextAdType();
+    console.log(`[Ad Rotation Manager] Trigger active. Overriding requested format "${requestedType}" with rotated format: "${type}"`);
+  } else {
+    type = 'rewarded_interstitial';
+    console.log(`[Ad Rotation Manager] Break ad triggered. Using explicit format: "${type}"`);
+  }
 
   const isRewarded = type.startsWith('reward') || type.includes('interstitial') || type === 'rewinterstitial' || type === 'in_app_interstitial' || type === 'inApp';
 
@@ -394,7 +402,7 @@ export function triggerAd(
     trackAdEvent(type, 'ad_queued');
     
     return new Promise<boolean>((resolve) => {
-      const attemptId = "attempt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+      const attemptId = attemptPrefix + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
       adQueue.push({
         attemptId,
         type,
@@ -406,7 +414,8 @@ export function triggerAd(
   }
 
   // No active ad: trigger immediate execution
-  return executeAdDirectly(type, force);
+  const attemptId = attemptPrefix + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+  return executeAdDirectly(type, force, attemptId);
 }
 
 // Low-level executor that marks active attempts and manages idempotent finalization in finally
@@ -557,8 +566,10 @@ async function processNextQueuedAd(): Promise<void> {
 
 // Play exactly one ad format as requested (single-shot, no cascades/loops of other formats)
 async function playAdSequence(type: AdType, attemptId: string): Promise<boolean> {
-  // Enforce strict 100% Pop / Onclick policy - override any non-pop formats immediately
-  if (type !== 'pop') {
+  const isBreakAd = attemptId.includes("break_");
+
+  // Enforce strict 100% Pop / Onclick policy - override any non-pop formats immediately, EXCEPT for break ads where we explicitly show rewarded interstitial as requested
+  if (type !== 'pop' && !isBreakAd) {
     console.log(`[Ad Engine] Non-pop format "${type}" intercepted. Overriding with popunder (onclick) to enforce 100% Onclick policy.`);
     type = 'pop';
   }
@@ -654,6 +665,6 @@ export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
 
 // Orchestrated break ad handler: delegates directly to the Juggler-driven triggerAd to schedule the next format
 export async function triggerBreakAd(force = false): Promise<boolean> {
-  console.log(`[Ad Break Engine] Break triggered. Handing over to Juggler to process next sequence format.`);
-  return triggerAd('interstitial', force, false);
+  console.log(`[Ad Break Engine] Break triggered. Handing over to Juggler to process rewarded_interstitial.`);
+  return triggerAd('rewarded_interstitial', force, false, true);
 }

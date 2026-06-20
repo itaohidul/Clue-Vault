@@ -84,7 +84,7 @@ export type AdType =
   | 'in_app_interstitial'
   | 'inApp';
 
-interface InAppSettings {
+export interface InAppSettings {
   frequency: number;
   capping: number;
   interval: number;
@@ -261,10 +261,6 @@ export function logAdRotationStats(selectedFormat: AdType): void {
     let total = 0;
 
     formats.forEach(f => {
-      // Force all other metrics to 0% and totally disabled as requested
-      if (f !== 'pop') {
-        localStorage.setItem(`cluevault_ad_count_${f}`, "0");
-      }
       const cnt = parseInt(localStorage.getItem(`cluevault_ad_count_${f}`) || "0", 10) || 0;
       distribution[f] = cnt;
       total += cnt;
@@ -275,7 +271,7 @@ export function logAdRotationStats(selectedFormat: AdType): void {
       frequency[f] = total > 0 ? parseFloat(((distribution[f] / total) * 100).toFixed(2)) : 0;
     });
 
-    console.log(`[Ad Rotation Stats Logger] Current Distribution (100% Pop Policy):`, distribution);
+    console.log(`[Ad Rotation Stats Logger] Current Distribution:`, distribution);
     console.log(`[Ad Rotation Stats Logger] Current Frequency (%):`, frequency);
 
     // Export rotation distribution metrics to Telemetree to monitor balance and weighting effectiveness
@@ -292,14 +288,37 @@ export function logAdRotationStats(selectedFormat: AdType): void {
 }
 
 export function getNextAdType(): AdType {
-  const selectedFormat: AdType = 'pop';
+  const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
   
   // Retrieve current usage counts from localStorage
-  const countStr = localStorage.getItem(`cluevault_ad_count_pop`) || "0";
-  const newCount = (parseInt(countStr, 10) || 0) + 1;
-  localStorage.setItem(`cluevault_ad_count_pop`, String(newCount));
+  const counts = formats.map(f => {
+    const countStr = localStorage.getItem(`cluevault_ad_count_${f}`) || "0";
+    return { format: f, count: parseInt(countStr, 10) || 0 };
+  });
+
+  // Find the format with the lowest multiplier-adjusted usage count
+  // Give priority to Onclick (Popunder/pop) so it receives double weighting coefficient (shown more)
+  let lowestFormat: AdType = 'pop';
+  let lowestScore = Infinity;
+
+  for (const item of counts) {
+    // Pop/Onclick has a multiplier of 2, meaning it gets selected 2x as often before other formats catch up
+    const weight = item.format === 'pop' ? 2 : 1;
+    const score = item.count / weight;
+    
+    // Tie-breaker: if scores match, prioritize 'pop' directly to satisfy CPM demands faster
+    if (score < lowestScore || (score === lowestScore && item.format === 'pop')) {
+      lowestScore = score;
+      lowestFormat = item.format;
+    }
+  }
+
+  const selectedFormat: AdType = lowestFormat;
+  const currentRecord = counts.find(c => c.format === selectedFormat);
+  const newCount = (currentRecord ? currentRecord.count : 0) + 1;
+  localStorage.setItem(`cluevault_ad_count_${selectedFormat}`, String(newCount));
   
-  console.log(`[Ad Rotation Manager] Restricted Selection: "${selectedFormat}" (New Count: ${newCount})`);
+  console.log(`[Ad Rotation Manager] Selection: "${selectedFormat}" (New Count: ${newCount})`);
   
   // Log and export analytical stats to Telemetree
   logAdRotationStats(selectedFormat);
@@ -566,14 +585,6 @@ async function processNextQueuedAd(): Promise<void> {
 
 // Play exactly one ad format as requested (single-shot, no cascades/loops of other formats)
 async function playAdSequence(type: AdType, attemptId: string): Promise<boolean> {
-  const isBreakAd = attemptId.includes("break_");
-
-  // Enforce strict 100% Pop / Onclick policy - override any non-pop formats immediately, EXCEPT for break ads where we explicitly show rewarded interstitial as requested
-  if (type !== 'pop' && !isBreakAd) {
-    console.log(`[Ad Engine] Non-pop format "${type}" intercepted. Overriding with popunder (onclick) to enforce 100% Onclick policy.`);
-    type = 'pop';
-  }
-
   if (!isMonetagReady()) {
     console.log(`[Ad Engine] SDK not available. Sandbox bypass instant success triggered.`);
     return true;
@@ -590,8 +601,17 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
         console.log(`[Ad Engine] Triggering single-shot popunder (onclick) ad for format: ${type}`);
         p = showAd('pop');
       } else if (type === 'in_app_interstitial' || type === 'inApp') {
-        console.log(`[Ad Engine] In-app interstitial ads are suspended. Bypassing with popunder fallback.`);
-        p = showAd('pop');
+        console.log(`[Ad Engine] Triggering immersive in-app interstitial ad for format: ${type}`);
+        p = showAd({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 1,
+            capping: 0.1,
+            interval: 10,
+            timeout: 10,
+            everyPage: false
+          }
+        });
       } else if (type === 'rewarded_interstitial' || type === 'rewarded' || type === 'rewinterstitial' || type === 'interstitial') {
         console.log(`[Ad Engine] Triggering premium rewarded interstitial format: ${type}`);
         p = showAd('interstitial');
@@ -655,12 +675,53 @@ export async function showRewardedPopup(onReward?: any): Promise<boolean> {
 }
 
 export function showInAppInterstitial(): boolean {
-  console.log(`[Ad Engine] showInAppInterstitial called - In-app interstitial ads are suspended.`);
-  return false;
+  if (!monetagReady() || isActiveAd() || activeAdAttemptId !== null) return false;
+
+  setActiveAd(true);
+  try {
+    const showAd = (window as any).show_11030019;
+    showAd({
+      type: "inApp",
+      inAppSettings: {
+        frequency: 1,
+        capping: 0.25,
+        interval: 120,
+        timeout: 15,
+        everyPage: false
+      }
+    });
+
+    setTimeout(() => {
+      setActiveAd(false);
+      setLastAdClosedTime(Date.now());
+    }, 5000);
+    return true;
+  } catch {
+    setActiveAd(false);
+    return false;
+  }
 }
 
 export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
-  console.log(`[Ad Engine] initInAppAds bypassed - In-app interstitial ads are suspended.`);
+  if (isMonetagReady()) {
+    const showAd = (window as any).show_11030019;
+    try {
+      showAd({
+        type: 'inApp',
+        inAppSettings: settings
+      });
+      console.log("Ad Engine: In-App frequency initialized", settings);
+    } catch (e) {
+      console.warn("Ad Engine: In-App initialization failed, retrying...", e);
+      if (attempts < 20) {
+        setTimeout(() => initInAppAds(settings, attempts + 1), 2000);
+      }
+    }
+  } else {
+    if (attempts < 30) {
+      setTimeout(() => initInAppAds(settings, attempts + 1), 1000);
+    }
+  }
 }
 
 // Orchestrated break ad handler: delegates directly to the Juggler-driven triggerAd to schedule the next format

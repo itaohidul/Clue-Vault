@@ -295,23 +295,33 @@ function AppContent() {
 
 
 
+  // Trigger general ad on initial startup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log(`[Ad Engine] App initialized. Triggering startup ad...`);
+      triggerAd(undefined, true);
+    }, 1500); // 1.5 seconds delay allows page rendering and SDK readiness
+    return () => clearTimeout(timer);
+  }, []);
+
   // Track navigations and 60-second activity loops for rewarded interstitial ads
   const prevPathRef = useRef<string>(location.pathname);
   const navigationCountRef = useRef<number>(0);
 
-  // 2. Continuous 90-second activity loop ad trigger: "Users shall see break rewarded interstitial ad every 90 seconds strictly."
+  // 2. Continuous activity loop ad trigger: Trigger break ad every 25 seconds (within the 20-30 seconds range)
   useEffect(() => {
     const adInterval = setInterval(() => {
       const now = Date.now();
       const lastClosed = getLastAdClosedTime();
-      if (now - lastClosed < 60000) {
-        console.log(`[Ad Engine] 90s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (60s wait required).`);
+      // Use a much shorter 5s limit instead of 60s to ensure 20-30s intervals are never blocked
+      if (now - lastClosed < 5000) {
+        console.log(`[Ad Engine] 25s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (5s minimum wait required).`);
       } else {
-        console.log(`[Ad Engine] Strict 90s activity interval reached. Triggering orchestrated break ad.`);
-        trackAdAnalytics("totalIntervals", 90);
-        triggerBreakAd(false);
+        console.log(`[Ad Engine] Strict 25s activity interval reached. Triggering orchestrated break ad.`);
+        trackAdAnalytics("totalIntervals", 25);
+        triggerBreakAd(true); // Force = true to guarantee delivery
       }
-    }, 90000);
+    }, 25000); // Trigger every 25 seconds
 
     return () => clearInterval(adInterval);
   }, []);

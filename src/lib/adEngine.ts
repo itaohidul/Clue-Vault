@@ -603,17 +603,8 @@ async function playAdSequence(type: AdType, attemptId: string): Promise<boolean>
         console.log(`[Ad Engine] Triggering single-shot popunder (onclick) ad for format: ${type}`);
         p = showAd('pop');
       } else if (type === 'in_app_interstitial' || type === 'inApp') {
-        console.log(`[Ad Engine] Triggering immersive in-app interstitial ad for format: ${type}`);
-        p = showAd({
-          type: 'inApp',
-          inAppSettings: {
-            frequency: 1,
-            capping: 0.05,
-            interval: 10,
-            timeout: 10,
-            everyPage: false
-          }
-        });
+        console.log(`[Ad Engine] In-app interstitial ads are suspended. Bypassing with popunder fallback.`);
+        p = showAd('pop');
       } else if (type === 'rewarded_interstitial' || type === 'rewarded' || type === 'rewinterstitial' || type === 'interstitial') {
         console.log(`[Ad Engine] Triggering premium rewarded interstitial format: ${type}`);
         p = showAd('interstitial');
@@ -677,53 +668,12 @@ export async function showRewardedPopup(onReward?: any): Promise<boolean> {
 }
 
 export function showInAppInterstitial(): boolean {
-  if (!monetagReady() || isActiveAd() || activeAdAttemptId !== null) return false;
-
-  setActiveAd(true);
-  try {
-    const showAd = (window as any).show_11030019;
-    showAd({
-      type: "inApp",
-      inAppSettings: {
-        frequency: 1,
-        capping: 0.25,
-        interval: 120,
-        timeout: 15,
-        everyPage: false
-      }
-    });
-
-    setTimeout(() => {
-      setActiveAd(false);
-      setLastAdClosedTime(Date.now());
-    }, 5000);
-    return true;
-  } catch {
-    setActiveAd(false);
-    return false;
-  }
+  console.log(`[Ad Engine] showInAppInterstitial called - In-app interstitial ads are suspended.`);
+  return false;
 }
 
 export function initInAppAds(settings: InAppSettings, attempts: number = 0) {
-  if (isMonetagReady()) {
-    const showAd = (window as any).show_11030019;
-    try {
-      showAd({
-        type: 'inApp',
-        inAppSettings: settings
-      });
-      console.log("Ad Engine: In-App frequency initialized", settings);
-    } catch (e) {
-      console.warn("Ad Engine: In-App initialization failed, retrying...", e);
-      if (attempts < 20) {
-        setTimeout(() => initInAppAds(settings, attempts + 1), 2000);
-      }
-    }
-  } else {
-    if (attempts < 30) {
-      setTimeout(() => initInAppAds(settings, attempts + 1), 1000);
-    }
-  }
+  console.log(`[Ad Engine] initInAppAds bypassed - In-app interstitial ads are suspended.`);
 }
 
 // Orchestrated break ad handler: delegates directly to the Juggler-driven triggerAd to schedule the next format

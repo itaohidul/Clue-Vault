@@ -29,7 +29,7 @@ import { TwaAnalyticsProvider, useTelemetree } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
-import { initInAppAds, triggerAd, getLastAdClosedTime, showRewardedInterstitial, showInAppInterstitial, triggerBreakAd } from "./lib/adEngine";
+import { triggerAd, getLastAdClosedTime, showRewardedInterstitial, triggerBreakAd } from "./lib/adEngine";
 import { trackAdAnalytics } from "./lib/adPacer";
 
 
@@ -293,15 +293,7 @@ function AppContent() {
     }
   }, [location.pathname]);
 
-  useEffect(() => {
-    initInAppAds({
-      frequency: 1000,
-      capping: 0.1, // Show up to 1000 ads within 6 minutes (basically unlimited)
-      interval: 30, // 30 seconds between ads
-      timeout: 30,  // 30 seconds initial delay on app start
-      everyPage: false
-    });
-  }, []);
+
 
   // Track navigations and 60-second activity loops for rewarded interstitial ads
   const prevPathRef = useRef<string>(location.pathname);

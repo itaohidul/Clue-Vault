@@ -256,12 +256,15 @@ export async function safeShowAdWithTimeout(
 // New intelligent ad rotation manager tracking usage counts for balanced distribution to protect/grow CPM
 export function logAdRotationStats(selectedFormat: AdType): void {
   try {
-    // Restore full 4 formats in logs
     const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
     const distribution: Record<string, number> = {};
     let total = 0;
 
     formats.forEach(f => {
+      // Force all other metrics to 0% and totally disabled as requested
+      if (f !== 'pop') {
+        localStorage.setItem(`cluevault_ad_count_${f}`, "0");
+      }
       const cnt = parseInt(localStorage.getItem(`cluevault_ad_count_${f}`) || "0", 10) || 0;
       distribution[f] = cnt;
       total += cnt;
@@ -272,7 +275,7 @@ export function logAdRotationStats(selectedFormat: AdType): void {
       frequency[f] = total > 0 ? parseFloat(((distribution[f] / total) * 100).toFixed(2)) : 0;
     });
 
-    console.log(`[Ad Rotation Stats Logger] Current Distribution:`, distribution);
+    console.log(`[Ad Rotation Stats Logger] Current Distribution (100% Pop Policy):`, distribution);
     console.log(`[Ad Rotation Stats Logger] Current Frequency (%):`, frequency);
 
     // Export rotation distribution metrics to Telemetree to monitor balance and weighting effectiveness
@@ -289,50 +292,17 @@ export function logAdRotationStats(selectedFormat: AdType): void {
 }
 
 export function getNextAdType(): AdType {
-  // Restore all 4 original formats
-  const formats: AdType[] = ['in_app_interstitial', 'pop', 'rewarded_interstitial', 'direct'];
+  const selectedFormat: AdType = 'pop';
   
   // Retrieve current usage counts from localStorage
-  const counts = formats.map(f => {
-    const countStr = localStorage.getItem(`cluevault_ad_count_${f}`) || "0";
-    return { format: f, count: parseInt(countStr, 10) || 0 };
-  });
-
-  // Find the format with the lowest multiplier-adjusted usage count
-  // Give priority to Onclick (Popunder/pop) so it receives double weighting coefficient (shown more)
-  let lowestFormat: AdType = 'pop';
-  let lowestScore = Infinity;
-
-  for (const item of counts) {
-    // Pop/Onclick has a multiplier of 2, meaning it gets selected 2x as often before other formats catch up
-    const weight = item.format === 'pop' ? 2 : 1;
-    const score = item.count / weight;
-    
-    // Tie-breaker: if scores match, prioritize 'pop' directly to satisfy CPM demands faster
-    if (score < lowestScore || (score === lowestScore && item.format === 'pop')) {
-      lowestScore = score;
-      lowestFormat = item.format;
-    }
-  }
-
-  const selectedFormat: AdType = lowestFormat;
-  const currentRecord = counts.find(c => c.format === selectedFormat);
-  const newCount = (currentRecord ? currentRecord.count : 0) + 1;
-  localStorage.setItem(`cluevault_ad_count_${selectedFormat}`, String(newCount));
+  const countStr = localStorage.getItem(`cluevault_ad_count_pop`) || "0";
+  const newCount = (parseInt(countStr, 10) || 0) + 1;
+  localStorage.setItem(`cluevault_ad_count_pop`, String(newCount));
   
-  console.log(`[Ad Rotation Manager] Selection: "${selectedFormat}" (New Count: ${newCount})`);
+  console.log(`[Ad Rotation Manager] Restricted Selection: "${selectedFormat}" (New Count: ${newCount})`);
   
   // Log and export analytical stats to Telemetree
   logAdRotationStats(selectedFormat);
-  
-  // Replace in_app_interstitial with 'pop', 'rewarded_interstitial', or 'direct' to give it a rest
-  if (selectedFormat === 'in_app_interstitial') {
-    const replacements: AdType[] = ['pop', 'rewarded_interstitial', 'direct'];
-    const rIndex = Math.floor(Math.random() * replacements.length);
-    const replacement: AdType = replacements[rIndex];
-    console.log(`[Ad Rotation Manager] Swap selected in_app_interstitial with: "${replacement}"`);
-    return replacement;
-  }
   
   return selectedFormat;
 }
@@ -587,6 +557,12 @@ async function processNextQueuedAd(): Promise<void> {
 
 // Play exactly one ad format as requested (single-shot, no cascades/loops of other formats)
 async function playAdSequence(type: AdType, attemptId: string): Promise<boolean> {
+  // Enforce strict 100% Pop / Onclick policy - override any non-pop formats immediately
+  if (type !== 'pop') {
+    console.log(`[Ad Engine] Non-pop format "${type}" intercepted. Overriding with popunder (onclick) to enforce 100% Onclick policy.`);
+    type = 'pop';
+  }
+
   if (!isMonetagReady()) {
     console.log(`[Ad Engine] SDK not available. Sandbox bypass instant success triggered.`);
     return true;

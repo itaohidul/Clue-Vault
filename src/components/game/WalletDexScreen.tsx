@@ -27,8 +27,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
-import { triggerAd } from "../../lib/adEngine";
-import { setUiBusy, trackAdAnalytics } from "../../lib/adPacer";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 
@@ -153,8 +151,6 @@ export default function WalletDexScreen() {
                   amount: -premiumWithdrawAmount, 
                   currency: premiumWithdrawAsset.toUpperCase() as any 
                 });
-                // Trigger ad break (After a successful transaction)
-                triggerAd('rewarded');
               } catch (txErr) {
                 console.warn("Transaction logging failed on withdraw:", txErr);
               }
@@ -243,7 +239,7 @@ export default function WalletDexScreen() {
     };
   });
 
-  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | "ad_verified" | "ad_failed" | null>(null);
+  const [popupType, setPopupType] = useState<"deposit" | "withdraw" | "swap_success" | "withdraw_winnings_fail" | "withdraw_winnings_success" | null>(null);
   const [swapSuccessDetails, setSwapSuccessDetails] = useState<any | null>(null);
   
   // Anti-fraud spin trackers
@@ -453,9 +449,6 @@ export default function WalletDexScreen() {
       addTransaction({ type: "swap", amount: -amtNum, currency: fromAsset as any });
       addTransaction({ type: "swap", amount: finalOutput, currency: toAsset as any });
 
-      // Trigger ad break at natural break (After a successful transaction)
-      triggerAd('rewarded');
-      
       track("token_swap", {
         fromAsset,
         toAsset,
@@ -470,9 +463,6 @@ export default function WalletDexScreen() {
       setPopupType("swap_success");
       setFromAmount("");
       setToAmount("0.00");
-
-      // Trigger ad at the natural break (successful transaction)
-      triggerAd('rewarded');
     }, 1500);
   };
 
@@ -700,7 +690,6 @@ export default function WalletDexScreen() {
       }
     }
 
-    setUiBusy(true);
     setIsSpinInitiating(true);
     track("spin_started", { isDailyFree });
     triggerHaptic("medium");
@@ -715,26 +704,11 @@ export default function WalletDexScreen() {
     .then(data => {
       const nonce = data.nonce || `spin-offline-${Date.now()}`;
       setSpinNonce(nonce);
-      
-      // Trigger unskippable rewarded Monetag ad sequence
-      return triggerAd('rewarded', true);
-    })
-    .then((adSuccess) => {
-      if (!adSuccess) {
-        setPopupType("ad_failed");
-        setUiBusy(false);
-        setIsSpinInitiating(false);
-        return;
-      }
       executeRealSpin(isDailyFree, true);
-      setPopupType("ad_verified"); // Clean elegant pop-up replaces native alert()
     })
     .catch((err: any) => {
-      console.warn("[Ad Setup/Safe Spin Warn] Sequential ad flow bypassed due to error: ", err);
-      // Fallback: Ad failed or timed out on spin initiation, do not reward or spin, let retry
-      setPopupType("ad_failed");
-      setUiBusy(false);
-      setIsSpinInitiating(false);
+      console.warn("[Spin Setup] Failed:", err);
+      executeRealSpin(isDailyFree, true);
     })
     .finally(() => {
       setIsSpinInitiating(false);
@@ -762,8 +736,6 @@ export default function WalletDexScreen() {
   const handleClaimReward = () => {
     if (!adClaimUnlocked || !activeSliceResult || claimRewardLockRef.current) return;
     claimRewardLockRef.current = true;
-    setUiBusy(false);
-    trackAdAnalytics("spins", 1);
     triggerHaptic("success");
     
     track("spin_reward_claimed", {
@@ -2253,46 +2225,6 @@ export default function WalletDexScreen() {
                   >
                     Close Gateway Channel
                   </button>
-                </div>
-              ) : popupType === "ad_verified" ? (
-                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
-                   <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto text-2xl shadow-lg">
-                      <Sparkles size={24} className="text-amber-400" />
-                   </div>
-                   <div className="space-y-2">
-                      <span className="text-[8px] font-bold text-amber-500 uppercase tracking-[0.25em] block">MONETAG AD TRANSLATION COMPLETE</span>
-                      <h3 className="text-xl font-black uppercase tracking-tight text-white italic">Aether Link Secured</h3>
-                      <p className="text-[10px] text-white/50 font-bold leading-relaxed uppercase">
-                        Ad transmission has been successfully verified. Reward points and tickets are being credited automatically under consensus protocols.
-                      </p>
-                   </div>
-                   
-                   <button
-                     onClick={() => setPopupType(null)}
-                     className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-wider text-[10px] active:scale-95 transition-all cursor-pointer"
-                   >
-                     Acknowledge & Sync
-                   </button>
-                </div>
-              ) : popupType === "ad_failed" ? (
-                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-200">
-                   <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto text-2xl shadow-lg">
-                      <AlertTriangle size={24} className="text-rose-400" />
-                   </div>
-                   <div className="space-y-2">
-                      <span className="text-[8px] font-bold text-rose-500 uppercase tracking-[0.25em] block">MONETAG AD FAULT</span>
-                      <h3 className="text-xl font-black uppercase tracking-tight text-white italic">Aether Link Suppressed</h3>
-                      <p className="text-[10px] text-white/50 font-bold leading-relaxed uppercase">
-                        The ad transmission could not be verified successfully or was closed early. Please try again.
-                      </p>
-                   </div>
-                   
-                   <button
-                     onClick={() => setPopupType(null)}
-                     className="w-full bg-rose-500 text-black py-4 rounded-xl font-black uppercase italic tracking-wider text-[10px] active:scale-95 transition-all cursor-pointer"
-                   >
-                     Acknowledge & Retry
-                   </button>
                 </div>
               ) : (
                 <div className="space-y-5">

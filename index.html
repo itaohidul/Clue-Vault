@@ -7,13 +7,15 @@
     <link rel="icon" type="image/png" href="/src/assets/images/cluevault_logo_1779272321887.png" />
     <!-- 1. Load Telegram WebApp base first -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Ad SDK inclusion -->
+    <script src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019'></script>
     <!-- 2. Set up early CloudStorage polyfills & error suppressions to prevent older WebView/App crashes -->
     <script>
       (function() {
-        // A. Global Error & Promise Rejection Suppression for Third-Party Ads (adex timeout / Empty feed)
+        // A. Global Error & Promise Rejection Suppression for CloudStorage errors
         window.addEventListener('error', function(e) {
           var msg = (e.message || '').toString();
-          if (msg.indexOf('adex timeout') !== -1 || msg.indexOf('Empty feed') !== -1 || msg.indexOf('CloudStorage') !== -1) {
+          if (msg.indexOf('CloudStorage') !== -1) {
             if (e.preventDefault) e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
@@ -22,14 +24,14 @@
         
         window.addEventListener('unhandledrejection', function(e) {
           var msg = (e.reason && e.reason.message || '').toString();
-          if (msg.indexOf('adex timeout') !== -1 || msg.indexOf('Empty feed') !== -1 || msg.indexOf('CloudStorage') !== -1) {
+          if (msg.indexOf('CloudStorage') !== -1) {
             if (e.preventDefault) e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
           }
         }, true);
 
-        // B. Console.error Filter to swallow known benign sandbox/ad script errors
+        // B. Console.error Filter to swallow known benign sandbox errors
         var originalConsoleError = console.error;
         console.error = function() {
           var args = Array.prototype.slice.call(arguments);
@@ -38,13 +40,7 @@
             try { return JSON.stringify(arg); } catch(ex) { return ''; }
           }).join(' ');
 
-          if (
-            concatenatedMessage.indexOf('adex timeout') !== -1 || 
-            concatenatedMessage.indexOf('Empty feed') !== -1 || 
-            concatenatedMessage.indexOf('EventBuilder: Config or transport') !== -1 ||
-            concatenatedMessage.indexOf('CloudStorage') !== -1
-          ) {
-            // Demote to custom warn debug line to avoid alerting developers or telemetry
+          if (concatenatedMessage.indexOf('CloudStorage') !== -1) {
             console.warn('[Benign Intercepted Warning]:', concatenatedMessage);
             return;
           }
@@ -143,8 +139,6 @@
         } catch (e) {}
       })();
     </script>
-    <!-- 3. Third-party Ad SDK (libtl.com) -->
-    <script src="//libtl.com/sdk.js" data-zone="11030019" data-sdk="show_11030019"></script>
   </head>
   <body>
     <div id="root"></div>

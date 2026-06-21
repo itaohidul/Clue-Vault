@@ -6,8 +6,6 @@ import { useUserStore, getTzDateString } from "../../store/userStore";
 import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X, HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
-import { triggerAd } from "../../lib/adEngine";
-import { setUiBusy } from "../../lib/adPacer";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 
@@ -82,13 +80,8 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
     }
 
     if (newUserSeq.length === sequence.length) {
-      setUiBusy(true);
       setStatus("success");
       triggerHaptic("success");
-      // Trigger ad at the natural break (opening a reward chest)
-      triggerAd('rewarded').finally(() => {
-        setUiBusy(false);
-      });
       setTimeout(() => onComplete(), 1200);
     }
   };
@@ -272,12 +265,6 @@ export default function VaultScreen() {
     logTransaction(rewardMats, "vault_reward", "Element");
     addTransaction({ type: "vault_reward", amount: rewardCoins, currency: "ZP" });
     addTransaction({ type: "vault_reward", amount: rewardMats, currency: "ELEMENT" });
-
-    setUiBusy(true);
-    // Trigger ad at the natural break (opening a reward chest)
-    triggerAd('rewarded').finally(() => {
-      setUiBusy(false);
-    });
 
     const riddleData = RIDDLES.find(r => r.id === riddleProg.riddleId);
     setShowReward({ 

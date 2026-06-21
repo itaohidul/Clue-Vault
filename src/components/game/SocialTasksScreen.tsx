@@ -9,26 +9,25 @@ import {
   ChevronRight, 
   ExternalLink, 
   Shield, 
-  Tv, 
   Sparkles, 
-  Eye, 
   RefreshCw,
   Coins,
   Key,
-  Cpu,
   Database,
   Lock,
-  Timer,
-  AlertTriangle
+  AlertTriangle,
+  Play,
+  Activity,
+  Tv
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn, safeOpenLink } from "../../lib/utils";
-import { triggerAd } from "../../lib/adEngine";
+import { adManager } from "../../lib/adManager";
 
 interface TaskState {
   id: string;
   name: string;
-  type: 'ad_pop' | 'ad_interstitial' | 'ad_gamma' | 'link_alpha' | 'link_beta';
+  type: 'decrypt_node' | 'link_alpha' | 'link_beta' | 'interstitial_task' | 'rewarded_interstitial_task' | 'pop_task';
   completed: boolean;
   rewardCoins: number;
   rewardKeys: number;
@@ -37,16 +36,23 @@ interface TaskState {
 }
 
 const INITIAL_BATCH: TaskState[] = [
-  { id: "task_1", name: "Sponsor Broadcast Alpha [Pop]", type: "ad_pop", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_2", name: "Sponsor Broadcast Alpha [Pop] II", type: "ad_pop", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_3", name: "Sponsor Broadcast Beta [Interstitial]", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_4", name: "Sponsor Broadcast Beta [Interstitial] II", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_5", name: "Sponsor Broadcast Beta [Interstitial] III", type: "ad_interstitial", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_6", name: "Sponsor Broadcast Gamma [Direct]", type: "ad_gamma", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_7", name: "Sponsor Broadcast Gamma [Direct] II", type: "ad_gamma", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_8", name: "Quantum Link Access [Alpha]", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
-  { id: "task_9", name: "Quantum Link Access [Alpha] II", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
-  { id: "task_10", name: "Frequency Link Audit [Beta]", type: "link_beta", link: "https://omg10.com/4/6430252", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 }
+  { id: "task_1", name: "Quantum Signal Validation I", type: "decrypt_node", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_2", name: "Network Link Security Audit I", type: "decrypt_node", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_3", name: "Quantum Link Access [Alpha]", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
+  { id: "task_4", name: "Frequency Link Audit [Beta]", type: "link_beta", link: "https://omg10.com/4/6430252", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
+  
+  // Interstitial Task (Called when a user taps "Play broadcast")
+  { id: "task_inter_1", name: "Interstitial Signal Broadcast I", type: "interstitial_task", completed: false, rewardCoins: 400, rewardKeys: 1, rewardMats: 1 },
+  
+  // 3 Rewarded Interstitial Tasks in the task section
+  { id: "task_rew_inter_1", name: "Rewarded Interstitial Transmission Alfa", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_rew_inter_2", name: "Rewarded Interstitial Transmission Beta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_rew_inter_3", name: "Rewarded Interstitial Transmission Gamma", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  
+  // 3 Rewarded Popup (Pop) Tasks in the task section
+  { id: "task_pop_1", name: "Rewarded Popup Signal Channel 1", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_pop_2", name: "Rewarded Popup Signal Channel 2", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_pop_3", name: "Rewarded Popup Signal Channel 3", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 }
 ];
 
 export default function SocialTasksScreen() {
@@ -68,41 +74,17 @@ export default function SocialTasksScreen() {
   const isClaimingSupabaseRef = useRef(false);
   const claimingCommunityIdsRef = useRef<string[]>([]);
 
-  // Unskippable Quest Ad state
-  const [showQuestAd, setShowQuestAd] = useState(false);
-  const [questAdCountdown, setQuestAdCountdown] = useState(5);
-  const [activeQuestTask, setActiveQuestTask] = useState<any | null>(null);
-  const [currentQuestAdIndex, setCurrentQuestAdIndex] = useState(0);
-
-  const QUEST_ADS = [
-    { title: "Defect Detector Pro Security Guard", desc: "Automate your defense grid node to block inbound packet injections. No root access keys required.", mockUrl: "guard.defector.node" },
-    { title: "Z-Alloy Synthesizer Rig 3.0", desc: "Process base metals at 99.8% precision rate to feed your local vault core memory.", mockUrl: "alloy.synthesizer.clue" },
-    { title: "Consensus VPN Multi-Hop Routing", desc: "Secure your public IP packets across 20 global nodes behind anti-firewalls.", mockUrl: "consensusvpn.encrypt" }
-  ];
-
-  // Quest unskippable ad timer countdown
-  useEffect(() => {
-    let timer: any;
-    if (showQuestAd && questAdCountdown > 0) {
-      timer = setInterval(() => {
-        setQuestAdCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [showQuestAd, questAdCountdown]);
-
   // Load or initialize persistent batch list (10 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
     const saved = localStorage.getItem("cluevault_tasks_batch_state");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Make sure we migrate to the new dynamic batch schema containing the new ad task types
+        const hasNewAdTypes = parsed.some((t: any) => t.type === 'interstitial_task' || t.type === 'rewarded_interstitial_task' || t.type === 'pop_task');
+        if (hasNewAdTypes && parsed.length >= 10) {
+          return parsed;
+        }
       } catch (e) {
         console.error("Failed to parse batch state:", e);
       }
@@ -213,26 +195,6 @@ export default function SocialTasksScreen() {
   // Link task countdown
   const [linkCountdown, setLinkCountdown] = useState<number>(5);
 
-  const [activeAd, setActiveAd] = useState<TaskState | null>(null);
-
-  // Ad watch state validation structure to avoid instant rewarded exploits
-  const [adWatchState, setAdWatchState] = useState<{
-    active: boolean;
-    task: TaskState | null;
-    countdown: number;
-    error: string | null;
-  }>({ active: false, task: null, countdown: 0, error: null });
-
-  // Add effect for SocialTasks ad error handling only
-  useEffect(() => {
-    if (adWatchState.error) {
-      const timer = setTimeout(() => {
-        setAdWatchState(prev => ({ ...prev, error: null, active: false }));
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [adWatchState.error]);
-
   // One-time telegram community links
   const [communityTasks, setCommunityTasks] = useState(() => {
     const saved = localStorage.getItem("cluevault_oneoff_tasks");
@@ -261,7 +223,7 @@ export default function SocialTasksScreen() {
     localStorage.setItem("cluevault_oneoff_tasks", JSON.stringify(tasks));
   };
 
-  // Handle claiming in Supabase database (Show unskippable ad instead of opening random links)
+  // Handle claiming in Supabase database (Proceeds directly, completely bypassing ads!)
   const handleClaimSupabaseTask = async (task: any) => {
     if (completedTaskIds.includes(task.id) || !user.onboarded || isClaimingSupabaseRef.current) return;
 
@@ -270,23 +232,11 @@ export default function SocialTasksScreen() {
     setClaimingTaskId(task.id);
 
     try {
-      // Trigger prioritized ad flow: Rewarded -> Interstitial -> Popunder -> Direct
-      const adSuccess = await triggerAd('rewarded_interstitial', true);
-      if (!adSuccess) {
-        console.warn("[Social Tasks] Ad was not completed successfully. Aborting claim.");
-        triggerHaptic("error");
-        setClaimingTaskId(null);
-        isClaimingSupabaseRef.current = false;
-        return;
-      }
-
-      // On successful ad engagement (or fallback success)
       const success = await claimSupabaseTask(task.id);
       if (success) {
         const randomClue = Math.floor(Math.random() * 15) + 1;
         updateResources({ clue: randomClue });
         
-        // Log transaction to cloud and local instantly
         const claimRewardZP = task.reward || 1000;
         const claimRewardKeys = task.reward_keys || task.rewardKeys || 1;
         
@@ -302,7 +252,7 @@ export default function SocialTasksScreen() {
         triggerHaptic("success");
       }
     } catch (e) {
-      console.error("Ad error during task claim:", e);
+      console.error("Error during task claim:", e);
     } finally {
       setClaimingTaskId(null);
       isClaimingSupabaseRef.current = false;
@@ -322,13 +272,9 @@ export default function SocialTasksScreen() {
         const nextTasks = communityTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
         saveCommunityState(nextTasks);
         
-        // Calculate random clue reward
         const clueTokens = Math.floor(Math.random() * 20) + 1;
         completeMission({ coins: task.reward, keys: 1, clue: clueTokens, xp: true });
         
-        // Trigger ad break at natural break (completing a task)
-        await triggerAd('rewarded_interstitial', true);
-
         setSuccessAnimation({ active: true, clueAwarded: clueTokens });
         triggerHaptic("success");
       } finally {
@@ -337,94 +283,12 @@ export default function SocialTasksScreen() {
     }, 1500);
   };
 
-  // Safely execute Ads
-  const executeAdWithTimeout = (adFn: () => any, timeoutMs: number = 4000) => {
-    let completed = false;
-    return new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        if (!completed) {
-          completed = true;
-          console.warn("Clip ad network timeout. Invoking local user fallback reward.");
-          resolve();
-        }
-      }, timeoutMs);
-
-      try {
-        const result = adFn();
-        if (result && typeof result.then === 'function') {
-          result.then(() => {
-            if (!completed) {
-              completed = true;
-              clearTimeout(timer);
-              resolve();
-            }
-          }).catch((err: any) => {
-            console.error("Ad promise error fallback:", err);
-            if (!completed) {
-              completed = true;
-              clearTimeout(timer);
-              resolve();
-            }
-          });
-        } else {
-          setTimeout(() => {
-            if (!completed) {
-              completed = true;
-              clearTimeout(timer);
-              resolve();
-            }
-          }, 1500);
-        }
-      } catch (err) {
-        console.error("Ad exception fallback launched:", err);
-        if (!completed) {
-          completed = true;
-          clearTimeout(timer);
-          resolve();
-        }
-      }
-    });
-  };
-
-  // Handle interactive closure of active sponsor transmissions
-  const handleCloseActiveAd = (isTap: boolean) => {
-    if (!activeAd) return;
-    const task = activeAd;
-    const randomClue = Math.floor(Math.random() * 20) + 1;
-
-    // Complete & Reward
-    completeMission({ 
-      coins: task.rewardCoins, 
-      keys: task.rewardKeys, 
-      clue: randomClue, 
-      xp: true 
-    });
-
-    // Update state
-    const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-    saveBatchState(nextTasks);
-    
-    setActiveAd(null);
-    setLoadingTaskId(null);
-    setSuccessAnimation({ active: true, clueAwarded: randomClue });
-    triggerHaptic("success");
-
-    // Start task-specific cooling timer!
-    startTaskCooldown(task.id);
-
-    if (isTap) {
-      // ONLY open target link when they purposefully click/tap
-      safeOpenLink(task.link || "https://omg10.com/4/11030019");
-    }
-  };
-
   // Handle completing a task in the dynamic 10-task batch
   const handleBatchTaskAction = async (task: TaskState) => {
     if (task.completed || !user.onboarded) return;
 
     const randomClue = Math.floor(Math.random() * 20) + 1;
 
-    // Reject if task specific cooldown is active
     const remaining = getRemainingCooldown(task.id);
     if (remaining > 0) {
       triggerHaptic("error");
@@ -434,29 +298,30 @@ export default function SocialTasksScreen() {
     setLoadingTaskId(task.id);
     triggerHaptic("medium");
 
-    const isAdTask = task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma';
-
-    if (isAdTask && task.type === 'ad_gamma') {
-      // ad_gamma: Open safe interactive activeAd frame nicely
-      setActiveAd(task);
-      setLoadingTaskId(null);
-      return;
-    }
-
-    setAdWatchState({
-      active: true,
-      task,
-      countdown: 0,
-      error: null
-    });
-
-    // If it's a pop task, use 'pop', otherwise let the rotate manager pick ('rewarded_interstitial' / 'in_app_interstitial' etc)
-    const adType = task.type === 'ad_pop' ? 'pop' : 'rewarded_interstitial';
-
     const onComplete = () => {
-      if (task.link && !isAdTask) {
-        // Link task countdown with verification
-        setAdWatchState({ active: false, task: null, countdown: 0, error: null });
+      completeMission({
+        coins: task.rewardCoins,
+        keys: task.rewardKeys,
+        baseMaterials: task.rewardMats,
+        clue: randomClue,
+        xp: true
+      });
+
+      const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+      saveBatchState(nextTasks);
+      
+      setLoadingTaskId(null);
+      logTransaction(task.rewardCoins, "task_completion", "ZP");
+      logTransaction(randomClue, "task_completion", "Clue");
+      addTransaction({ type: "task_completion", amount: task.rewardCoins, currency: "ZP" });
+      addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
+      setSuccessAnimation({ active: true, clueAwarded: randomClue });
+      triggerHaptic("success");
+      startTaskCooldown(task.id);
+    };
+
+    if (task.type === 'link_alpha' || task.type === 'link_beta') {
+      if (task.link) {
         safeOpenLink(task.link);
         
         setLinkCountdown(5);
@@ -464,65 +329,57 @@ export default function SocialTasksScreen() {
           setLinkCountdown(prev => {
             if (prev <= 1) {
               clearInterval(interval);
-              
-              completeMission({
-                coins: task.rewardCoins,
-                keys: task.rewardKeys,
-                baseMaterials: task.rewardMats,
-                clue: randomClue,
-                xp: true
-              });
-
-              const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-              saveBatchState(nextTasks);
-              
-              setLoadingTaskId(null);
-              logTransaction(task.rewardCoins, "task_completion", "ZP");
-              logTransaction(randomClue, "task_completion", "Clue");
-              addTransaction({ type: "task_completion", amount: task.rewardCoins, currency: "ZP" });
-              addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
-              setSuccessAnimation({ active: true, clueAwarded: randomClue });
-              triggerHaptic("success");
-
-              // Cooldown starts for links too
-              startTaskCooldown(task.id);
+              onComplete();
               return 5;
             }
             return prev - 1;
           });
         }, 1000);
       } else {
-        // Simple ad format task completes immediately upon ad view success
-        completeMission({
-          coins: task.rewardCoins,
-          keys: task.rewardKeys,
-          baseMaterials: task.rewardMats,
-          clue: randomClue,
-          xp: true
-        });
-
-        const nextTasks = batchTasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
-        saveBatchState(nextTasks);
-        
-        setAdWatchState({ active: false, task: null, countdown: 0, error: null });
-        setLoadingTaskId(null);
-        setSuccessAnimation({ active: true, clueAwarded: randomClue });
-        triggerHaptic("success");
-        startTaskCooldown(task.id);
+        onComplete();
       }
-    };
-
-    const onError = (e: any) => {
-      console.error("Ad Engine Execution Error on task:", e);
-      // Fallback: Continue sequence after rotation retries are exhausted to preserve perfect UX
-      onComplete();
-    };
-
-    try {
-      triggerAd(adType, true).then(onComplete).catch(onError);
-    } catch (err) {
-      console.error("SDK Call Exception in batch task:", err);
-      onError(err);
+    } else if (task.type === 'interstitial_task') {
+      // Trigger In-App Interstitial
+      adManager.triggerInAppInterstitial();
+      setTimeout(() => {
+        onComplete();
+      }, 2000);
+    } else if (task.type === 'rewarded_interstitial_task') {
+      // Trigger Rewarded Interstitial
+      adManager.triggerRewardedInterstitial()
+        .then((success) => {
+          if (success) {
+            onComplete();
+          } else {
+            console.warn("Rewarded Interstitial play failed or was closed.");
+            setLoadingTaskId(null);
+            triggerHaptic("error");
+          }
+        })
+        .catch(() => {
+          setLoadingTaskId(null);
+          triggerHaptic("error");
+        });
+    } else if (task.type === 'pop_task') {
+      // Trigger Rewarded Popup
+      adManager.triggerRewardedPopup()
+        .then((success) => {
+          if (success) {
+            onComplete();
+          } else {
+            console.warn("Rewarded Popup play failed or was closed.");
+            setLoadingTaskId(null);
+            triggerHaptic("error");
+          }
+        })
+        .catch(() => {
+          setLoadingTaskId(null);
+          triggerHaptic("error");
+        });
+    } else {
+      setTimeout(() => {
+        onComplete();
+      }, 1500);
     }
   };
 
@@ -532,115 +389,115 @@ export default function SocialTasksScreen() {
     const costElements = 50;
 
     if (resources.coins >= costZP && resources.baseMaterials >= costElements) {
-      // Deduct resources
       updateResources({ 
         coins: -costZP, 
         baseMaterials: -costElements 
       });
 
-      // Log the spend in transaction logs
       logTransaction(-costZP, "task_refresh", "ZP");
       addTransaction({ type: "task_refresh", amount: -costZP, currency: "ZP" });
       addTransaction({ type: "task_refresh", amount: -costElements, currency: "ELEMENT" });
 
-      // Reset all tasks to ready
       const resetBatch = INITIAL_BATCH.map(t => ({ ...t, completed: false }));
       saveBatchState(resetBatch);
 
-      // Instantly clear all active individual task cooldowns!
-      saveTaskCooldowns({});
+      const nextCooldowns = { ...taskCooldowns };
+      resetBatch.forEach(t => {
+        delete nextCooldowns[t.id];
+      });
+      saveTaskCooldowns(nextCooldowns);
 
+      setSuccessAnimation({ active: true, clueAwarded: 0 });
       triggerHaptic("success");
-      setSuccessAnimation({ active: true, clueAwarded: 0 }); 
     } else {
       triggerHaptic("error");
     }
   };
 
-  const completedCount = batchTasks.filter(t => t.completed).length;
-  const completedSupabaseCount = supabaseTasks.filter(t => completedTaskIds.includes(t.id)).length;
+  const completedCount = batchTasks.filter((t) => t.completed).length;
+  const completedSupabaseCount = supabaseTasks.filter((t: any) => completedTaskIds.includes(t.id)).length;
   const totalSupabaseCount = supabaseTasks.length;
 
   return (
     <div className="p-5 pb-24 space-y-6">
       
-      {/* Resource Balances Header */}
-      <div className="glass rounded-[2rem] border-white/5 p-4 bg-gradient-to-r from-neutral-950 via-neutral-900 to-black shadow-2xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-        <span className="text-[9px] font-black uppercase text-amber-500/80 tracking-widest block mb-2 px-1">🟢 CURRENT DECIPHER ASSETS</span>
-        
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ZP (COINS)</span>
-            <span className="text-xs font-black text-amber-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
-              <Coins size={11} className="text-amber-400" />
-              {resources.coins.toLocaleString()}
-            </span>
-          </div>
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">ELEMENTS</span>
-            <span className="text-xs font-black text-emerald-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
-              <Cpu size={11} className="text-emerald-400" />
-              {resources.baseMaterials}
-            </span>
-          </div>
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">KEYS</span>
-            <span className="text-xs font-black text-cyan-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
-              <Key size={11} className="text-cyan-400" />
-              {resources.keys}
-            </span>
-          </div>
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 text-center flex flex-col justify-center">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-tight block">CLUE BAL</span>
-            <span className="text-xs font-black text-violet-400 font-mono tracking-tight flex items-center justify-center gap-1 mt-0.5">
-              <Sparkles size={11} className="text-violet-400" />
-              {resources.clue}
-            </span>
-          </div>
+      {/* Dynamic Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-1 select-none flex items-center gap-2">
+            <Shield className="text-emerald-500 shrink-0" size={28} />
+            SECURITY CORPS
+          </h1>
+          <p className="text-xs text-white/50 italic">Resolve Signal Node Vault Incongruences</p>
+        </div>
+        <div className="glass px-3 py-1.5 rounded-2xl flex flex-col items-end border-emerald-500/20 bg-emerald-500/5">
+           <span className="text-[8px] font-black uppercase text-emerald-500/60 leading-none">Cores Synced</span>
+           <span className="text-md font-black italic">{completedCount + completedSupabaseCount} verified</span>
         </div>
       </div>
 
-      {!user.onboarded && (
-        <div className="glass rounded-3xl p-5 border-amber-500/50 bg-amber-500/5 flex items-center justify-between gap-4">
-           <div>
-              <h3 className="text-[10px] font-black uppercase text-amber-500 mb-0.5">Observation Mode</h3>
-              <p className="text-[8px] text-white/40 uppercase font-bold">Log in to link credentials.</p>
-           </div>
-           <button 
-             onClick={() => {
-               localStorage.removeItem("cluevault_onboarding_skipped");
-               localStorage.removeItem("cluevault_onboarding_hidden");
-               window.location.reload();
-             }}
-             className="bg-amber-500 text-black px-4 py-2 rounded-xl font-black uppercase italic text-[8px]"
-           >
-             Login
-           </button>
+      {/* Section 1: Telegram Channels and Announcements (Community Tasks) */}
+      <section className="space-y-3">
+        <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] px-1">I. Social Community Access Points</h3>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {communityTasks.map((task) => {
+             const Icon = task.icon;
+             const isPending = claimingCommunityIdsRef.current.includes(task.id);
+             return (
+               <button
+                 key={task.id}
+                 onClick={() => handleCommunityAction(task)}
+                 disabled={task.completed || isPending || !user.onboarded}
+                 className={cn(
+                   "group text-left glass border-white/5 hover:border-white/10 p-4.5 rounded-3xl relative overflow-hidden transition-all duration-300 w-full flex items-center justify-between",
+                   task.completed ? "opacity-35" : "hover:scale-[1.01]"
+                 )}
+               >
+                  <div className="flex items-center gap-3.5">
+                     <div className={cn(
+                       "w-11 h-11 rounded-2xl flex items-center justify-center border transition-colors",
+                       task.completed 
+                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                         : "bg-blue-500/10 text-blue-400 border-blue-500/20 group-hover:border-blue-400/30"
+                     )}>
+                        {task.completed ? (
+                          <CheckCircle2 size={20} />
+                        ) : isPending ? (
+                          <RefreshCw className="animate-spin" size={20} />
+                        ) : (
+                          <Icon size={20} />
+                        )}
+                     </div>
+                     <div>
+                        <h4 className="text-xs font-black uppercase tracking-tight text-white/95 leading-none">{task.title}</h4>
+                        <span className="text-[9px] font-mono font-black text-amber-500 mt-1 block">+{task.reward} ZP +1 KEY</span>
+                     </div>
+                  </div>
+                  <div>
+                    {task.completed ? (
+                      <span className="text-[10px] font-black uppercase italic text-emerald-500">Secured</span>
+                    ) : (
+                      <>
+                        <ExternalLink size={14} className="group-hover:text-amber-500 transition-colors" />
+                      </>
+                    )}
+                  </div>
+               </button>
+             );
+          })}
         </div>
-      )}
+      </section>
 
-      <header>
-        <div className="flex items-center gap-2 mb-1">
-           <Shield size={16} className="text-amber-500" />
-           <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Global Rewards Hub</span>
-        </div>
-        <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-1">Earn Network</h1>
-        <p className="text-sm text-white/50 italic font-medium">Bypass anti-bot firewalls to sync secure decryption assets.</p>
-      </header>
-
-
-
-      {/* Section 1: Dynamic 10-Task Decryption Batch */}
-      <section className="space-y-4">
+      {/* Section 2: Dynamic 10-Task Security Batch */}
+      <section className="space-y-3">
         <div className="flex items-center justify-between px-1 bg-white/[0.01] border border-white/5 py-2 px-4 rounded-3xl backdrop-blur-md">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em]">I. Active Decryption Batch</h3>
+            <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.15em]">II. Dynamic Security Transmissions</h3>
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Radial Progress Ring Component */}
             <div className="relative flex items-center justify-center w-12 h-12">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
                 <circle
@@ -660,7 +517,9 @@ export default function SocialTasksScreen() {
                   strokeWidth="3.5"
                   strokeDasharray={`${2 * Math.PI * 20}`}
                   initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
-                  animate={{ strokeDashoffset: 2 * Math.PI * 20 - (Math.min(completedCount, 10) / 10) * (2 * Math.PI * 20) }}
+                  animate={{ 
+                    strokeDashoffset: 2 * Math.PI * 20 - (completedCount / batchTasks.length) * (2 * Math.PI * 20) 
+                  }}
                   transition={{ duration: 0.8, ease: "easeOut" }}
                   strokeLinecap="round"
                 />
@@ -669,16 +528,16 @@ export default function SocialTasksScreen() {
                 <span className="text-[11px] font-mono font-black text-amber-500 leading-none">
                   {completedCount}
                 </span>
-                <span className="text-[7px] font-mono text-white/30 font-black leading-none mt-0.5">
-                  /10
+                <span className="text-[7.5px] font-mono text-white/30 font-black leading-none mt-0.5">
+                  /{batchTasks.length}
                 </span>
               </div>
             </div>
             
             <div className="flex flex-col text-right leading-none">
-              <span className="text-[9px] font-black uppercase text-amber-500 tracking-wider">BATCH STATUS</span>
+              <span className="text-[9px] font-black uppercase text-amber-500 tracking-wider">BATCH RESOLUTION</span>
               <span className="text-[7.5px] font-mono font-black text-white/35 uppercase mt-0.5">
-                {completedCount === 10 ? "FULLY SECURED" : "SYNCING CORES"}
+                {completedCount === batchTasks.length ? "FULLY SECURED" : "SYNCING CORES"}
               </span>
             </div>
           </div>
@@ -689,115 +548,68 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            To prevent ad-network blockage, a defensive 4-minute cooldown is in place between clicks.
+            A defensive 4-minute cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
-
-        <AnimatePresence>
-          {adWatchState.error && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-rose-500/10 border border-rose-500/20 text-rose-200 p-4 rounded-2xl flex items-start gap-3 overflow-hidden mb-4"
-            >
-              <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400">
-                <AlertTriangle size={18} className="animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-black uppercase text-rose-400 block tracking-wider leading-none">COMMUNICATION LIMITER</span>
-                <span className="text-[9px] uppercase font-bold text-white/50 block mt-1 tracking-tight">{adWatchState.error}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <div className="space-y-3">
           {batchTasks.map((task) => {
             const isLoading = loadingTaskId === task.id;
             const remainingSecs = getRemainingCooldown(task.id);
             const isCooldownActive = remainingSecs > 0;
-            const isAd = task.type === 'ad_pop' || task.type === 'ad_interstitial' || task.type === 'ad_gamma';
+            const isDecrypt = task.type === 'decrypt_node';
+            const isAdTask = task.type === 'interstitial_task' || task.type === 'rewarded_interstitial_task' || task.type === 'pop_task';
 
             return (
               <div
                 key={task.id}
                 className={cn(
                   "relative block w-full glass rounded-3xl p-5 border-white/5 overflow-hidden transition-all duration-300",
-                  task.completed && !isCooldownActive ? "opacity-35" : "hover:border-white/10"
+                  task.completed ? "opacity-35" : "hover:border-white/10"
                 )}
               >
-                {/* Blurring Canvas Overlay for active cooldowns */}
-                {isCooldownActive && (
-                  <div className="absolute inset-0 bg-neutral-950/75 backdrop-blur-[8px] z-10 flex items-center justify-between p-5 border border-rose-500/20">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 animate-pulse">
-                        <Timer size={18} />
-                      </div>
-                      <div className="text-left">
-                        <span className="text-[9px] font-black uppercase text-rose-500 block tracking-widest leading-none">TELEMETRY LOCKOUT</span>
-                        <span className="text-[10px] text-white/50 uppercase font-bold block mt-1 tracking-tight">STABILIZING FREQUENCY FEED</span>
-                      </div>
-                    </div>
-                    <div className="bg-rose-500/10 border border-rose-500/20 px-3.5 py-1.5 rounded-xl text-center shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                      <span className="text-xs font-mono font-black text-rose-500 tracking-wider">
-                        {(() => {
-                          const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
-                          const secs = (remainingSecs % 60).toString().padStart(2, '0');
-                          return `${mins}:${secs}`;
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 text-left">
                     <div className={cn(
                       "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all",
                       task.completed 
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/35"
-                        : isAd 
-                          ? "bg-amber-500/10 text-amber-500 border-amber-500/20" 
-                          : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        : isDecrypt
+                          ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                          : isAdTask
+                            ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                            : "bg-blue-500/10 text-blue-500 border-blue-500/20"
                     )}>
                       {task.completed ? (
                         <CheckCircle2 size={24} />
                       ) : isLoading ? (
                         <RefreshCw className="animate-spin" size={20} />
-                      ) : isAd ? (
-                        <Tv size={20} />
+                      ) : isDecrypt ? (
+                        <Shield size={20} />
+                      ) : isAdTask ? (
+                        <Play size={20} className="fill-violet-400 text-violet-400 ml-0.5" />
                       ) : (
-                        <Eye size={20} />
+                        <ExternalLink size={20} />
                       )}
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-tight text-white/95">
                         {task.name}
                       </h4>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[9px] font-black font-mono text-amber-400">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="text-[9.5px] font-black font-mono text-amber-500 leading-none">
                           +{task.rewardCoins} ZP
                         </span>
                         {task.rewardKeys > 0 && (
-                          <span className="text-[9px] font-black font-mono text-cyan-400 flex items-center gap-0.5">
-                            • <Key size={8} /> +{task.rewardKeys} Key
+                          <span className="text-[9.5px] font-black font-mono text-violet-400 leading-none flex items-center gap-0.5">
+                            • <Key size={10} className="inline" /> +{task.rewardKeys} Key
                           </span>
-                        )}
-                        {task.rewardKeys > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Key size={10} className="text-amber-500" />
-                            <span className="text-white/40">{task.rewardKeys}</span>
-                          </div>
                         )}
                         {task.rewardMats > 0 && (
-                          <span className="text-[9px] font-black font-mono text-emerald-400 flex items-center gap-0.5">
-                            • <Cpu size={8} /> +{task.rewardMats} Elements
+                          <span className="text-[9.5px] font-black font-mono text-emerald-400 leading-none">
+                            • +{task.rewardMats} Element
                           </span>
                         )}
-                        <span className="text-[9px] font-black font-mono text-violet-400 block sm:inline">
-                          • +1-20 Clue
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -805,7 +617,7 @@ export default function SocialTasksScreen() {
                   <div>
                     {task.completed ? (
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1.5 rounded-xl block text-center min-w-[100px]">
-                        SECURED
+                        SYNCHRONIZED
                       </span>
                     ) : (
                       <button
@@ -815,26 +627,30 @@ export default function SocialTasksScreen() {
                           "px-4 py-2.5 rounded-xl font-black uppercase italic tracking-tighter text-[9px] active:scale-95 transition-all text-center min-w-[100px]",
                           isCooldownActive
                             ? "bg-white/5 border border-white/10 text-rose-500 cursor-not-allowed font-mono font-bold"
-                            : isAd
+                            : isDecrypt
                               ? "bg-amber-500 text-black hover:bg-amber-400"
-                              : "bg-blue-500 text-white hover:bg-blue-400"
+                              : isAdTask
+                                ? "bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-550 text-white border border-violet-500/30"
+                                : "bg-blue-500 text-white hover:bg-blue-400"
                         )}
                       >
                         {isLoading 
-                          ? (isAd 
-                              ? (adWatchState.active && adWatchState.task?.id === task.id 
-                                  ? "VERIFYING..." 
-                                  : "BROADCASTING...")
-                              : `SYNCING (${linkCountdown}S)`)
+                          ? (isDecrypt 
+                              ? "DECRYPTING..."
+                              : isAdTask
+                                ? "PLAYING..."
+                                : `SYNCING (${linkCountdown}S)`)
                           : isCooldownActive
                             ? (() => {
                                 const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
                                 const secs = (remainingSecs % 60).toString().padStart(2, '0');
                                 return `${mins}:${secs}`;
                               })()
-                            : isAd 
-                              ? "PLAY BROADCAST" 
-                              : "VISIT FREQ"
+                            : isDecrypt 
+                              ? "DECRYPT NODE" 
+                              : isAdTask
+                                ? "PLAY BROADCAST"
+                                : "VISIT FREQ"
                         }
                       </button>
                     )}
@@ -846,7 +662,7 @@ export default function SocialTasksScreen() {
         </div>
       </section>
 
-      {/* Section 2: Conversion Refresh Override */}
+      {/* Section 3: Conversion Refresh Override */}
       <section className="glass rounded-[2rem] border-amber-500/20 bg-gradient-to-r from-amber-500/[0.04] to-black p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Database size={18} className="text-amber-500 animate-pulse" />
@@ -858,75 +674,24 @@ export default function SocialTasksScreen() {
 
         <div className="flex items-center justify-between border-t border-dashed border-white/5 pt-4">
           <div className="space-y-1 text-left">
-            <span className="text-[8px] font-black text-white/30 uppercase tracking-widest block">OVERRIDE FEE REQ</span>
-            <div className="flex gap-3">
-              <span className="text-[10px] font-mono font-black text-amber-500 flex items-center gap-1">
-                <Coins size={11} /> 12000 ZP
-              </span>
-              <span className="text-[10px] font-mono font-black text-emerald-400 flex items-center gap-1">
-                <Cpu size={11} /> 50 Elements
-              </span>
+            <div className="text-[8px] font-black text-white/30 uppercase tracking-widest leading-none">REFRESH PRICE</div>
+            <div className="text-[10px] text-white/60 font-black uppercase">
+              <strong className="text-amber-500 font-mono">12,000 ZP</strong> + <strong className="text-emerald-500 font-mono">50 Elements</strong>
             </div>
           </div>
-
+          
           <button
             onClick={handleConvertRefresh}
-            disabled={resources.coins < 12000 || resources.baseMaterials < 50}
+            disabled={resources.coins < 12000 || resources.baseMaterials < 50 || !user.onboarded}
             className={cn(
-              "px-5 py-3 rounded-xl font-black uppercase text-[10px] italic active:scale-95 transition-all text-black",
+              "px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-wider active:scale-95 transition-all text-center border",
               (resources.coins >= 12000 && resources.baseMaterials >= 50)
-                ? "bg-gradient-to-r from-amber-500 to-amber-600 glow-gold hover:from-amber-400 hover:to-amber-500"
-                : "bg-white/5 text-white/20 border border-white/5 cursor-default"
+                ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black border-amber-500/25 cursor-pointer hover:shadow-lg hover:shadow-amber-500/5"
+                : "bg-white/[0.01] border-white/5 text-white/20 cursor-not-allowed"
             )}
           >
-            {(resources.coins >= 12000 && resources.baseMaterials >= 50) ? "Force Refresh Batch" : "Insufficient Assets"}
+            INJECT REFRESH REGEN
           </button>
-        </div>
-      </section>
-
-      {/* Section 3: One-Time Telegram Community Credentials */}
-      <section className="space-y-3">
-        <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] px-1">II. Social Security Verification</h3>
-        <div className="space-y-3">
-          {communityTasks.map((task) => (
-            <button
-              key={task.id}
-              onClick={() => handleCommunityAction(task)}
-              disabled={task.completed || !user.onboarded}
-              className={cn(
-                "w-full glass rounded-3xl p-5 border-white/5 flex items-center justify-between group transition-all text-left",
-                task.completed ? "opacity-50 grayscale cursor-default" : "hover:border-white/10 active:scale-[0.98]",
-                !user.onboarded && "opacity-30 grayscale cursor-not-allowed"
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0",
-                  task.completed ? "bg-emerald-500 text-black" : "bg-white/5 text-white/40 group-hover:bg-amber-500 group-hover:text-black"
-                )}>
-                  {task.completed ? <CheckCircle2 size={24} /> : <task.icon size={24} />}
-                </div>
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-tight text-white/95">{task.title}</h4>
-                  <div className="flex items-center gap-2 mt-0.5">
-                     <span className="text-[10px] font-black text-amber-500">+{task.reward} ZP</span>
-                     <span className="text-[9px] text-white/20 uppercase font-black tracking-widest">• Secured link</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 text-white/20">
-                 {task.completed ? (
-                   <span className="text-[10px] font-black uppercase italic text-emerald-500">Secured</span>
-                 ) : (
-                   <>
-                     <ExternalLink size={14} className="group-hover:text-amber-500 transition-colors" />
-                     <ChevronRight size={18} />
-                   </>
-                 )}
-              </div>
-            </button>
-          ))}
         </div>
       </section>
 
@@ -939,7 +704,6 @@ export default function SocialTasksScreen() {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Radial Progress Ring Component */}
             <div className="relative flex items-center justify-center w-12 h-12">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
                 <circle
@@ -970,7 +734,7 @@ export default function SocialTasksScreen() {
                 <span className="text-[11px] font-mono font-black text-emerald-400 leading-none">
                   {completedSupabaseCount}
                 </span>
-                <span className="text-[7px] font-mono text-white/30 font-black leading-none mt-0.5">
+                <span className="text-[7.5px] font-mono text-white/30 font-black leading-none mt-0.5">
                   /{totalSupabaseCount}
                 </span>
               </div>
@@ -1028,10 +792,10 @@ export default function SocialTasksScreen() {
                         {task.title}
                       </h4>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[9px] font-black font-mono text-amber-400">
+                        <span className="text-[9.5px] font-black font-mono text-amber-400">
                           +{Number(task.reward).toLocaleString()} ZP
                         </span>
-                        <span className="text-[9px] font-black font-mono text-violet-400 block sm:inline">
+                        <span className="text-[9.5px] font-black font-mono text-violet-400 block sm:inline">
                           • +Welcome Bonus Decryption
                         </span>
                       </div>
@@ -1070,32 +834,32 @@ export default function SocialTasksScreen() {
          <h3 className="text-[10px] font-black uppercase text-white/40 tracking-[0.15em] px-1">IV. Secure Transaction Log Ledger</h3>
          <div className="glass rounded-[2rem] border-white/5 p-5 bg-gradient-to-b from-neutral-950 to-black space-y-4 max-h-[250px] overflow-y-auto">
            {transactions.length === 0 ? (
-             <div className="py-6 text-center">
-                <Database size={24} className="text-white/10 mx-auto mb-2" />
-                <p className="text-[9px] text-white/30 uppercase font-bold">No transactions found on the database logs. Set up missions to log records.</p>
-             </div>
+              <div className="py-6 text-center">
+                 <Database size={24} className="text-white/10 mx-auto mb-2" />
+                 <p className="text-[9px] text-white/30 uppercase font-bold">No transactions found on the database logs. Set up missions to log records.</p>
+              </div>
            ) : (
-             <div className="space-y-3.5">
-               {transactions.map((tx) => (
-                 <div key={tx.id} className="flex justify-between items-center text-left py-1 border-b border-white/[0.02]">
-                    <div>
-                      <span className="text-[10px] font-black text-white/90 block uppercase">
-                         {tx.type === "welcome_package" ? "WELCOME IDENTITY DEPOSIT" : 
-                          tx.type === "referral_bonus" ? "AGENT COMPATRIOT BONUS" : 
-                          "TACTICAL TASK CRITICAL PAYOUT"}
-                      </span>
-                      <span className="text-[8px] font-mono text-white/45 block mt-0.5">
-                         DATE: {new Date(tx.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-mono font-black text-emerald-400">
-                         +{Number(tx.amount).toLocaleString()} ZP
-                      </span>
-                    </div>
-                 </div>
-               ))}
-             </div>
+              <div className="space-y-3.5">
+                {transactions.map((tx) => (
+                  <div key={tx.id} className="flex justify-between items-center text-left py-1 border-b border-white/[0.02]">
+                     <div>
+                       <span className="text-[10px] font-black text-white/90 block uppercase">
+                          {tx.type === "welcome_package" ? "WELCOME IDENTITY DEPOSIT" : 
+                           tx.type === "referral_bonus" ? "AGENT COMPATRIOT BONUS" : 
+                           "TACTICAL TASK CRITICAL PAYOUT"}
+                       </span>
+                       <span className="text-[8px] font-mono text-white/45 block mt-0.5">
+                          DATE: {new Date(tx.created_at).toLocaleString()}
+                       </span>
+                     </div>
+                     <div className="text-right">
+                       <span className="text-xs font-mono font-black text-emerald-400">
+                          +{Number(tx.amount).toLocaleString()} ZP
+                       </span>
+                     </div>
+                  </div>
+                ))}
+              </div>
            )}
          </div>
       </section>
@@ -1145,202 +909,13 @@ export default function SocialTasksScreen() {
         )}
       </AnimatePresence>
 
-      {/* Immersive Fullscreen Active Ad telemetry Stream */}
-      <AnimatePresence>
-        {activeAd && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/98 z-50 flex flex-col justify-between p-6 overflow-y-auto"
-          >
-            {/* Topbar of transmission stream */}
-            <div className="flex justify-between items-center border-b border-white/10 pb-4">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-widest">
-                  LIVE SPONSOR TELEMETRY DECODE
-                </span>
-              </div>
-              <button 
-                onClick={() => handleCloseActiveAd(false)}
-                className="bg-white/5 border border-white/10 text-white/60 hover:text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all"
-              >
-                <span>← BACK</span>
-              </button>
-            </div>
-
-            {/* Immersive Main Sponsor Board card */}
-            <div className="my-auto max-w-md mx-auto w-full space-y-6 text-center">
-              <div className="glass rounded-[3rem] p-6 border-amber-500/30 bg-gradient-to-t from-neutral-950 to-amber-500/5 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-                
-                {/* Visual telemetry node */}
-                <div 
-                  onClick={() => handleCloseActiveAd(true)}
-                  className="w-full aspect-video rounded-[1.8rem] bg-neutral-900 border border-white/10 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden cursor-pointer hover:border-amber-500/40 select-none transition-all shadow-[0_0_30px_rgba(0,0,0,0.8)] animate-pulse"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/[0.03] to-violet-500/[0.03]" />
-                  <Database size={48} className="text-amber-500/65 mb-4" />
-                  <span className="text-[11px] font-black uppercase text-amber-500/80 tracking-widest block mb-1">
-                    [ SPONSOR LINK DIRECTORY ]
-                  </span>
-                  <p className="text-[14px] font-black uppercase text-white tracking-tight px-4 mb-2">
-                    {activeAd.name}
-                  </p>
-                  <span className="text-[8px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
-                    TAP GRAPHIC TO OPEN WEBLINK
-                  </span>
-                </div>
-
-                {/* Sub banner text */}
-                <div className="mt-6 space-y-2">
-                  <h4 className="text-sm font-black uppercase italic tracking-tighter text-white">Interactive Sponsor Channel Code</h4>
-                  <p className="text-[10px] text-white/40 leading-relaxed font-bold">
-                    Tapping the sponsor banner or backing out returns you instantly to the secure node while unlocking rewards coordinate buffers!
-                  </p>
-                </div>
-              </div>
-
-              {/* Mega CTA Button action to tap the ad directly */}
-              <button
-                onClick={() => handleCloseActiveAd(true)}
-                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(245,158,11,0.2)]"
-              >
-                <span>DECODE SPONSOR CHANNEL WEB & SECURE</span>
-                <ExternalLink size={14} />
-              </button>
-            </div>
-
-            {/* Bottom info banner */}
-            <div className="text-center pt-4 border-t border-white/5">
-              <span className="text-[8px] font-mono text-white/20 uppercase tracking-[0.15em] block">
-                SYSTEM CORRELATION FEEDBACK SECURED — SAFE EXIT EMULATOR ENABLED
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Unskippable Quest Ad Overlay */}
-      <AnimatePresence>
-        {showQuestAd && activeQuestTask && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-left"
-          >
-            <motion.div
-              initial={{ scale: 0.9, rotateX: 10, y: 20 }}
-              animate={{ scale: 1, rotateX: 0, y: 0 }}
-              exit={{ scale: 0.9, rotateX: -10, y: -20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 180 }}
-              className="w-full max-w-sm bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-[0_0_50px_rgba(245,158,11,0.15)] overflow-hidden relative"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-              
-              {/* Ad Badge */}
-              <div className="flex justify-between items-center bg-white/5 border border-white/5 px-3.5 py-1.5 rounded-2xl">
-                <span className="text-[8px] font-black tracking-widest text-amber-500 uppercase flex items-center gap-1.5 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Sponsored Network Broadcast
-                </span>
-                <span className="text-[9px] font-mono font-black text-white/40 uppercase">
-                  Mandatory Sync Ad
-                </span>
-              </div>
-
-              {/* Video simulation placeholder */}
-              <div className="aspect-video bg-neutral-950/80 rounded-2xl border border-white/5 relative flex flex-col items-center justify-center overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 via-transparent to-transparent opacity-70" />
-                <Tv size={36} className="text-amber-500/30 animate-bounce mb-2" />
-                <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">Streaming Sponsor Feed</span>
-                <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/80 px-2.5 py-1 rounded-lg border border-white/5 text-[8px] font-mono text-amber-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> BUFFERING SECURE STREAM
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-black uppercase text-white tracking-tight flex items-center gap-2">
-                  <Sparkles size={16} className="text-amber-500 shrink-0" />
-                  {QUEST_ADS[currentQuestAdIndex].title}
-                </h3>
-                <p className="text-[10px] text-white/50 leading-relaxed font-bold uppercase">
-                  {QUEST_ADS[currentQuestAdIndex].desc}
-                </p>
-                <div className="text-[8px] font-mono text-white/30 pt-2 border-t border-white/5 flex justify-between uppercase">
-                  <span>Route Node: {QUEST_ADS[currentQuestAdIndex].mockUrl}</span>
-                  <span className="text-amber-500/60">unskippable ad flow</span>
-                </div>
-              </div>
-
-              {/* Status Actions */}
-              <div className="bg-black/40 border border-white/5 p-4 rounded-3xl space-y-3.5 text-center">
-                {questAdCountdown > 0 ? (
-                  <div className="flex flex-col items-center space-y-1">
-                    <span className="text-[11px] font-black uppercase text-amber-500 tracking-wider animate-pulse">
-                      Anti-bot security verification in progress
-                    </span>
-                    <p className="text-[20px] font-mono font-black text-white">
-                      {questAdCountdown}s remaining
-                    </p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      triggerHaptic("success");
-                      setShowQuestAd(false);
-                      setClaimingTaskId(activeQuestTask.id);
-                      setLinkCountdown(5);
-                      
-                      // execute claim
-                      claimSupabaseTask(activeQuestTask.id).then((verified) => {
-                        setClaimingTaskId(null);
-                        if (verified) {
-                          const randomClue = Math.floor(Math.random() * 10) + 1;
-                          updateResources({ clue: randomClue });
-                          
-                          // Log transactions to ledger (cloud and local)
-                          const claimRewardZP = activeQuestTask.reward || 1000;
-                          const claimRewardKeys = activeQuestTask.reward_keys || activeQuestTask.rewardKeys || 1;
-                          
-                          logTransaction(randomClue, "task_completion", "Clue");
-                          logTransaction(claimRewardZP, "task_completion", "ZP");
-                          
-                          addTransaction({ type: "task_completion", amount: randomClue, currency: "CLUE" });
-                          addTransaction({ type: "task_completion", amount: claimRewardZP, currency: "ZP" });
-                          addTransaction({ type: "task_completion", amount: claimRewardKeys, currency: "KEY" });
-
-                          // trigger ad
-                          triggerAd('rewarded_interstitial', true);
-
-                          setSuccessAnimation({ active: true, clueAwarded: randomClue });
-                          triggerHaptic("success");
-                          loadTasksAndCompletions();
-                          loadTransactions();
-                        } else {
-                          triggerHaptic("error");
-                        }
-                        setActiveQuestTask(null);
-                      });
-                    }}
-                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black uppercase italic tracking-wider rounded-xl text-[10px] active:scale-95 transition-all shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <CheckCircle2 size={14} /> Synchronize & Verify Quest Rewards
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="p-6 glass rounded-[2.5rem] border-white/5 space-y-4">
+      <div className="text-center pt-2">
          <h4 className="text-[10px] font-black uppercase text-white/20 tracking-[0.2em] text-center italic">Encryption Standards</h4>
          <p className="text-[10px] text-white/40 text-center leading-relaxed font-bold">
             Social data is encrypted using the ClueVault Signal Protocol. Batch operations lock limits to prevent anti-bot network blockages. Bypassing limits is allowed via Elements injection points.
          </p>
       </div>
+
     </div>
   );
 }

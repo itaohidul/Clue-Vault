@@ -27,8 +27,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { TonConnectUI } from "@tonconnect/ui";
 import { beginCell, Address } from "@ton/core";
-import { triggerAd } from "../../lib/adEngine";
-import { setUiBusy, isUiBusy } from "../../lib/adPacer";
 
 // Helper to construct jetton transfer payload cell
 function buildUsdtPayload(recipientAddress: string, amountUsdt: number, responseAddress: string): string {
@@ -279,8 +277,6 @@ export default function ShopScreen() {
       return;
     }
 
-    setUiBusy(true);
-    // Move to broadcasting state
     setActiveTx(prev => prev ? { ...prev, step: 'broadcasting' } : null);
     triggerHaptic("heavy");
 
@@ -336,11 +332,6 @@ export default function ShopScreen() {
       // If successful, credit game resource inventory atomically!
       updateResources(activeTx.pack.reward);
 
-      // Trigger ad break (After a successful transaction)
-      triggerAd('rewarded').finally(() => {
-        setUiBusy(false);
-      });
-
       // Log premium acquisition
       Object.entries(activeTx.pack.reward).forEach(([k, v]) => {
         const amount = typeof v === 'number' ? v : 0;
@@ -359,7 +350,6 @@ export default function ShopScreen() {
       triggerHaptic("success");
 
     } catch (err: any) {
-      setUiBusy(false);
       console.error("USDT/TON Checkout failed:", err);
       
       setActiveTx(prev => prev ? { 
@@ -374,12 +364,11 @@ export default function ShopScreen() {
 
   // Process standard swaps (coinpacks using ZP)
   const handleStandardSwap = (pack: any) => {
-    if (!user.onboarded || isUiBusy()) {
+    if (!user.onboarded) {
       triggerHaptic("error");
       return;
     }
 
-    setUiBusy(true);
     // Call userStore's buyItem
     const success = buyItem(pack);
     if (success) {
@@ -391,13 +380,8 @@ export default function ShopScreen() {
         logTransaction(amount, "shop_buy", cur);
         addTransaction({ type: "shop_buy", amount, currency: (cur.toUpperCase() === "ELEMENT" ? "ELEMENT" : cur.toUpperCase()) as any });
       });
-      // Trigger ad break (After a successful transaction)
-      triggerAd('rewarded').finally(() => {
-        setUiBusy(false);
-      });
       setSwapSuccessItem(pack);
     } else {
-      setUiBusy(false);
       triggerHaptic("error");
     }
   };

@@ -29,8 +29,7 @@ import { TwaAnalyticsProvider, useTelemetree } from "./lib/telegramAnalytics";
 import { useUserStore } from "./store/userStore";
 import cluevaultLogo from "./assets/images/cluevault_logo_1779272321887.png";
 import SupabaseSyncProvider, { useSupabaseSync } from "./components/SupabaseSyncProvider";
-import { triggerAd, getLastAdClosedTime, showRewardedInterstitial, triggerBreakAd, initInAppAds } from "./lib/adEngine";
-import { trackAdAnalytics } from "./lib/adPacer";
+import { adManager } from "./lib/adManager";
 
 
 // Simple Game Context
@@ -205,6 +204,10 @@ function AppContent() {
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
 
   useEffect(() => {
+    adManager.init({});
+  }, []);
+
+  useEffect(() => {
     if (isCloudLoaded) {
       setInitSyncCompleted(true);
     }
@@ -294,49 +297,6 @@ function AppContent() {
   }, [location.pathname]);
 
 
-
-  // Trigger general ad and inApp ad system on initial startup
-  useEffect(() => {
-    initInAppAds({
-      frequency: 1000,
-      capping: 0.1, // Show up to 1000 ads within 6 minutes (basically unlimited)
-      interval: 30, // 30 seconds between ads
-      timeout: 30,  // 30 seconds initial delay on app start
-      everyPage: false
-    });
-
-    const timer = setTimeout(() => {
-      console.log(`[Ad Engine] App initialized. Triggering startup ad...`);
-      triggerAd(undefined, true);
-    }, 1500); // 1.5 seconds delay allows page rendering and SDK readiness
-    return () => clearTimeout(timer);
-  }, []);
-
-  // 60-second interval trigger for rewarded or in-app interstitial ads
-  useEffect(() => {
-    let adFormatToggle = true; // true = rewarded_interstitial, false = in_app_interstitial
-
-    const adInterval = setInterval(() => {
-      const now = Date.now();
-      const lastClosed = getLastAdClosedTime();
-      
-      // Prevent spamming ads in rapid succession (e.g. if another ad was manually closed 2 seconds ago)
-      if (now - lastClosed < 5000) {
-        console.log(`[Ad Engine] 60s interval trigger suppressed: only ${Math.round((now - lastClosed) / 1000)}s elapsed since last ad closed (5s minimum wait required).`);
-        return;
-      }
-
-      const selectedFormat = adFormatToggle ? 'rewarded_interstitial' : 'in_app_interstitial';
-      console.log(`[Ad Engine] 60s activity interval reached. Triggering orchestrated break ad with format: ${selectedFormat}`);
-      
-      triggerBreakAd(true, selectedFormat);
-      
-      // Toggle for the next cycle
-      adFormatToggle = !adFormatToggle;
-    }, 60000); // every 60 seconds
-
-    return () => clearInterval(adInterval);
-  }, []);
 
   // Track navigations and 60-second activity loops for rewarded interstitial ads
   const prevPathRef = useRef<string>(location.pathname);

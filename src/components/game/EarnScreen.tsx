@@ -24,7 +24,6 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { cn, safeOpenLink } from "../../lib/utils";
-import { triggerAd } from "../../lib/adEngine";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 
@@ -43,9 +42,9 @@ export default function EarnScreen() {
   const [calibrationTarget, setCalibrationTarget] = useState<number>(0);
   const [claimedReward, setClaimedReward] = useState<number | null>(null);
 
-  // Ad Pacing & Verification states
+  // Sync & Telemetry states
   const [pacerAlert, setPacerAlert] = useState<{ title: string; desc: string } | null>(null);
-  const [adVerifying, setAdVerifying] = useState<'direct' | 'interstitial' | null>(null);
+  const [syncState, setSyncState] = useState<'direct' | 'interstitial' | null>(null);
   const [pacerCountdown, setPacerCountdown] = useState<number>(0);
 
   // Global pool estimates
@@ -220,45 +219,22 @@ export default function EarnScreen() {
     setCalibrationActive(true);
   };
 
-  const handleWatchAd = async (type: 'interstitial' | 'direct') => {
-    if (adVerifying) return;
+  const handleTelemetrySync = async (type: 'interstitial' | 'direct') => {
+    if (syncState) return;
     triggerHaptic("medium");
-    setAdVerifying(type);
+    setSyncState(type);
     
-    const adType = type === 'direct' ? 'pop' : 'rewarded';
-    
-    try {
-      // Force user-initiated ads to show immediately
-      const adSuccess = await triggerAd(adType, true);
-      setAdVerifying(null);
-      if (!adSuccess) {
-        triggerHaptic("error");
-        setPacerAlert({
-          title: "Signal Link Offline",
-          desc: "AD COULD NOT BE CONFIRMED — PLEASE TRY AGAIN"
-        });
-        setTimeout(() => setPacerAlert(null), 3000);
-        return;
-      }
+    setTimeout(() => {
       const rewardAmount = type === 'direct' ? 100 : 50;
       updateResources({ activityScore: rewardAmount });
+      setSyncState(null);
       triggerHaptic("success");
       setPacerAlert({
         title: "Aether Link Established",
-        desc: "AD TRANSMISSION COMPLETE — CREDITING REWARD POINTS"
+        desc: "TRANSMISSION REVERSED & CREDITED SUCCESSFULLY"
       });
       setTimeout(() => setPacerAlert(null), 3500);
-    } catch (err) {
-      console.error("Ad Engine Execution Error:", err);
-      setAdVerifying(null);
-      triggerHaptic("error");
-      
-      setPacerAlert({
-        title: "Signal Link Offline",
-        desc: "TELEMETRY SYNC INTERRUPTED — PLEASE TRY AGAIN"
-      });
-      setTimeout(() => setPacerAlert(null), 3000);
-    }
+    }, 1500);
   };
 
   const clickCalibrationCircle = (id: number) => {
@@ -331,13 +307,13 @@ export default function EarnScreen() {
 
         <div className="grid grid-cols-1 gap-3">
            <button 
-             onClick={() => handleWatchAd('direct')}
-             disabled={!!adVerifying}
+             onClick={() => handleTelemetrySync('direct')}
+             disabled={!!syncState}
              className={cn(
                "group relative overflow-hidden p-4 rounded-2xl transition-all duration-300",
-               adVerifying === 'direct'
+               syncState === 'direct'
                  ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
-                 : adVerifying
+                 : syncState
                    ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
                    : "bg-gradient-to-r from-amber-500 to-orange-600 hover:scale-[1.01] active:scale-95"
              )}
@@ -345,16 +321,16 @@ export default function EarnScreen() {
               <div className="flex justify-between items-center relative z-10">
                  <div className="text-left">
                     <span className="text-[8px] font-black uppercase text-black/60 tracking-widest bg-white/30 px-1.5 py-0.5 rounded">
-                      {adVerifying === 'direct' ? "Verifying..." : "Priority Earn"}
+                      {syncState === 'direct' ? "Verifying..." : "Priority Earn"}
                     </span>
                     <h4 className="text-lg font-black uppercase italic text-white leading-none mt-1">
-                      {adVerifying === 'direct' ? "VERIFYING..." : "DIRECT SIGNAL"}
+                      {syncState === 'direct' ? "VERIFYING..." : "DIRECT SIGNAL"}
                     </h4>
                     <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">
-                      {adVerifying === 'direct' ? "Checking signal telemetry load" : "Instant +100 Activity Score"}
+                      {syncState === 'direct' ? "Checking signal telemetry load" : "Instant +100 Activity Score"}
                     </p>
                  </div>
-                 {adVerifying === 'direct' ? (
+                 {syncState === 'direct' ? (
                    <RefreshCw className="text-amber-500 animate-spin" size={24} />
                  ) : (
                    <ArrowUpRight className="text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" size={24} />
@@ -364,13 +340,13 @@ export default function EarnScreen() {
            </button>
 
            <button 
-             onClick={() => handleWatchAd('interstitial')}
-             disabled={!!adVerifying}
+             onClick={() => handleTelemetrySync('interstitial')}
+             disabled={!!syncState}
              className={cn(
                "p-4 rounded-2xl flex items-center justify-between transition-all duration-300",
-               adVerifying === 'interstitial'
+               syncState === 'interstitial'
                  ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
-                 : adVerifying
+                 : syncState
                    ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
                    : "bg-white/5 hover:bg-white/10 hover:scale-[1.01] border border-white/5 active:scale-95"
              )}
@@ -378,9 +354,9 @@ export default function EarnScreen() {
               <div className="flex items-center gap-4">
                  <div className={cn(
                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                   adVerifying === 'interstitial' ? "bg-amber-500/25 text-amber-400" : "bg-amber-500/10 text-amber-500"
+                   syncState === 'interstitial' ? "bg-amber-500/25 text-amber-400" : "bg-amber-500/10 text-amber-500"
                  )}>
-                    {adVerifying === 'interstitial' ? (
+                    {syncState === 'interstitial' ? (
                       <RefreshCw className="animate-spin" size={24} />
                     ) : (
                       <Activity size={24} />
@@ -388,14 +364,14 @@ export default function EarnScreen() {
                  </div>
                  <div className="text-left">
                     <h4 className="text-sm font-black uppercase italic leading-none">
-                      {adVerifying === 'interstitial' ? "VERIFYING OVERLAY..." : "OVERLAY SIGNAL"}
+                      {syncState === 'interstitial' ? "VERIFYING OVERLAY..." : "OVERLAY SIGNAL"}
                     </h4>
                     <span className="text-[10px] font-bold text-white/30 tracking-tight">
-                      {adVerifying === 'interstitial' ? "Authorizing transmission packet..." : "+50 Activity Score"}
+                      {syncState === 'interstitial' ? "Authorizing transmission packet..." : "+50 Activity Score"}
                     </span>
                  </div>
               </div>
-              {adVerifying === 'interstitial' ? null : <ChevronRight className="text-white/20" size={20} />}
+              {syncState === 'interstitial' ? null : <ChevronRight className="text-white/20" size={20} />}
            </button>
         </div>
       </div>

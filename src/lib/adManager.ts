@@ -59,12 +59,14 @@ class AdManager {
 
     console.log("[AdManager] Triggering background interstitial...");
     this.isAdActive = true;
+    this.recordAdView(); // Reset timer immediately to prevent instant loops on fail or delay
     this.config.onAdStart?.();
 
     // Invoke interstitial
     try {
-      showAdFn()
-        .then(() => {
+      const res = showAdFn();
+      if (res && typeof res.then === "function") {
+        res.then(() => {
           console.log("[AdManager] Background interstitial completed.");
           this.recordAdView();
         })
@@ -76,6 +78,12 @@ class AdManager {
           this.isAdActive = false;
           this.config.onAdEnd?.();
         });
+      } else {
+        console.log("[AdManager] Background interstitial resolved synchronously.");
+        this.recordAdView();
+        this.isAdActive = false;
+        this.config.onAdEnd?.();
+      }
     } catch (e) {
       console.error("[AdManager] Error running show_11030019 background script:", e);
       this.recordAdView();
@@ -94,7 +102,7 @@ class AdManager {
 
     this.recordAdView();
     try {
-      showAdFn({
+      const res = showAdFn({
         type: 'inApp',
         inAppSettings: {
           frequency: 2,
@@ -104,6 +112,9 @@ class AdManager {
           everyPage: false
         }
       });
+      if (res && typeof res.then === "function") {
+        await res;
+      }
       return true;
     } catch (e) {
       console.error("[AdManager] Error triggering inApp interstitial:", e);
@@ -124,7 +135,10 @@ class AdManager {
     this.recordAdView();
 
     try {
-      await showAdFn();
+      const res = showAdFn();
+      if (res && typeof res.then === "function") {
+        await res;
+      }
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return true;
@@ -132,7 +146,7 @@ class AdManager {
       console.error("[AdManager] Rewarded interstitial error/closed:", e);
       this.isAdActive = false;
       this.config.onAdEnd?.();
-      return false;
+      return false; // Still return false, but we can treat as success and reward if desired by fallback, but false is safer for integrity unless wanted
     }
   }
 
@@ -149,7 +163,10 @@ class AdManager {
     this.recordAdView();
 
     try {
-      await showAdFn('pop');
+      const res = showAdFn('pop');
+      if (res && typeof res.then === "function") {
+        await res;
+      }
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return true;

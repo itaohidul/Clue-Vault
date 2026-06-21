@@ -36,23 +36,23 @@ interface TaskState {
 }
 
 const INITIAL_BATCH: TaskState[] = [
-  { id: "task_1", name: "Quantum Signal Validation I", type: "decrypt_node", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_2", name: "Network Link Security Audit I", type: "decrypt_node", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_3", name: "Quantum Link Access [Alpha]", type: "link_alpha", link: "https://omg10.com/4/11030039", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
-  { id: "task_4", name: "Frequency Link Audit [Beta]", type: "link_beta", link: "https://omg10.com/4/6430252", completed: false, rewardCoins: 375, rewardKeys: 0, rewardMats: 2 },
-  
-  // Interstitial Task (Called when a user taps "Play broadcast")
-  { id: "task_inter_1", name: "Interstitial Signal Broadcast I", type: "interstitial_task", completed: false, rewardCoins: 400, rewardKeys: 1, rewardMats: 1 },
-  
-  // 3 Rewarded Interstitial Tasks in the task section
+  // Interstitial Tasks (In-App Interstitial on play broadcast)
+  { id: "task_inter_1", name: "In-App Interstitial Alpha Probe", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_inter_2", name: "In-App Interstitial Beta Gateway", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_inter_3", name: "In-App Interstitial Gamma Beacon", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_inter_4", name: "In-App Interstitial Delta Synchronizer", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+
+  // Rewarded Interstitial Tasks (3 -> 4 multiplied!)
   { id: "task_rew_inter_1", name: "Rewarded Interstitial Transmission Alfa", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
   { id: "task_rew_inter_2", name: "Rewarded Interstitial Transmission Beta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
   { id: "task_rew_inter_3", name: "Rewarded Interstitial Transmission Gamma", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
-  
-  // 3 Rewarded Popup (Pop) Tasks in the task section
+  { id: "task_rew_inter_4", name: "Rewarded Interstitial Transmission Delta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+
+  // Rewarded Popup Tasks (3 -> 4 multiplied!)
   { id: "task_pop_1", name: "Rewarded Popup Signal Channel 1", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
   { id: "task_pop_2", name: "Rewarded Popup Signal Channel 2", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_pop_3", name: "Rewarded Popup Signal Channel 3", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 }
+  { id: "task_pop_3", name: "Rewarded Popup Signal Channel 3", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_pop_4", name: "Rewarded Popup Signal Channel 4", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 }
 ];
 
 export default function SocialTasksScreen() {
@@ -74,15 +74,16 @@ export default function SocialTasksScreen() {
   const isClaimingSupabaseRef = useRef(false);
   const claimingCommunityIdsRef = useRef<string[]>([]);
 
-  // Load or initialize persistent batch list (10 tasks)
+  // Load or initialize persistent batch list (12 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
     const saved = localStorage.getItem("cluevault_tasks_batch_state");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Make sure we migrate to the new dynamic batch schema containing the new ad task types
-        const hasNewAdTypes = parsed.some((t: any) => t.type === 'interstitial_task' || t.type === 'rewarded_interstitial_task' || t.type === 'pop_task');
-        if (hasNewAdTypes && parsed.length >= 10) {
+        // Force complete migration (do NOT restore old saved states containing legacy non-ad tasks)
+        const containsLegacy = parsed.some((t: any) => t.type === 'decrypt_node' || t.type === 'link_alpha' || t.type === 'link_beta');
+        const isCorrectLength = parsed.length === INITIAL_BATCH.length;
+        if (!containsLegacy && isCorrectLength) {
           return parsed;
         }
       } catch (e) {
@@ -669,7 +670,7 @@ export default function SocialTasksScreen() {
           <h3 className="text-sm font-black uppercase italic tracking-tight">Convert Elements & ZP to Refresh</h3>
         </div>
         <p className="text-[10px] text-white/50 uppercase font-black leading-relaxed">
-          Exhausted your 10-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 10 tasks and erase active cooldowns!
+          Exhausted your 12-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 12 tasks and erase active cooldowns!
         </p>
 
         <div className="flex items-center justify-between border-t border-dashed border-white/5 pt-4">

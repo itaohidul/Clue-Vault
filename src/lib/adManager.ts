@@ -100,24 +100,21 @@ class AdManager {
       return false;
     }
 
+    this.isAdActive = true;
+    this.config.onAdStart?.();
     this.recordAdView();
     try {
-      const res = showAdFn({
-        type: 'inApp',
-        inAppSettings: {
-          frequency: 2,
-          capping: 0.1,
-          interval: 30,
-          timeout: 5,
-          everyPage: false
-        }
-      });
+      const res = showAdFn();
       if (res && typeof res.then === "function") {
         await res;
       }
+      this.isAdActive = false;
+      this.config.onAdEnd?.();
       return true;
     } catch (e) {
       console.error("[AdManager] Error triggering inApp interstitial:", e);
+      this.isAdActive = false;
+      this.config.onAdEnd?.();
       return false;
     }
   }
@@ -146,7 +143,7 @@ class AdManager {
       console.error("[AdManager] Rewarded interstitial error/closed:", e);
       this.isAdActive = false;
       this.config.onAdEnd?.();
-      return false; // Still return false, but we can treat as success and reward if desired by fallback, but false is safer for integrity unless wanted
+      return false;
     }
   }
 
@@ -163,7 +160,7 @@ class AdManager {
     this.recordAdView();
 
     try {
-      const res = showAdFn('pop');
+      const res = showAdFn();
       if (res && typeof res.then === "function") {
         await res;
       }

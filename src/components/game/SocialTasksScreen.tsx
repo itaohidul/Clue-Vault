@@ -80,10 +80,11 @@ export default function SocialTasksScreen() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Force complete migration (do NOT restore old saved states containing legacy non-ad tasks)
-        const containsLegacy = parsed.some((t: any) => t.type === 'decrypt_node' || t.type === 'link_alpha' || t.type === 'link_beta');
-        const isCorrectLength = parsed.length === INITIAL_BATCH.length;
-        if (!containsLegacy && isCorrectLength) {
+        // Force complete migration: ensure exactly the correct number of tasks, matching active ad-task IDs only
+        const isValid = Array.isArray(parsed) && 
+                        parsed.length === INITIAL_BATCH.length && 
+                        parsed.every((p: any) => INITIAL_BATCH.some(init => init.id === p.id));
+        if (isValid) {
           return parsed;
         }
       } catch (e) {
@@ -184,7 +185,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 240 * 1000 // 4 minutes
+      [taskId]: Date.now() + 180 * 1000 // 3 minutes
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -321,30 +322,22 @@ export default function SocialTasksScreen() {
       startTaskCooldown(task.id);
     };
 
-    if (task.type === 'link_alpha' || task.type === 'link_beta') {
-      if (task.link) {
-        safeOpenLink(task.link);
-        
-        setLinkCountdown(5);
-        const interval = setInterval(() => {
-          setLinkCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(interval);
-              onComplete();
-              return 5;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        onComplete();
-      }
-    } else if (task.type === 'interstitial_task') {
-      // Trigger In-App Interstitial
-      adManager.triggerInAppInterstitial();
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
+    if (task.type === 'interstitial_task') {
+      // Trigger In-App Interstitial and await completion
+      adManager.triggerInAppInterstitial()
+        .then((success) => {
+          if (success) {
+            onComplete();
+          } else {
+            console.warn("In-App Interstitial play failed or was closed.");
+            setLoadingTaskId(null);
+            triggerHaptic("error");
+          }
+        })
+        .catch(() => {
+          setLoadingTaskId(null);
+          triggerHaptic("error");
+        });
     } else if (task.type === 'rewarded_interstitial_task') {
       // Trigger Rewarded Interstitial
       adManager.triggerRewardedInterstitial()
@@ -378,9 +371,21 @@ export default function SocialTasksScreen() {
           triggerHaptic("error");
         });
     } else {
-      setTimeout(() => {
-        onComplete();
-      }, 1500);
+      // Fallback: trigger general ad interstitial to ensure ads show as much as possible! Do not reward for free.
+      adManager.triggerRewardedInterstitial()
+        .then((success) => {
+          if (success) {
+            onComplete();
+          } else {
+            console.warn("Ad play failed or was closed.");
+            setLoadingTaskId(null);
+            triggerHaptic("error");
+          }
+        })
+        .catch(() => {
+          setLoadingTaskId(null);
+          triggerHaptic("error");
+        });
     }
   };
 
@@ -549,7 +554,7 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            A defensive 4-minute cooldown is in place between clicks to safeguard node integrity.
+            A defensive 3-minute cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
 
@@ -617,9 +622,21 @@ export default function SocialTasksScreen() {
 
                   <div>
                     {task.completed ? (
-                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1.5 rounded-xl block text-center min-w-[100px]">
-                        SYNCHRONIZED
-                      </span>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1.5 rounded-xl block text-center min-w-[100px]">
+                          SECURED
+                        </span>
+                        {getRemainingCooldown(task.id) > 0 && (
+                          <span className="text-[8.5px] font-mono font-black text-rose-400 uppercase flex items-center justify-center gap-1 border border-rose-500/20 bg-rose-500/10 px-2.5 py-0.5 rounded-md animate-pulse min-w-[100px]">
+                            BREAK: {(() => {
+                              const rem = getRemainingCooldown(task.id);
+                              const mins = Math.floor(rem / 60).toString().padStart(2, '0');
+                              const secs = (rem % 60).toString().padStart(2, '0');
+                              return `${mins}:${secs}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleBatchTaskAction(task)}

@@ -52,8 +52,7 @@ class AdManager {
 
     const showAdFn = (window as any).show_11030019;
     if (typeof showAdFn !== "function") {
-      console.warn("[AdManager] SDK show_11030019 function not available on window. Retrying timer.");
-      this.recordAdView(); // Reset timer to prevent constant retry loops if offline or blocked
+      console.warn("[AdManager] SDK show_11030019 not available yet. Will retry next interval.");
       return;
     }
 
@@ -64,7 +63,7 @@ class AdManager {
 
     // Invoke interstitial
     try {
-      const res = showAdFn();
+      const res = showAdFn({ type: "interstitial" });
       if (res && typeof res.then === "function") {
         res.then(() => {
           console.log("[AdManager] Background interstitial completed.");
@@ -94,6 +93,11 @@ class AdManager {
 
   // In-App Interstitial
   async triggerInAppInterstitial(): Promise<boolean> {
+    if (this.isAdActive) {
+      console.log("[AdManager] Ad already active, skipping triggerInAppInterstitial.");
+      return false;
+    }
+
     const showAdFn = (window as any).show_11030019;
     if (typeof showAdFn !== "function") {
       console.warn("[AdManager] show_11030019 is not registered.");
@@ -102,12 +106,12 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
-    this.recordAdView();
     try {
-      const res = showAdFn();
+      const res = showAdFn({ type: "interstitial" });
       if (res && typeof res.then === "function") {
         await res;
       }
+      this.recordAdView();
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return true;
@@ -121,6 +125,11 @@ class AdManager {
 
   // Rewarded Interstitial
   async triggerRewardedInterstitial(): Promise<boolean> {
+    if (this.isAdActive) {
+      console.log("[AdManager] Ad already active, skipping triggerRewardedInterstitial.");
+      return false;
+    }
+
     const showAdFn = (window as any).show_11030019;
     if (typeof showAdFn !== "function") {
       console.warn("[AdManager] show_11030019 is not registered.");
@@ -129,13 +138,13 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
-    this.recordAdView();
 
     try {
-      const res = showAdFn();
+      const res = showAdFn({ type: "rewarded" });
       if (res && typeof res.then === "function") {
         await res;
       }
+      this.recordAdView();
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return true;
@@ -149,6 +158,11 @@ class AdManager {
 
   // Rewarded Popup
   async triggerRewardedPopup(): Promise<boolean> {
+    if (this.isAdActive) {
+      console.log("[AdManager] Ad already active, skipping triggerRewardedPopup.");
+      return false;
+    }
+
     const showAdFn = (window as any).show_11030019;
     if (typeof showAdFn !== "function") {
       console.warn("[AdManager] show_11030019 is not registered.");
@@ -157,13 +171,13 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
-    this.recordAdView();
 
     try {
-      const res = showAdFn();
+      const res = showAdFn({ type: "popup" });
       if (res && typeof res.then === "function") {
         await res;
       }
+      this.recordAdView();
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return true;

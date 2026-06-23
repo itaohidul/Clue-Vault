@@ -185,7 +185,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 180 * 1000 // 3 minutes
+      [taskId]: Date.now() + 6 * 60 * 60 * 1000 // 6 hours
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -554,7 +554,7 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            A defensive 3-minute cooldown is in place between clicks to safeguard node integrity.
+            A defensive 6-hour cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
 

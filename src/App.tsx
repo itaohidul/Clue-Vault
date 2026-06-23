@@ -203,8 +203,13 @@ function AppContent() {
   // Use a local state for the loading screen that resolves when isCloudLoaded is true
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
 
+  const [adBlocking, setAdBlocking] = useState(false);
+
   useEffect(() => {
-    adManager.init({});
+    adManager.init({
+      onAdStart: () => setAdBlocking(true),
+      onAdEnd: () => setAdBlocking(false),
+    });
   }, []);
 
   useEffect(() => {
@@ -301,6 +306,17 @@ function AppContent() {
   // Track navigations and 60-second activity loops for rewarded interstitial ads
   const prevPathRef = useRef<string>(location.pathname);
   const navigationCountRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (prevPathRef.current !== location.pathname) {
+      prevPathRef.current = location.pathname;
+      navigationCountRef.current += 1;
+      // Trigger an interstitial every 3 screen navigations
+      if (navigationCountRef.current % 3 === 0 && !adBlocking) {
+        adManager.triggerInAppInterstitial();
+      }
+    }
+  }, [location.pathname, adBlocking]);
 
   // Handle BackButton click callbacks
   useEffect(() => {
@@ -401,7 +417,10 @@ function AppContent() {
   }
 
   return (
-    <div className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative">
+    <div 
+      className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative"
+      style={{ pointerEvents: adBlocking ? 'none' : 'auto' }}
+    >
 
       <AnimatePresence>
         {showOnboarding && <OnboardingWizard onComplete={async (data) => {

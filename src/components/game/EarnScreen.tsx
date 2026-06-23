@@ -26,6 +26,7 @@ import {
 import { cn, safeOpenLink } from "../../lib/utils";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
+import { adManager } from "../../lib/adManager";
 
 export default function EarnScreen() {
   const { user, resources, updateResources, crew, triggerHaptic } = useGame();
@@ -46,6 +47,32 @@ export default function EarnScreen() {
   const [pacerAlert, setPacerAlert] = useState<{ title: string; desc: string } | null>(null);
   const [syncState, setSyncState] = useState<'direct' | 'interstitial' | null>(null);
   const [pacerCountdown, setPacerCountdown] = useState<number>(0);
+
+  const [syncCooldowns, setSyncCooldowns] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem("cluevault_earn_sync_cooldowns");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const saveSyncCooldown = (type: string) => {
+    const updated = { ...syncCooldowns, [type]: Date.now() + 4 * 60 * 60 * 1000 };
+    setSyncCooldowns(updated);
+    localStorage.setItem("cluevault_earn_sync_cooldowns", JSON.stringify(updated));
+  };
+
+  const getSyncCooldownRemaining = (type: string): number => {
+    const until = syncCooldowns[type] || 0;
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000 / 60));
+  };
+
+  // Periodic refresh for active cooldown states to update visual timer labels
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSyncCooldowns(prev => ({ ...prev }));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Global pool estimates
   const DAILY_POOL = 120000; // 120,000 Clue
@@ -221,20 +248,43 @@ export default function EarnScreen() {
 
   const handleTelemetrySync = async (type: 'interstitial' | 'direct') => {
     if (syncState) return;
+    const cooldownRemaining = getSyncCooldownRemaining(type);
+    if (cooldownRemaining > 0) {
+      triggerHaptic("error");
+      return;
+    }
     triggerHaptic("medium");
     setSyncState(type);
-    
-    setTimeout(() => {
-      const rewardAmount = type === 'direct' ? 100 : 50;
-      updateResources({ activityScore: rewardAmount });
+
+    try {
+      let success = false;
+      if (type === 'interstitial') {
+        success = await adManager.triggerInAppInterstitial();
+      } else {
+        success = await adManager.triggerRewardedInterstitial();
+      }
+
+      if (!success) {
+        setSyncState(null);
+        triggerHaptic("error");
+        return;
+      }
+    } catch (e) {
       setSyncState(null);
-      triggerHaptic("success");
-      setPacerAlert({
-        title: "Aether Link Established",
-        desc: "TRANSMISSION REVERSED & CREDITED SUCCESSFULLY"
-      });
-      setTimeout(() => setPacerAlert(null), 3500);
-    }, 1500);
+      triggerHaptic("error");
+      return;
+    }
+
+    const rewardAmount = type === 'direct' ? 100 : 50;
+    updateResources({ activityScore: rewardAmount });
+    saveSyncCooldown(type);
+    setSyncState(null);
+    triggerHaptic("success");
+    setPacerAlert({
+      title: "Aether Link Established",
+      desc: "TRANSMISSION REVERSED & CREDITED SUCCESSFULLY"
+    });
+    setTimeout(() => setPacerAlert(null), 3500);
   };
 
   const clickCalibrationCircle = (id: number) => {
@@ -308,12 +358,12 @@ export default function EarnScreen() {
         <div className="grid grid-cols-1 gap-3">
            <button 
              onClick={() => handleTelemetrySync('direct')}
-             disabled={!!syncState}
+             disabled={!!syncState || getSyncCooldownRemaining('direct') > 0}
              className={cn(
                "group relative overflow-hidden p-4 rounded-2xl transition-all duration-300",
                syncState === 'direct'
                  ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
-                 : syncState
+                 : (syncState || getSyncCooldownRemaining('direct') > 0)
                    ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
                    : "bg-gradient-to-r from-amber-500 to-orange-600 hover:scale-[1.01] active:scale-95"
              )}
@@ -327,7 +377,11 @@ export default function EarnScreen() {
                       {syncState === 'direct' ? "VERIFYING..." : "DIRECT SIGNAL"}
                     </h4>
                     <p className="text-[9px] text-white/70 font-bold uppercase mt-0.5">
-                      {syncState === 'direct' ? "Checking signal telemetry load" : "Instant +100 Activity Score"}
+                      {syncState === 'direct' 
+                        ? "Checking signal telemetry load" 
+                        : getSyncCooldownRemaining('direct') > 0 
+                          ? `Available in ${getSyncCooldownRemaining('direct')}m` 
+                          : "Instant +100 Activity Score"}
                     </p>
                  </div>
                  {syncState === 'direct' ? (
@@ -341,12 +395,12 @@ export default function EarnScreen() {
 
            <button 
              onClick={() => handleTelemetrySync('interstitial')}
-             disabled={!!syncState}
+             disabled={!!syncState || getSyncCooldownRemaining('interstitial') > 0}
              className={cn(
                "p-4 rounded-2xl flex items-center justify-between transition-all duration-300",
                syncState === 'interstitial'
                  ? "bg-amber-950/40 border border-amber-500/20 cursor-not-allowed text-amber-500 animate-pulse"
-                 : syncState
+                 : (syncState || getSyncCooldownRemaining('interstitial') > 0)
                    ? "bg-neutral-900 border border-white/5 opacity-30 cursor-not-allowed"
                    : "bg-white/5 hover:bg-white/10 hover:scale-[1.01] border border-white/5 active:scale-95"
              )}
@@ -367,7 +421,11 @@ export default function EarnScreen() {
                       {syncState === 'interstitial' ? "VERIFYING OVERLAY..." : "OVERLAY SIGNAL"}
                     </h4>
                     <span className="text-[10px] font-bold text-white/30 tracking-tight">
-                      {syncState === 'interstitial' ? "Authorizing transmission packet..." : "+50 Activity Score"}
+                      {syncState === 'interstitial' 
+                        ? "Authorizing transmission packet..." 
+                        : getSyncCooldownRemaining('interstitial') > 0 
+                          ? `Available in ${getSyncCooldownRemaining('interstitial')}m` 
+                          : "+50 Activity Score"}
                     </span>
                  </div>
               </div>

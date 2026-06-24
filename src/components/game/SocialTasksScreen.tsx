@@ -193,6 +193,44 @@ export default function SocialTasksScreen() {
   // Loading indicator for active task triggers
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
   const [successAnimation, setSuccessAnimation] = useState<{ active: boolean; clueAwarded: number } | null>(null);
+  const [showRefreshPopup, setShowRefreshPopup] = useState<boolean>(false);
+
+  // Milestone chests configuration & state
+  const CHEST_MILESTONES = [
+    { at: 4, clue: 15, label: "Scout Cache" },
+    { at: 8, clue: 30, label: "Agent Stash" },
+    { at: 12, clue: 50, label: "Vault Core" },
+  ];
+
+  const [chestsClaimed, setChestsClaimed] = useState<Record<number, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("cluevault_milestone_chests");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const saveChestsClaimed = (updated: Record<number, boolean>) => {
+    setChestsClaimed(updated);
+    localStorage.setItem("cluevault_milestone_chests", JSON.stringify(updated));
+  };
+
+  const handleClaimMilestoneChest = async (milestone: typeof CHEST_MILESTONES[0]) => {
+    if (chestsClaimed[milestone.at]) return;
+    if (completedCount < milestone.at) return;
+    triggerHaptic("medium");
+    const success = await adManager.triggerRewardedPopup();
+    if (!success) {
+      triggerHaptic("error");
+      return;
+    }
+    updateResources({ clue: milestone.clue });
+    addTransaction({ type: "task_completion", amount: milestone.clue, currency: "CLUE" });
+    logTransaction(milestone.clue, "milestone_chest", "CLUE");
+    const updated = { ...chestsClaimed, [milestone.at]: true };
+    saveChestsClaimed(updated);
+    setSuccessAnimation({ active: true, clueAwarded: milestone.clue });
+    triggerHaptic("success");
+  };
 
   // Link task countdown
   const [linkCountdown, setLinkCountdown] = useState<number>(5);
@@ -412,8 +450,9 @@ export default function SocialTasksScreen() {
         delete nextCooldowns[t.id];
       });
       saveTaskCooldowns(nextCooldowns);
+      saveChestsClaimed({});
 
-      setSuccessAnimation({ active: true, clueAwarded: 0 });
+      setShowRefreshPopup(true);
       triggerHaptic("success");
     } else {
       triggerHaptic("error");
@@ -697,6 +736,72 @@ export default function SocialTasksScreen() {
             );
           })}
         </div>
+
+        {/* 3-Milestone Chest System */}
+        <div className="mt-6 space-y-2.5">
+          <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/5">
+            <span className="text-[9px] font-black uppercase text-amber-500 tracking-widest">
+              Milestone Reward Protocols
+            </span>
+          </div>
+          {CHEST_MILESTONES.map((milestone) => {
+            const isUnlocked = completedCount >= milestone.at;
+            const isClaimed = !!chestsClaimed[milestone.at];
+            return (
+              <motion.div
+                key={milestone.at}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "relative overflow-hidden rounded-2xl border p-3 flex items-center justify-between gap-3 transition-all duration-300",
+                  isClaimed
+                    ? "border-emerald-500/20 bg-emerald-500/5"
+                    : isUnlocked
+                    ? "border-amber-500/40 bg-amber-500/5"
+                    : "border-white/5 bg-white/5 opacity-50"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border",
+                    isClaimed
+                      ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
+                      : isUnlocked
+                      ? "bg-amber-500/20 border-amber-500/30 text-amber-500 animate-pulse"
+                      : "bg-white/5 border-white/5 text-white/20"
+                  )}>
+                    {isClaimed ? "✅" : isUnlocked ? "🎁" : "🔒"}
+                  </div>
+                  <div className="text-left">
+                    <p className={cn(
+                      "text-xs font-black uppercase italic tracking-tight",
+                      isClaimed ? "text-emerald-500" : isUnlocked ? "text-amber-500" : "text-white/30"
+                    )}>{milestone.label}</p>
+                    <p className="text-[10px] text-white/40 uppercase font-bold">{milestone.at} tasks required</p>
+                    <p className={cn(
+                      "text-[11px] font-black mt-0.5",
+                      isClaimed ? "text-white/40" : "text-white"
+                    )}>+{milestone.clue} CLUE Tokens</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleClaimMilestoneChest(milestone)}
+                  disabled={!isUnlocked || isClaimed}
+                  className={cn(
+                    "shrink-0 px-3 py-2 rounded-xl font-black uppercase italic text-xs transition-all active:scale-95",
+                    isClaimed
+                      ? "bg-white/5 text-white/20 border border-white/5 cursor-default"
+                      : isUnlocked
+                      ? "bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                      : "bg-white/5 text-white/20 border border-white/5 cursor-default"
+                  )}
+                >
+                  {isClaimed ? "Claimed" : isUnlocked ? "Unlock" : `${milestone.at - completedCount} left`}
+                </button>
+              </motion.div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Section 3: Conversion Refresh Override */}
@@ -940,6 +1045,46 @@ export default function SocialTasksScreen() {
                 className="w-full bg-amber-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs"
               >
                 Close Session Link
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showRefreshPopup && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-6"
+          >
+            <div className="glass rounded-[3.5rem] p-8 max-w-sm w-full text-center border-emerald-500/40 bg-gradient-to-b from-neutral-950 to-black space-y-6">
+              <div className="w-20 h-20 bg-gradient-to-tr from-emerald-500 to-emerald-600 rounded-[2.2rem] flex items-center justify-center text-black mx-auto shadow-[0_0_30px_rgba(16,185,129,0.25)] border border-emerald-400/20">
+                <RefreshCw size={40} className="animate-spin text-black" style={{ animationDuration: '3s' }} />
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-emerald-500">
+                  SYSTEM RE-CALIBRATED
+                </h3>
+                <p className="text-[10px] text-white/40 uppercase font-black tracking-wider mt-1">
+                  Task times and batch limits successfully refreshed.
+                </p>
+              </div>
+
+              <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+                <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest block mb-2">SESSION RE-BOOT REQUIRED</span>
+                <p className="text-[11px] text-white/70 font-semibold leading-relaxed">
+                  Tap below to initialize a fresh session protocol with cleared transmission times.
+                </p>
+              </div>
+
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black uppercase italic tracking-tight active:scale-95 transition-all text-xs"
+              >
+                Reload & Continue
               </button>
             </div>
           </motion.div>

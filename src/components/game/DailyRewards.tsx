@@ -4,6 +4,7 @@ import { useUserStore } from "../../store/userStore";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
 import { cn } from "../../lib/utils";
+import { adManager } from "../../lib/adManager";
 
 export default function DailyRewards() {
   const { user, claimDailyReward, triggerHaptic } = useUserStore();
@@ -55,8 +56,10 @@ export default function DailyRewards() {
     };
   });
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     if (isClaimedToday) return;
+    const success = await adManager.triggerRewardedPopup();
+    if (!success) return;
     claimDailyReward();
     
     // Log rewards based on streak

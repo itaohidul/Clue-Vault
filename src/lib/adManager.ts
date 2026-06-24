@@ -58,7 +58,6 @@ class AdManager {
 
     console.log("[AdManager] Triggering background interstitial...");
     this.isAdActive = true;
-    this.recordAdView(); // Reset timer immediately to prevent instant loops on fail or delay
     this.config.onAdStart?.();
 
     // Invoke interstitial
@@ -168,6 +167,7 @@ class AdManager {
       return true;
     } catch (e) {
       console.error("[AdManager] Rewarded interstitial error/closed:", e);
+      this.recordAdView();
       this.isAdActive = false;
       this.config.onAdEnd?.();
       return false;

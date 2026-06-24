@@ -185,7 +185,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 6 * 60 * 60 * 1000 // 6 hours
+      [taskId]: Date.now() + 2 * 60 * 1000 // 2 minutes
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -554,7 +554,7 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            A defensive 6-hour cooldown is in place between clicks to safeguard node integrity.
+            A defensive 2-minute cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
 
@@ -571,9 +571,28 @@ export default function SocialTasksScreen() {
                 key={task.id}
                 className={cn(
                   "relative block w-full glass rounded-3xl p-5 border-white/5 overflow-hidden transition-all duration-300",
-                  task.completed ? "opacity-35" : "hover:border-white/10"
+                  task.completed && !isCooldownActive ? "opacity-35" : "hover:border-white/10"
                 )}
               >
+                {isCooldownActive && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/75 backdrop-blur-md rounded-3xl p-4">
+                    <div className="text-center space-y-1">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-rose-500 font-mono animate-pulse">
+                        DECRYPTION COOLDOWN IN PROGRESS
+                      </span>
+                      <div className="text-xl font-mono font-black text-white tracking-widest">
+                        {(() => {
+                          const mins = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+                          const secs = (remainingSecs % 60).toString().padStart(2, '0');
+                          return `${mins}:${secs}`;
+                        })()}
+                      </div>
+                      <span className="text-[8px] text-white/40 uppercase font-bold block">
+                        Wait for system link to recalibrate
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 text-left">
                     <div className={cn(

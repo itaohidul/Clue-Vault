@@ -257,12 +257,7 @@ export default function EarnScreen() {
     setSyncState(type);
 
     try {
-      let success = false;
-      if (type === 'interstitial') {
-        success = await adManager.triggerInAppInterstitial();
-      } else {
-        success = await adManager.triggerRewardedInterstitial();
-      }
+      const success = await adManager.triggerRewardedInterstitial();
 
       if (!success) {
         setSyncState(null);
@@ -275,7 +270,7 @@ export default function EarnScreen() {
       return;
     }
 
-    const rewardAmount = type === 'direct' ? 100 : 50;
+    const rewardAmount = type === 'direct' ? 100 : 75;
     updateResources({ activityScore: rewardAmount });
     saveSyncCooldown(type);
     setSyncState(null);

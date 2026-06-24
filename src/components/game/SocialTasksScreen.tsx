@@ -323,13 +323,13 @@ export default function SocialTasksScreen() {
     };
 
     if (task.type === 'interstitial_task') {
-      // Trigger In-App Interstitial and await completion
-      adManager.triggerInAppInterstitial()
+      // Trigger Rewarded Interstitial to confirm ad was watched before rewarding
+      adManager.triggerRewardedInterstitial()
         .then((success) => {
           if (success) {
             onComplete();
           } else {
-            console.warn("In-App Interstitial play failed or was closed.");
+            console.warn("Interstitial task ad failed or was closed.");
             setLoadingTaskId(null);
             triggerHaptic("error");
           }

@@ -63,7 +63,16 @@ class AdManager {
 
     // Invoke interstitial
     try {
-      const res = showAdFn({ type: "interstitial" });
+      const res = showAdFn({
+        type: 'inApp',
+        inAppSettings: {
+          frequency: 2,
+          capping: 0.1,
+          interval: 30,
+          timeout: 5,
+          everyPage: false
+        }
+      });
       if (res && typeof res.then === "function") {
         res.then(() => {
           console.log("[AdManager] Background interstitial completed.");
@@ -107,7 +116,16 @@ class AdManager {
     this.isAdActive = true;
     this.config.onAdStart?.();
     try {
-      const res = showAdFn({ type: "interstitial" });
+      const res = showAdFn({
+        type: 'inApp',
+        inAppSettings: {
+          frequency: 2,
+          capping: 0.1,
+          interval: 30,
+          timeout: 5,
+          everyPage: false
+        }
+      });
       if (res && typeof res.then === "function") {
         await res;
       }
@@ -140,7 +158,7 @@ class AdManager {
     this.config.onAdStart?.();
 
     try {
-      const res = showAdFn({ type: "rewarded" });
+      const res = showAdFn();
       if (res && typeof res.then === "function") {
         await res;
       }
@@ -173,7 +191,7 @@ class AdManager {
     this.config.onAdStart?.();
 
     try {
-      const res = showAdFn({ type: "popup" });
+      const res = showAdFn('pop');
       if (res && typeof res.then === "function") {
         await res;
       }

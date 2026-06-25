@@ -115,6 +115,26 @@ export default function SocialTasksScreen() {
     return {};
   });
 
+  const [skipCooldowns, setSkipCooldowns] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem("cluevault_skip_cooldowns");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const [pendingClueReward, setPendingClueReward] = useState<{ taskId: string; expiresAt: number } | null>(null);
+  const [clueClaimCountdown, setClueClaimCountdown] = useState<number>(0);
+
+  const saveSkipCooldowns = (updated: Record<string, number>) => {
+    setSkipCooldowns(updated);
+    localStorage.setItem("cluevault_skip_cooldowns", JSON.stringify(updated));
+  };
+
+  const getSkipCooldownRemaining = (taskId: string): number => {
+    const until = skipCooldowns[taskId] || 0;
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+  };
+
   const [now, setNow] = useState(Date.now());
 
   // On mount safety sweep to release any expired task cooldowns immediately
@@ -183,6 +203,68 @@ export default function SocialTasksScreen() {
     localStorage.setItem("cluevault_task_cooldowns_state", JSON.stringify(cooldowns));
   };
 
+  useEffect(() => {
+    if (!pendingClueReward) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((pendingClueReward.expiresAt - Date.now()) / 1000));
+      setClueClaimCountdown(remaining);
+      if (remaining <= 0) {
+        setPendingClueReward(null);
+        setClueClaimCountdown(0);
+        clearInterval(interval);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [pendingClueReward]);
+
+  const handleSkipCooldown = async (taskId: string) => {
+    if (getSkipCooldownRemaining(taskId) > 0) return;
+    triggerHaptic("medium");
+    const success = await adManager.triggerRewardedPopup();
+    if (!success) {
+      triggerHaptic("error");
+      return;
+    }
+    const currentRemaining = taskCooldowns[taskId]
+      ? Math.max(0, taskCooldowns[taskId] - Date.now())
+      : 0;
+    const halved = Math.floor(currentRemaining / 2);
+    const nextCooldowns = {
+      ...taskCooldowns,
+      [taskId]: Date.now() + halved
+    };
+    saveTaskCooldowns(nextCooldowns);
+    const nextSkipCooldowns = {
+      ...skipCooldowns,
+      [taskId]: Date.now() + 20 * 60 * 1000
+    };
+    saveSkipCooldowns(nextSkipCooldowns);
+    setPendingClueReward({ taskId, expiresAt: Date.now() + 15000 });
+    setClueClaimCountdown(15);
+    triggerHaptic("success");
+  };
+
+  const handleClaimSkipClue = async () => {
+    if (!pendingClueReward) return;
+    if (Date.now() > pendingClueReward.expiresAt) {
+      setPendingClueReward(null);
+      return;
+    }
+    triggerHaptic("medium");
+    const success = await adManager.triggerRewardedInterstitial();
+    if (!success) {
+      triggerHaptic("error");
+      return;
+    }
+    updateResources({ clue: 20 });
+    addTransaction({ type: "task_completion", amount: 20, currency: "CLUE" });
+    logTransaction(20, "skip_clue_reward", "CLUE");
+    setPendingClueReward(null);
+    setClueClaimCountdown(0);
+    setSuccessAnimation({ active: true, clueAwarded: 20 });
+    triggerHaptic("success");
+  };
+
   const getRemainingCooldown = (taskId: string) => {
     const until = taskCooldowns[taskId] || 0;
     return Math.max(0, Math.ceil((until - now) / 1000));
@@ -191,7 +273,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 10 * 60 * 1000 // 10 minutes
+      [taskId]: Date.now() + 2 * 60 * 60 * 1000 // 2 hours
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -457,6 +539,8 @@ export default function SocialTasksScreen() {
       });
       saveTaskCooldowns(nextCooldowns);
       saveChestsClaimed({});
+      saveSkipCooldowns({});
+      setPendingClueReward(null);
 
       setShowRefreshPopup(true);
       triggerHaptic("success");
@@ -471,6 +555,36 @@ export default function SocialTasksScreen() {
 
   return (
     <div className="p-5 pb-24 space-y-6">
+      {pendingClueReward && clueClaimCountdown > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-amber-500/50 bg-black/90 backdrop-blur-xl p-4 flex items-center justify-between gap-3 shadow-2xl"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
+              ⚡
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase italic text-amber-500 tracking-tight">2× CLUE Reward</p>
+              <p className="text-[10px] text-white/50 uppercase font-bold">Watch ad to claim 20 CLUE</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right">
+              <p className="text-[9px] text-rose-400 font-black uppercase">Expires in</p>
+              <p className="text-sm font-black text-white font-mono">{clueClaimCountdown}s</p>
+            </div>
+            <button
+              onClick={handleClaimSkipClue}
+              className="px-3 py-2 rounded-xl bg-amber-500 text-black text-[10px] font-black uppercase italic active:scale-95 transition-all"
+            >
+              Claim
+            </button>
+          </div>
+        </motion.div>
+      )}
       
       {/* Dynamic Header */}
       <div className="flex justify-between items-start">
@@ -599,7 +713,7 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            A defensive 10-minute cooldown is in place between clicks to safeguard node integrity.
+            A defensive 2-hour cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
 
@@ -621,7 +735,7 @@ export default function SocialTasksScreen() {
               >
                 {isCooldownActive && (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/75 backdrop-blur-md rounded-3xl p-4">
-                    <div className="text-center space-y-1">
+                    <div className="text-center space-y-3">
                       <span className="text-[9px] uppercase font-black tracking-wider text-rose-500 font-mono animate-pulse">
                         DECRYPTION COOLDOWN IN PROGRESS
                       </span>
@@ -635,6 +749,25 @@ export default function SocialTasksScreen() {
                       <span className="text-[8px] text-white/40 uppercase font-bold block">
                         Wait for system link to recalibrate
                       </span>
+                      {(() => {
+                        const skipRemaining = getSkipCooldownRemaining(task.id);
+                        return skipRemaining > 0 ? (
+                          <span className="text-[9px] text-white/30 uppercase font-bold block">
+                            Skip available in {Math.floor(skipRemaining / 60)}m {skipRemaining % 60}s
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSkipCooldown(task.id);
+                            }}
+                            className="flex items-center gap-1.5 mx-auto px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all"
+                          >
+                            <span>▶</span>
+                            <span>Watch Ad · Halve Timer</span>
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}

@@ -38,6 +38,40 @@ class AdManager {
     console.log("[AdManager] Ad viewed/recorded. Background timer reset.");
   }
 
+  private injectTapBlocker(): void {
+    const existing = document.getElementById('ad-tap-blocker');
+    if (existing) existing.remove();
+
+    const blocker = document.createElement('div');
+    blocker.id = 'ad-tap-blocker';
+    blocker.style.cssText = [
+      'position:fixed',
+      'top:0',
+      'left:0',
+      'width:100vw',
+      'height:100vh',
+      'z-index:999999',
+      'background:transparent',
+      'pointer-events:all',
+      'touch-action:none',
+      '-webkit-user-select:none',
+      'user-select:none'
+    ].join(';');
+
+    blocker.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    blocker.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+    blocker.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    blocker.addEventListener('click', (e) => e.preventDefault());
+    blocker.addEventListener('mousedown', (e) => e.preventDefault());
+
+    document.body.appendChild(blocker);
+
+    setTimeout(() => {
+      const el = document.getElementById('ad-tap-blocker');
+      if (el) el.remove();
+    }, 10000);
+  }
+
   // Get remaining seconds until the next automatic background ad
   getRemainingSeconds(): number {
     const elapsed = Date.now() - this.lastAdTime;
@@ -155,6 +189,7 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
+    this.injectTapBlocker();
 
     try {
       const res = showAdFn();
@@ -189,6 +224,7 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
+    this.injectTapBlocker();
 
     try {
       const res = showAdFn('pop');

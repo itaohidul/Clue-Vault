@@ -41,18 +41,24 @@ const INITIAL_BATCH: TaskState[] = [
   { id: "task_inter_2", name: "In-App Interstitial Beta Gateway", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
   { id: "task_inter_3", name: "In-App Interstitial Gamma Beacon", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
   { id: "task_inter_4", name: "In-App Interstitial Delta Synchronizer", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_inter_5", name: "In-App Interstitial Epsilon Relay", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_inter_6", name: "In-App Interstitial Zeta Uplink", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
 
   // Rewarded Interstitial Tasks (3 -> 4 multiplied!)
   { id: "task_rew_inter_1", name: "Rewarded Interstitial Transmission Alfa", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
   { id: "task_rew_inter_2", name: "Rewarded Interstitial Transmission Beta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
   { id: "task_rew_inter_3", name: "Rewarded Interstitial Transmission Gamma", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
   { id: "task_rew_inter_4", name: "Rewarded Interstitial Transmission Delta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_rew_inter_5", name: "Rewarded Interstitial Transmission Epsilon", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_rew_inter_6", name: "Rewarded Interstitial Transmission Zeta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
 
   // Rewarded Popup Tasks (3 -> 4 multiplied!)
   { id: "task_pop_1", name: "Rewarded Popup Signal Channel 1", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
   { id: "task_pop_2", name: "Rewarded Popup Signal Channel 2", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
   { id: "task_pop_3", name: "Rewarded Popup Signal Channel 3", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_pop_4", name: "Rewarded Popup Signal Channel 4", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 }
+  { id: "task_pop_4", name: "Rewarded Popup Signal Channel 4", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_pop_5", name: "Rewarded Popup Signal Channel 5", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_pop_6", name: "Rewarded Popup Signal Channel 6", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 }
 ];
 
 export default function SocialTasksScreen() {
@@ -74,7 +80,7 @@ export default function SocialTasksScreen() {
   const isClaimingSupabaseRef = useRef(false);
   const claimingCommunityIdsRef = useRef<string[]>([]);
 
-  // Load or initialize persistent batch list (12 tasks)
+  // Load or initialize persistent batch list (18 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
     const saved = localStorage.getItem("cluevault_tasks_batch_state");
     if (saved) {
@@ -185,7 +191,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 2 * 60 * 1000 // 2 minutes
+      [taskId]: Date.now() + 10 * 60 * 1000 // 10 minutes
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -197,9 +203,9 @@ export default function SocialTasksScreen() {
 
   // Milestone chests configuration & state
   const CHEST_MILESTONES = [
-    { at: 4, clue: 15, label: "Scout Cache" },
-    { at: 8, clue: 30, label: "Agent Stash" },
-    { at: 12, clue: 50, label: "Vault Core" },
+    { at: 6, clue: 15, label: "Scout Cache" },
+    { at: 12, clue: 30, label: "Agent Stash" },
+    { at: 18, clue: 50, label: "Vault Core" },
   ];
 
   const [chestsClaimed, setChestsClaimed] = useState<Record<number, boolean>>(() => {
@@ -593,7 +599,7 @@ export default function SocialTasksScreen() {
             ⚙️ ACTIVE RECON TRANSMISSION FLOW
           </p>
           <p className="text-[8px] text-white/40 uppercase font-bold mt-0.5">
-            A defensive 2-minute cooldown is in place between clicks to safeguard node integrity.
+            A defensive 10-minute cooldown is in place between clicks to safeguard node integrity.
           </p>
         </div>
 
@@ -811,7 +817,7 @@ export default function SocialTasksScreen() {
           <h3 className="text-sm font-black uppercase italic tracking-tight">Convert Elements & ZP to Refresh</h3>
         </div>
         <p className="text-[10px] text-white/50 uppercase font-black leading-relaxed">
-          Exhausted your 12-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 12 tasks and erase active cooldowns!
+          Exhausted your 18-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 18 tasks and erase active cooldowns!
         </p>
 
         <div className="flex items-center justify-between border-t border-dashed border-white/5 pt-4">

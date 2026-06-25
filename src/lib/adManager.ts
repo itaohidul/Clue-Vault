@@ -48,21 +48,29 @@ class AdManager {
       'position:fixed',
       'top:0',
       'left:0',
+      'right:0',
+      'bottom:0',
       'width:100vw',
       'height:100vh',
-      'z-index:999999',
-      'background:transparent',
-      'pointer-events:all',
+      'z-index:2147483647',
+      'background:rgba(0,0,0,0.001)',
+      'pointer-events:auto',
       'touch-action:none',
       '-webkit-user-select:none',
       'user-select:none'
     ].join(';');
 
-    blocker.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-    blocker.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
-    blocker.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-    blocker.addEventListener('click', (e) => e.preventDefault());
-    blocker.addEventListener('mousedown', (e) => e.preventDefault());
+    const stopEvent = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    blocker.addEventListener('touchstart', stopEvent, { passive: false });
+    blocker.addEventListener('touchend', stopEvent, { passive: false });
+    blocker.addEventListener('touchmove', stopEvent, { passive: false });
+    blocker.addEventListener('click', stopEvent);
+    blocker.addEventListener('mousedown', stopEvent);
 
     document.body.appendChild(blocker);
 
@@ -93,6 +101,7 @@ class AdManager {
     console.log("[AdManager] Triggering background interstitial...");
     this.isAdActive = true;
     this.config.onAdStart?.();
+    this.injectTapBlocker();
 
     // Invoke interstitial
     try {
@@ -148,6 +157,7 @@ class AdManager {
 
     this.isAdActive = true;
     this.config.onAdStart?.();
+    this.injectTapBlocker();
     try {
       const res = showAdFn({
         type: 'inApp',

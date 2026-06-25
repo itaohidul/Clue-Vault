@@ -204,12 +204,36 @@ function AppContent() {
   const [initSyncCompleted, setInitSyncCompleted] = useState(false);
 
   const [adBlocking, setAdBlocking] = useState(false);
+  const adBlockTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isAdBlockingForcedRef = useRef(false);
+  const adActiveRef = useRef(false);
 
   useEffect(() => {
     adManager.init({
-      onAdStart: () => setAdBlocking(true),
-      onAdEnd: () => setAdBlocking(false),
+      onAdStart: () => {
+        adActiveRef.current = true;
+        isAdBlockingForcedRef.current = true;
+        setAdBlocking(true);
+
+        if (adBlockTimerRef.current) clearTimeout(adBlockTimerRef.current);
+        adBlockTimerRef.current = setTimeout(() => {
+          isAdBlockingForcedRef.current = false;
+          if (!adActiveRef.current) {
+            setAdBlocking(false);
+          }
+        }, 10000);
+      },
+      onAdEnd: () => {
+        adActiveRef.current = false;
+        if (!isAdBlockingForcedRef.current) {
+          setAdBlocking(false);
+        }
+      },
     });
+
+    return () => {
+      if (adBlockTimerRef.current) clearTimeout(adBlockTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {

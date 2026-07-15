@@ -27,7 +27,7 @@ import { adManager } from "../../lib/adManager";
 interface TaskState {
   id: string;
   name: string;
-  type: 'decrypt_node' | 'link_alpha' | 'link_beta' | 'interstitial_task' | 'rewarded_interstitial_task' | 'pop_task';
+  type: 'decrypt_node' | 'link_alpha' | 'link_beta' | 'interstitial_task' | 'rewarded_interstitial_task' | 'pop_task' | 'direct_link_task';
   completed: boolean;
   rewardCoins: number;
   rewardKeys: number;
@@ -36,22 +36,32 @@ interface TaskState {
 }
 
 const INITIAL_BATCH: TaskState[] = [
-  // Alternating task sequence to maximize ad rotation (1 pop -> 1 interstitial -> 1 rewarded interstitial)
-  { id: "task_pop_1", name: "Rewarded Popup Signal Channel 1", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_inter_1", name: "In-App Interstitial Alpha Probe", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_rew_inter_1", name: "Rewarded Interstitial Transmission Alfa", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  // Alternating task sequence to maximize ad rotation (1 pop -> 1 interstitial -> 1 rewarded interstitial -> 1 direct link)
+  { id: "task_pop_1", name: "Premium Pop Quantum Node 1", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_inter_1", name: "Premium Interstitial Core Uplink 1", type: "interstitial_task", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_rew_inter_1", name: "Premium Rewarded Flux Gateway 1", type: "rewarded_interstitial_task", completed: false, rewardCoins: 900, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_direct_1", name: "Direct Link Beacon Prime", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/6430252" },
 
-  { id: "task_pop_2", name: "Rewarded Popup Signal Channel 2", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_inter_2", name: "In-App Interstitial Beta Gateway", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_rew_inter_2", name: "Rewarded Interstitial Transmission Beta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_pop_2", name: "Premium Pop Quantum Node 2", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_inter_2", name: "Premium Interstitial Core Uplink 2", type: "interstitial_task", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_rew_inter_2", name: "Premium Rewarded Flux Gateway 2", type: "rewarded_interstitial_task", completed: false, rewardCoins: 900, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_direct_2", name: "Direct Link Nebula Sync", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/11030039" },
 
-  { id: "task_pop_3", name: "Rewarded Popup Signal Channel 3", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_inter_3", name: "In-App Interstitial Gamma Beacon", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_rew_inter_3", name: "Rewarded Interstitial Transmission Gamma", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_pop_3", name: "Premium Pop Quantum Node 3", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_inter_3", name: "Premium Interstitial Core Uplink 3", type: "interstitial_task", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_rew_inter_3", name: "Premium Rewarded Flux Gateway 3", type: "rewarded_interstitial_task", completed: false, rewardCoins: 900, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_direct_3", name: "Direct Link Matrix Decrypt", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/6430252" },
 
-  { id: "task_pop_4", name: "Rewarded Popup Signal Channel 4", type: "pop_task", completed: false, rewardCoins: 1000, rewardKeys: 3, rewardMats: 1 },
-  { id: "task_inter_4", name: "In-App Interstitial Delta Synchronizer", type: "interstitial_task", completed: false, rewardCoins: 500, rewardKeys: 1, rewardMats: 0 },
-  { id: "task_rew_inter_4", name: "Rewarded Interstitial Transmission Delta", type: "rewarded_interstitial_task", completed: false, rewardCoins: 800, rewardKeys: 2, rewardMats: 0 }
+  { id: "task_pop_4", name: "Premium Pop Quantum Node 4", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_inter_4", name: "Premium Interstitial Core Uplink 4", type: "interstitial_task", completed: false, rewardCoins: 600, rewardKeys: 1, rewardMats: 0 },
+  { id: "task_rew_inter_4", name: "Premium Rewarded Flux Gateway 4", type: "rewarded_interstitial_task", completed: false, rewardCoins: 900, rewardKeys: 2, rewardMats: 0 },
+  { id: "task_direct_4", name: "Direct Link Proton Stream", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/11030039" },
+
+  { id: "task_pop_5", name: "Premium Pop Quantum Node 5", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_direct_5", name: "Direct Link Cipher Wave", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/6430252" },
+
+  { id: "task_pop_6", name: "Premium Pop Quantum Node 6", type: "pop_task", completed: false, rewardCoins: 1200, rewardKeys: 3, rewardMats: 1 },
+  { id: "task_direct_6", name: "Direct Link Horizon Edge", type: "direct_link_task", completed: false, rewardCoins: 1500, rewardKeys: 4, rewardMats: 1, link: "https://omg10.com/4/11030039" }
 ];
 
 export default function SocialTasksScreen() {
@@ -73,7 +83,7 @@ export default function SocialTasksScreen() {
   const isClaimingSupabaseRef = useRef(false);
   const claimingCommunityIdsRef = useRef<string[]>([]);
 
-  // Load or initialize persistent batch list (12 tasks)
+  // Load or initialize persistent batch list (20 tasks)
   const [batchTasks, setBatchTasks] = useState<TaskState[]>(() => {
     const saved = localStorage.getItem("cluevault_tasks_batch_state");
     if (saved) {
@@ -278,9 +288,10 @@ export default function SocialTasksScreen() {
 
   // Milestone chests configuration & state
   const CHEST_MILESTONES = [
-    { at: 4, clue: 15, label: "Scout Cache" },
-    { at: 8, clue: 30, label: "Agent Stash" },
-    { at: 12, clue: 50, label: "Vault Core" },
+    { at: 5, clue: 15, label: "Scout Cache" },
+    { at: 10, clue: 30, label: "Agent Stash" },
+    { at: 15, clue: 45, label: "Vault Core" },
+    { at: 20, clue: 60, label: "Apex Junction" },
   ];
 
   const [chestsClaimed, setChestsClaimed] = useState<Record<number, boolean>>(() => {
@@ -488,6 +499,22 @@ export default function SocialTasksScreen() {
         .catch(() => {
           setLoadingTaskId(null);
           triggerHaptic("error");
+        });
+    } else if (task.type === 'direct_link_task') {
+      // Trigger a rewarded popup to maximize revenue before opening direct link
+      adManager.triggerRewardedPopup()
+        .then(() => {
+          if (task.link) {
+            safeOpenLink(task.link);
+          }
+          onComplete();
+        })
+        .catch(() => {
+          // Fallback to open link anyway and complete the task so user gets their reward/destination
+          if (task.link) {
+            safeOpenLink(task.link);
+          }
+          onComplete();
         });
     } else {
       // Fallback: trigger general ad interstitial to ensure ads show as much as possible! Do not reward for free.
@@ -858,7 +885,7 @@ export default function SocialTasksScreen() {
                               ? "DECRYPT NODE" 
                               : isAdTask
                                 ? "PLAY BROADCAST"
-                                : "VISIT FREQ"
+                                : "OPEN LINK"
                         }
                       </button>
                     )}
@@ -943,7 +970,7 @@ export default function SocialTasksScreen() {
           <h3 className="text-sm font-black uppercase italic tracking-tight">Convert Elements & ZP to Refresh</h3>
         </div>
         <p className="text-[10px] text-white/50 uppercase font-black leading-relaxed">
-          Exhausted your 12-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 12 tasks and erase active cooldowns!
+          Exhausted your 20-task batch, or blocked by a rate limit? Inject energy coordinates back to instantly reload all 20 tasks and erase active cooldowns!
         </p>
 
         <div className="flex items-center justify-between border-t border-dashed border-white/5 pt-4">

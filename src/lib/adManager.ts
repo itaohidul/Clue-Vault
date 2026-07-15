@@ -32,6 +32,19 @@ class AdManager {
     }, 1000);
   }
 
+  // Get active showAd function, prioritizing new SDK
+  private getShowAdFn() {
+    const showAdNew = (window as any).show_11301826;
+    if (typeof showAdNew === "function") {
+      return { fn: showAdNew, isNew: true };
+    }
+    const showAdOld = (window as any).show_11030019;
+    if (typeof showAdOld === "function") {
+      return { fn: showAdOld, isNew: false };
+    }
+    return null;
+  }
+
   // Record manual or incentivized ad view to strictly reset the 60s background timer
   recordAdView() {
     this.lastAdTime = Date.now();
@@ -50,19 +63,19 @@ class AdManager {
       return;
     }
 
-    const showAdFn = (window as any).show_11030019;
-    if (typeof showAdFn !== "function") {
-      console.warn("[AdManager] SDK show_11030019 not available yet. Will retry next interval.");
+    const showAd = this.getShowAdFn();
+    if (!showAd) {
+      console.warn("[AdManager] No active SDK show function available yet. Will retry next interval.");
       return;
     }
 
-    console.log("[AdManager] Triggering background interstitial...");
+    console.log(`[AdManager] Triggering background interstitial via ${showAd.isNew ? "new SDK" : "old SDK"}...`);
     this.isAdActive = true;
     this.config.onAdStart?.();
 
     // Invoke interstitial
     try {
-      const res = showAdFn({
+      const res = showAd.fn({
         type: 'inApp',
         inAppSettings: {
           frequency: 2,
@@ -92,7 +105,7 @@ class AdManager {
         this.config.onAdEnd?.();
       }
     } catch (e) {
-      console.error("[AdManager] Error running show_11030019 background script:", e);
+      console.error("[AdManager] Error running background script:", e);
       this.recordAdView();
       this.isAdActive = false;
       this.config.onAdEnd?.();
@@ -106,16 +119,16 @@ class AdManager {
       return false;
     }
 
-    const showAdFn = (window as any).show_11030019;
-    if (typeof showAdFn !== "function") {
-      console.warn("[AdManager] show_11030019 is not registered.");
+    const showAd = this.getShowAdFn();
+    if (!showAd) {
+      console.warn("[AdManager] No active SDK show function registered.");
       return false;
     }
 
     this.isAdActive = true;
     this.config.onAdStart?.();
     try {
-      const res = showAdFn({
+      const res = showAd.fn({
         type: 'inApp',
         inAppSettings: {
           frequency: 2,
@@ -147,9 +160,9 @@ class AdManager {
       return false;
     }
 
-    const showAdFn = (window as any).show_11030019;
-    if (typeof showAdFn !== "function") {
-      console.warn("[AdManager] show_11030019 is not registered.");
+    const showAd = this.getShowAdFn();
+    if (!showAd) {
+      console.warn("[AdManager] No active SDK show function registered.");
       return false;
     }
 
@@ -157,7 +170,7 @@ class AdManager {
     this.config.onAdStart?.();
 
     try {
-      const res = showAdFn();
+      const res = showAd.fn();
       if (res && typeof res.then === "function") {
         await res;
       }
@@ -181,9 +194,9 @@ class AdManager {
       return false;
     }
 
-    const showAdFn = (window as any).show_11030019;
-    if (typeof showAdFn !== "function") {
-      console.warn("[AdManager] show_11030019 is not registered.");
+    const showAd = this.getShowAdFn();
+    if (!showAd) {
+      console.warn("[AdManager] No active SDK show function registered.");
       return false;
     }
 
@@ -191,7 +204,7 @@ class AdManager {
     this.config.onAdStart?.();
 
     try {
-      const res = showAdFn('pop');
+      const res = showAd.fn('pop');
       if (res && typeof res.then === "function") {
         await res;
       }

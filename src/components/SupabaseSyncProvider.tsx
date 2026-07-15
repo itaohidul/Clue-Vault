@@ -105,23 +105,28 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
     
     // Set up polling fallback for asynchronous Telegram SDK load
     if (!resolvedNatively) {
+      if (!isTelegramEnvironment) {
+        // In non-Telegram environments (like the AI Studio previewer), bypass polling entirely and resolve identity immediately
+        const id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
+        setUserId(id);
+        localStorage.setItem("cluevault_supabase_id", id);
+      } else {
         let attempts = 0;
         const interval = setInterval(() => {
-        attempts++;
-        const success = resolveIdentity(); // force fallback on last attempt
-        if (success || attempts >= 50) { // More attempts for TWA
+          attempts++;
+          const success = resolveIdentity(); // force fallback on last attempt
+          if (success || attempts >= 50) { // More attempts for TWA
             clearInterval(interval);
             if (!success) {
-                // If STILL not resolving, fall back to anon only if not in Telegram environment
-                if (!isTelegramEnvironment) {
-                    let id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
-                    setUserId(id);
-                    localStorage.setItem("cluevault_supabase_id", id);
-                }
+              // If STILL not resolving, fall back to stored or anonymous ID to ensure previewer/standalone loads successfully
+              const id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
+              setUserId(id);
+              localStorage.setItem("cluevault_supabase_id", id);
             }
-        }
+          }
         }, 100);
         return () => clearInterval(interval);
+      }
     }
   }, []);
 
@@ -292,9 +297,9 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
       setIsSyncing(true);
       const controller = new AbortController();
       const handshakeTimeout = setTimeout(() => {
-        console.warn("[Startup Handshake] 25-second mobile timeout reached. Aborting request and unlocking with local state.");
+        console.warn("[Startup Handshake] 2.5-second resilient timeout reached. Aborting request and unlocking with local state.");
         controller.abort();
-      }, 25000); // 25s mobile-friendly resilient fallback handshake
+      }, 2500); // 2.5s fast-fallback handshake to prevent stuck previewers
 
       try {
         const tg = window.Telegram?.WebApp;

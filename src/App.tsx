@@ -200,8 +200,8 @@ function AppContent() {
 
   const [firstRouteLogged, setFirstRouteLogged] = useState(false);
 
-  // Use a local state for the loading screen that resolves when isCloudLoaded is true
-  const [initSyncCompleted, setInitSyncCompleted] = useState(false);
+  // Use a local state for the loading screen that resolves instantly
+  const [initSyncCompleted, setInitSyncCompleted] = useState(true);
 
   const [adBlocking, setAdBlocking] = useState(false);
 
@@ -270,10 +270,9 @@ function AppContent() {
     }
   }, [location.pathname, initSyncCompleted, firstRouteLogged, track, user]);
 
-  // Inside Telegram, automatically route from landing "/" to "/app/home"
+  // Automatically route from landing "/" to "/app/home" for web & Telegram preview
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    if (tg && tg.initData && location.pathname === "/") {
+    if (location.pathname === "/") {
       navigate("/app/home", { replace: true });
     }
   }, [location.pathname, navigate]);
@@ -418,7 +417,7 @@ function AppContent() {
 
   return (
     <div 
-      className="h-screen h-[100dvh] w-full bg-black overflow-hidden flex flex-col relative"
+      className="min-h-screen h-[100dvh] w-full bg-black overflow-y-auto flex flex-col relative text-white"
       style={{ pointerEvents: adBlocking ? 'none' : 'auto' }}
     >
 

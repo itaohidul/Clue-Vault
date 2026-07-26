@@ -8,6 +8,7 @@ import { cn } from "../../lib/utils";
 import { VAULT_CONFIG, RIDDLES, Riddle } from "../../data/gameConfig";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
+import { adManager } from "../../lib/adManager";
 
 const VAULTS = VAULT_CONFIG.map(v => ({
   ...v,
@@ -173,15 +174,17 @@ export default function VaultScreen() {
 
   const getVaultRewards = (vault: any) => {
     const tier = vault.rewardTier;
-    if (tier === "Low") return { coins: 500 * vault.id, mats: 10 + vault.id * 5, exp: 40 + vault.id * 10 };
-    if (tier === "Medium") return { coins: 5000 + vault.id * 1000, mats: 100 + vault.id * 20, exp: 300 + vault.id * 50 };
-    return { coins: 50000 + vault.id * 5000, mats: 1000 + vault.id * 100, exp: 2000 + vault.id * 200 };
+    const clueReward = vault.id * 3.0;
+    if (tier === "Low") return { coins: 500 * vault.id, mats: 10 + vault.id * 5, exp: 40 + vault.id * 10, clue: clueReward };
+    if (tier === "Medium") return { coins: 5000 + vault.id * 1000, mats: 100 + vault.id * 20, exp: 300 + vault.id * 50, clue: clueReward * 2 };
+    return { coins: 50000 + vault.id * 5000, mats: 1000 + vault.id * 100, exp: 2000 + vault.id * 200, clue: clueReward * 4 };
   };
 
   const handleApplyRewards = (rewards: any, riddleProg: any) => {
     const rewardCoins = rewards.coins;
     const rewardMats = rewards.mats;
     const rewardExp = rewards.exp;
+    const rewardClue = rewards.clue || 5;
 
     // Award rewards cleanly + handle level-up through EXP
     useUserStore.setState((state) => {
@@ -199,6 +202,7 @@ export default function VaultScreen() {
         ...state.resources,
         coins: state.resources.coins + rewardCoins,
         baseMaterials: state.resources.baseMaterials + rewardMats,
+        clue: (state.resources.clue || 0) + rewardClue,
         energy: state.resources.maxEnergy || 100, // Fully restore energy!
       };
 
@@ -263,14 +267,17 @@ export default function VaultScreen() {
     // Log the vault reward in transaction history
     logTransaction(rewardCoins, "vault_reward", "ZP");
     logTransaction(rewardMats, "vault_reward", "Element");
+    logTransaction(rewardClue, "vault_reward", "Clue");
     addTransaction({ type: "vault_reward", amount: rewardCoins, currency: "ZP" });
     addTransaction({ type: "vault_reward", amount: rewardMats, currency: "ELEMENT" });
+    addTransaction({ type: "vault_reward", amount: rewardClue, currency: "CLUE" });
 
     const riddleData = RIDDLES.find(r => r.id === riddleProg.riddleId);
     setShowReward({ 
       coins: rewardCoins, 
       mats: rewardMats, 
       exp: rewardExp, 
+      clue: rewardClue,
       riddlePart: riddleData?.parts[riddleProg.part - 1],
       isRiddleComplete: riddleProg.isComplete,
       riddleAnswer: riddleData?.answer
@@ -318,6 +325,10 @@ export default function VaultScreen() {
               const riddleProg = updateRiddleProgression();
               handleApplyRewards(rewards, riddleProg);
               setActiveDecryptionVault(null);
+              // Trigger interstitial/rewarded ad upon vault clearance
+              adManager.triggerRewardedInterstitial().catch((err) => {
+                console.warn("Vault clearance ad error:", err);
+              });
             }}
             onCancel={() => {
               // Cancel closes terminal but refunds the key
@@ -461,16 +472,20 @@ export default function VaultScreen() {
                 )}
               </div>
               
-              <div className="grid grid-cols-3 gap-2 mb-8">
-                 <div className="bg-white/5 rounded-2xl p-3 flex flex-col items-center">
+              <div className="grid grid-cols-4 gap-2 mb-8">
+                 <div className="bg-white/5 rounded-2xl p-2 flex flex-col items-center">
                     <span className="text-xs font-black text-amber-500">+{showReward.coins}</span>
                     <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">ZP</span>
                  </div>
-                 <div className="bg-white/5 rounded-2xl p-3 flex flex-col items-center">
+                 <div className="bg-white/5 rounded-2xl p-2 flex flex-col items-center">
+                    <span className="text-xs font-black text-amber-400">+{showReward.clue ? showReward.clue.toFixed(1) : "5.0"}</span>
+                    <span className="text-[8px] font-black uppercase text-amber-400/70 tracking-widest">CLUE</span>
+                 </div>
+                 <div className="bg-white/5 rounded-2xl p-2 flex flex-col items-center">
                     <span className="text-xs font-black text-blue-500">+{showReward.mats}</span>
                     <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">Materials</span>
                  </div>
-                 <div className="bg-white/5 rounded-2xl p-3 flex flex-col items-center">
+                 <div className="bg-white/5 rounded-2xl p-2 flex flex-col items-center">
                     <span className="text-xs font-black text-violet-400">+{showReward.exp}</span>
                     <span className="text-[8px] font-black uppercase text-white/30 tracking-widest">EXP</span>
                  </div>

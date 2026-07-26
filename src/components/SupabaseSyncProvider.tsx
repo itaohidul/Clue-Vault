@@ -56,7 +56,7 @@ export const useSupabaseSync = () => {
 export default function SupabaseSyncProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [isCloudLoaded, setIsCloudLoaded] = useState<boolean>(false);
+  const [isCloudLoaded, setIsCloudLoaded] = useState<boolean>(true);
   const [dbConnected, setDbConnected] = useState<boolean | null>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,62 +71,25 @@ export default function SupabaseSyncProvider({ children }: { children: ReactNode
   const lastPendingStateRef = useRef<any>(null);
   const isSyncInProgressRef = useRef(false);
 
-  // Initialize unique identity (Telegram context preferred)
+  // Initialize unique identity (Telegram context preferred or local fallback immediately)
   useEffect(() => {
-    // Check if URL suggests we are running inside Telegram interface, or user agent
-    const isTelegramEnvironment = 
-      typeof window !== 'undefined' && (
-        window.location.search.includes('tgWebAppData') || 
-        window.location.hash.includes('tgWebAppData') || 
-        navigator.userAgent.toLowerCase().includes('telegram') ||
-        (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
-      );
+    const nativeTgUser = 
+      window.Telegram && 
+      window.Telegram.WebApp && 
+      window.Telegram.WebApp.initDataUnsafe && 
+      window.Telegram.WebApp.initDataUnsafe.user;
 
-    const resolveIdentity = () => {
-      const nativeTgUser = 
-        window.Telegram && 
-        window.Telegram.WebApp && 
-        window.Telegram.WebApp.initDataUnsafe && 
-        window.Telegram.WebApp.initDataUnsafe.user;
-
-      if (nativeTgUser && nativeTgUser.id) {
-        const nativeId = nativeTgUser.id.toString();
-        setUserId(nativeId);
-        localStorage.setItem("cluevault_supabase_id", nativeId);
-        console.log("[Identity Resolver] Native Telegram user resolved:", nativeId);
-        return true;
-      }
-      
-      return false;
-    };
-
-    // Run first resolve pass
-    const resolvedNatively = resolveIdentity();
-    
-    // Set up polling fallback for asynchronous Telegram SDK load
-    if (!resolvedNatively) {
-      if (!isTelegramEnvironment) {
-        // In non-Telegram environments (like the AI Studio previewer), bypass polling entirely and resolve identity immediately
-        const id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
-        setUserId(id);
-        localStorage.setItem("cluevault_supabase_id", id);
-      } else {
-        let attempts = 0;
-        const interval = setInterval(() => {
-          attempts++;
-          const success = resolveIdentity(); // force fallback on last attempt
-          if (success || attempts >= 50) { // More attempts for TWA
-            clearInterval(interval);
-            if (!success) {
-              // If STILL not resolving, fall back to stored or anonymous ID to ensure previewer/standalone loads successfully
-              const id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
-              setUserId(id);
-              localStorage.setItem("cluevault_supabase_id", id);
-            }
-          }
-        }, 100);
-        return () => clearInterval(interval);
-      }
+    if (nativeTgUser && nativeTgUser.id) {
+      const nativeId = nativeTgUser.id.toString();
+      setUserId(nativeId);
+      localStorage.setItem("cluevault_supabase_id", nativeId);
+      console.log("[Identity Resolver] Native Telegram user resolved:", nativeId);
+    } else {
+      // Immediately resolve with stored ID or generated ID to prevent preview blocking
+      const id = localStorage.getItem("cluevault_supabase_id") || "anon_" + Math.random().toString(36).substring(2, 11);
+      setUserId(id);
+      localStorage.setItem("cluevault_supabase_id", id);
+      console.log("[Identity Resolver] Standard/Preview user resolved:", id);
     }
   }, []);
 

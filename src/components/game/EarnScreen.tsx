@@ -290,8 +290,12 @@ export default function EarnScreen() {
         setAntiBotProgress(100);
         setCalibrationActive(false);
         updateResources({
-          activityScore: 60
+          activityScore: 60,
+          keys: 2,
+          clue: 5
         });
+        addTransaction({ type: "task_completion", amount: 2, currency: "KEY" });
+        addTransaction({ type: "task_completion", amount: 5, currency: "CLUE" });
       } else {
         setCalibrationStep(prev => prev + 1);
         setCalibrationTarget(Math.floor(Math.random() * 4) + 1);

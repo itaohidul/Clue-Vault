@@ -73,6 +73,20 @@ class AdManager {
     this.isAdActive = true;
     this.config.onAdStart?.();
 
+    const safetyTimer = setTimeout(() => {
+      if (this.isAdActive) {
+        console.warn("[AdManager] Background interstitial safety timeout, unlocking UI.");
+        this.isAdActive = false;
+        this.config.onAdEnd?.();
+      }
+    }, 3500);
+
+    const finish = () => {
+      clearTimeout(safetyTimer);
+      this.isAdActive = false;
+      this.config.onAdEnd?.();
+    };
+
     // Invoke interstitial
     try {
       const res = showAd.fn({
@@ -92,23 +106,20 @@ class AdManager {
         })
         .catch((err: any) => {
           console.warn("[AdManager] Background interstitial failed:", err);
-          this.recordAdView(); // still reset to avoid spam loops
+          this.recordAdView();
         })
         .finally(() => {
-          this.isAdActive = false;
-          this.config.onAdEnd?.();
+          finish();
         });
       } else {
         console.log("[AdManager] Background interstitial resolved synchronously.");
         this.recordAdView();
-        this.isAdActive = false;
-        this.config.onAdEnd?.();
+        finish();
       }
     } catch (e) {
       console.error("[AdManager] Error running background script:", e);
       this.recordAdView();
-      this.isAdActive = false;
-      this.config.onAdEnd?.();
+      finish();
     }
   }
 

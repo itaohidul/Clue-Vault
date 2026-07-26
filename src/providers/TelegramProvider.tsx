@@ -19,10 +19,8 @@ export default function TelegramProvider({ children }: { children: ReactNode }) 
          if (typeof tg.ready === 'function') tg.ready();
          if (typeof tg.expand === 'function') tg.expand();
          
-         // Set background to tg theme color
-         if (tg.themeParams?.bg_color) {
-           document.body.style.background = tg.themeParams.bg_color;
-         }
+         // Always keep dark background matching the app's aesthetic
+         document.body.style.background = "#000000";
        } catch (e) {
          console.warn("Telegram init failed:", e);
        }

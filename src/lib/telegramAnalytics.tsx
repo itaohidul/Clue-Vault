@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useState, useEffect, useRef } from "react";
+import React, { Component, createContext, useContext, ReactNode, useState, useEffect, useRef } from "react";
 import { TwaAnalyticsProvider as RealTwaAnalyticsProvider, useTWAEvent } from "@tonsolutions/telemetree-react";
 
 // Module-level globals to safely outlive React context/provider recreations and prevent duplicates
@@ -137,17 +137,62 @@ export function TwaAnalyticsProvider(props: any) {
   const username = launchData?.user?.username || "";
   const pKey = `telemetree-${userId}-${username}-${isTgWebApp ? "tg" : "mock"}`;
 
+  const fallbackTrack = (evt: string, properties?: any) => {
+    console.log(`[TELEMETREE-FALLBACK-TRACK] Event: "${evt}"`, properties || {});
+  };
+
   return (
-    <RealTwaAnalyticsProvider 
-      key={pKey}
-      {...rest} 
-      telegramWebAppData={launchData}
-    >
-      <RealTelemetreeWrapper>
-        {props.children}
-      </RealTelemetreeWrapper>
-    </RealTwaAnalyticsProvider>
+    <TelemetreeErrorBoundary fallbackChildren={props.children} trackHandler={fallbackTrack}>
+      <RealTwaAnalyticsProvider 
+        key={pKey}
+        {...rest} 
+        telegramWebAppData={launchData}
+      >
+        <RealTelemetreeWrapper>
+          {props.children}
+        </RealTelemetreeWrapper>
+      </RealTwaAnalyticsProvider>
+    </TelemetreeErrorBoundary>
   );
+}
+
+interface TelemetreeErrorBoundaryProps {
+  children: ReactNode;
+  fallbackChildren: ReactNode;
+  trackHandler: (evt: string, props?: any) => void;
+}
+
+interface TelemetreeErrorBoundaryState {
+  hasError: boolean;
+}
+
+class TelemetreeErrorBoundary extends Component<TelemetreeErrorBoundaryProps, TelemetreeErrorBoundaryState> {
+  props: TelemetreeErrorBoundaryProps;
+  public state: TelemetreeErrorBoundaryState = { hasError: false };
+
+  constructor(props: TelemetreeErrorBoundaryProps) {
+    super(props);
+    this.props = props;
+  }
+
+  public static getDerivedStateFromError(): TelemetreeErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error) {
+    console.warn("[TELEMETREE-SAFETY] Telemetree SDK error caught, falling back safely:", error);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <MockAnalyticsContext.Provider value={{ track: this.props.trackHandler }}>
+          {this.props.fallbackChildren}
+        </MockAnalyticsContext.Provider>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 const MockAnalyticsContext = createContext<{ track: (evt: string, props?: any) => void }>({

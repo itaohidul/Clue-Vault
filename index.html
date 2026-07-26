@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClueVault — Unlock, Solve, Earn</title>
     <link rel="icon" type="image/png" href="/src/assets/images/cluevault_logo_1779272321887.png" />
-    <!-- 1. Load Telegram WebApp base first -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Ad SDK inclusion -->
-    <script src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019'></script>
-    <script src='//libtl.com/sdk.js' data-zone='11301826' data-sdk='show_11301826'></script>
+    <!-- 1. Load Telegram WebApp base non-blocking -->
+    <script async src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Ad SDK inclusion non-blocking -->
+    <script async src='//libtl.com/sdk.js' data-zone='11030019' data-sdk='show_11030019'></script>
+    <script async src='//libtl.com/sdk.js' data-zone='11301826' data-sdk='show_11301826'></script>
     <!-- 2. Set up early CloudStorage polyfills & error suppressions to prevent older WebView/App crashes -->
     <script>
       (function() {

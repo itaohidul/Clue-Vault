@@ -255,7 +255,8 @@ export const useUserStore = create<GameState>((set, get) => ({
     const clueReward = (reward.clue || 0) + randomClueBonus + 15;
 
     const coinGain = Math.round(((reward.coins || 0) + 300) / 2);
-    const keyGain = Math.round((reward.keys || 0) / 2);
+    const rawKeyGain = reward.keys !== undefined ? reward.keys : 1;
+    const keyGain = Math.max(1, Math.round(rawKeyGain));
     const fragmentGain = Math.round((reward.fragments || 0) / 2);
     const alloyGain = Math.round((reward.baseMaterials || 0) / 2);
     const clueGain = Math.round(clueReward / 2);
@@ -629,7 +630,9 @@ export const useUserStore = create<GameState>((set, get) => ({
       const nextResources = {
         ...resources,
         coins: resources.coins - coinCost,
-        baseMaterials: resources.baseMaterials - matCost
+        baseMaterials: resources.baseMaterials - matCost,
+        keys: resources.keys + 2,
+        clue: (resources.clue || 0) + 5
       };
 
       set({ base: nextBase, resources: nextResources });

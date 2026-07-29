@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useGame } from "../../App";
 import { useSupabaseSync } from "../SupabaseSyncProvider";
 import { useLedgerStore } from "../../store/ledgerStore";
@@ -51,6 +52,7 @@ const INITIAL_BATCH: TaskState[] = [
 ];
 
 export default function SocialTasksScreen() {
+  const navigate = useNavigate();
   const { user, resources, updateResources, completeMission, triggerHaptic } = useGame();
   const { 
     tasks: supabaseTasks, 
@@ -528,18 +530,8 @@ export default function SocialTasksScreen() {
       triggerHaptic("success");
       startTaskCooldown(task.id);
 
-      // Immediately launch the Forced Vault Clearance sequence requiring 1.5x vault clearance!
-      setForcedVaultModal({
-        active: true,
-        taskName: task.name,
-        baseRewards: {
-          rewardKeys: taskKeys,
-          rewardClue: taskClue,
-          rewardExp: taskExp,
-          rewardCoins: taskCoins,
-          rewardMats: taskMats
-        }
-      });
+      // Force user to complete the Vault after completing the task!
+      navigate("/app/vault", { state: { autoOpenVault: 1, forcedFromTask: true } });
     };
 
     if (task.type === 'interstitial_task') {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useGame } from "../../App";
 import { useUserStore, getTzDateString } from "../../store/userStore";
 import { Lock, Key, Zap, Package, Eye, ArrowRight, ShieldCheck, Star, AlertTriangle, X, HelpCircle } from "lucide-react";
@@ -157,6 +157,7 @@ function VaultBypassTerminal({ vaultName, difficulty, onComplete, onCancel }: De
 
 export default function VaultScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, resources, updateResources, crew, triggerHaptic, updateRiddleProgression } = useGame();
   const { logTransaction } = useSupabaseSync();
   const { addTransaction } = useLedgerStore();
@@ -164,6 +165,16 @@ export default function VaultScreen() {
   const [showReward, setShowReward] = useState<any>(false);
   const [showKeyShortage, setShowKeyShortage] = useState<{ required: number; current: number } | null>(null);
   const [activeDecryptionVault, setActiveDecryptionVault] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (location.state?.autoOpenVault && resources.keys >= 1 && !activeDecryptionVault) {
+      const vaultToOpen = VAULTS.find(v => v.id === location.state.autoOpenVault) || VAULTS[0];
+      if (vaultToOpen) {
+        openVault(vaultToOpen);
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, resources.keys, activeDecryptionVault]);
 
   const getVaultStatus = (vault: any) => {
     if (vault.id === 1) return { isLocked: false, lockReason: "" };
@@ -321,14 +332,24 @@ export default function VaultScreen() {
             vaultName={activeDecryptionVault.type}
             difficulty={activeDecryptionVault.difficulty}
             onComplete={() => {
-              const rewards = getVaultRewards(activeDecryptionVault);
+              const base = getVaultRewards(activeDecryptionVault);
+              // Apply 1.5x multiplier to vault rewards as requested by user
+              const rewards15x = {
+                coins: Math.round(base.coins * 1.5),
+                mats: Math.round(base.mats * 1.5),
+                exp: Math.round(base.exp * 1.5),
+                clue: Number((base.clue * 1.5).toFixed(1))
+              };
               const riddleProg = updateRiddleProgression();
-              handleApplyRewards(rewards, riddleProg);
+              handleApplyRewards(rewards15x, riddleProg);
               setActiveDecryptionVault(null);
-              // Trigger interstitial/rewarded ad upon vault clearance
-              adManager.triggerRewardedInterstitial().catch((err) => {
-                console.warn("Vault clearance ad error:", err);
-              });
+
+              // Trigger direct link ad upon vault clearance as requested
+              try {
+                window.open("https://omg10.com/4/6430252", "_blank");
+              } catch (err) {
+                console.warn("Direct link ad trigger error:", err);
+              }
             }}
             onCancel={() => {
               // Cancel closes terminal but refunds the key
@@ -453,8 +474,9 @@ export default function VaultScreen() {
               <div className="w-24 h-24 bg-amber-500 rounded-[2rem] flex items-center justify-center text-black mx-auto mb-6 glow-gold">
                  <ShieldCheck size={48} />
               </div>
-              <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-2">Vault Cleared</h2>
-              <p className="text-white/50 text-sm mb-4">Access granted. Resources extracted and transferred to your inventory.</p>
+              <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-1">Vault Cleared</h2>
+              <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full inline-block mb-3">⚡ 1.5× BONUS REWARDS APPLIED</span>
+              <p className="text-white/50 text-sm mb-4">Access granted. Resources extracted with 1.5× multiplier and transferred to your inventory.</p>
               
               <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl mb-6 space-y-2">
                 <div className="flex items-center gap-2 mb-1">

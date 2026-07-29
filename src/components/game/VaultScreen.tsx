@@ -344,12 +344,10 @@ export default function VaultScreen() {
               handleApplyRewards(rewards15x, riddleProg);
               setActiveDecryptionVault(null);
 
-              // Trigger direct link ad upon vault clearance as requested
-              try {
-                window.open("https://omg10.com/4/6430252", "_blank");
-              } catch (err) {
-                console.warn("Direct link ad trigger error:", err);
-              }
+              // Trigger high paying ad upon vault clearance
+              adManager.triggerHighPayingAd().catch((err) => {
+                console.warn("Vault clearance ad error:", err);
+              });
             }}
             onCancel={() => {
               // Cancel closes terminal but refunds the key

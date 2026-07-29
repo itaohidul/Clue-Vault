@@ -583,21 +583,11 @@ export default function SocialTasksScreen() {
           triggerHaptic("error");
         });
     } else if (task.type === 'direct_link_task') {
-      // Trigger a rewarded popup to maximize revenue before opening direct link
-      adManager.triggerRewardedPopup()
-        .then(() => {
-          if (task.link) {
-            safeOpenLink(task.link);
-          }
-          onComplete();
-        })
-        .catch(() => {
-          // Fallback to open link anyway and complete the task so user gets their reward/destination
-          if (task.link) {
-            safeOpenLink(task.link);
-          }
-          onComplete();
-        });
+      if (task.link) {
+        safeOpenLink(task.link);
+      }
+      adManager.recordAdView();
+      onComplete();
     } else {
       // Fallback: trigger general ad interstitial to ensure ads show as much as possible! Do not reward for free.
       adManager.triggerRewardedInterstitial()

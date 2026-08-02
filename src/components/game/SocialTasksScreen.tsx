@@ -156,15 +156,29 @@ export default function SocialTasksScreen() {
   }, []);
 
   // Set up repeating interval to update 'now' and dynamically release completed tasks when cooldown expires
+  const batchTasksRef = useRef(batchTasks);
+  const taskCooldownsRef = useRef(taskCooldowns);
+
+  useEffect(() => {
+    batchTasksRef.current = batchTasks;
+  }, [batchTasks]);
+
+  useEffect(() => {
+    taskCooldownsRef.current = taskCooldowns;
+  }, [taskCooldowns]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       const currentTime = Date.now();
       setNow(currentTime);
 
+      const currentBatch = batchTasksRef.current;
+      const currentCooldowns = taskCooldownsRef.current;
+
       let stateChanged = false;
-      const updatedTasks = batchTasks.map(t => {
+      const updatedTasks = currentBatch.map(t => {
         if (t.completed) {
-          const cooldownUntil = taskCooldowns[t.id] || 0;
+          const cooldownUntil = currentCooldowns[t.id] || 0;
           if (cooldownUntil > 0 && currentTime >= cooldownUntil) {
             stateChanged = true;
             return { ...t, completed: false };
@@ -175,9 +189,7 @@ export default function SocialTasksScreen() {
 
       if (stateChanged) {
         saveBatchState(updatedTasks);
-        
-        // Also clear out the cooled down task ids from taskCooldowns to keep it clean
-        const nextCooldowns = { ...taskCooldowns };
+        const nextCooldowns = { ...currentCooldowns };
         updatedTasks.forEach(t => {
           if (!t.completed) {
             delete nextCooldowns[t.id];
@@ -187,7 +199,7 @@ export default function SocialTasksScreen() {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [batchTasks, taskCooldowns]);
+  }, []);
 
   const saveTaskCooldowns = (cooldowns: Record<string, number>) => {
     setTaskCooldowns(cooldowns);
@@ -264,7 +276,7 @@ export default function SocialTasksScreen() {
   const startTaskCooldown = (taskId: string) => {
     const nextCooldowns = {
       ...taskCooldowns,
-      [taskId]: Date.now() + 3 * 60 * 1000 // 3 minutes
+      [taskId]: Date.now() + 2 * 60 * 60 * 1000 // 2 hours
     };
     saveTaskCooldowns(nextCooldowns);
   };
@@ -530,11 +542,34 @@ export default function SocialTasksScreen() {
       triggerHaptic("success");
       startTaskCooldown(task.id);
 
-      // Force user to complete the Vault after completing the task!
-      navigate("/app/vault", { state: { autoOpenVault: 1, forcedFromTask: true } });
+      setForcedVaultModal({
+        active: true,
+        taskName: task.name,
+        baseRewards: {
+          rewardKeys: task.rewardKeys || 2,
+          rewardClue: task.rewardClue || 5.0,
+          rewardExp: task.rewardExp || 100,
+          rewardCoins: task.rewardCoins || 1000,
+          rewardMats: task.rewardMats || 50,
+        }
+      });
     };
 
-    if (task.type === 'interstitial_task') {
+    if (task.type === 'rewarded_task') {
+      adManager.triggerRewardedInterstitial()
+        .then((success) => {
+          if (success) {
+            onComplete();
+          } else {
+            setLoadingTaskId(null);
+            triggerHaptic("error");
+          }
+        })
+        .catch(() => {
+          setLoadingTaskId(null);
+          triggerHaptic("error");
+        });
+    } else if (task.type === 'interstitial_task') {
       // Trigger Rewarded Interstitial to confirm ad was watched before rewarding
       adManager.triggerRewardedInterstitial()
         .then((success) => {
@@ -815,7 +850,7 @@ export default function SocialTasksScreen() {
             const remainingSecs = getRemainingCooldown(task.id);
             const isCooldownActive = remainingSecs > 0;
             const isDecrypt = task.type === 'decrypt_node';
-            const isAdTask = task.type === 'interstitial_task' || task.type === 'rewarded_interstitial_task' || task.type === 'pop_task';
+            const isAdTask = task.type === 'rewarded_task' || task.type === 'interstitial_task' || task.type === 'rewarded_interstitial_task' || task.type === 'pop_task';
 
             return (
               <div

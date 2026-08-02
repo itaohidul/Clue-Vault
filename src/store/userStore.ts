@@ -15,15 +15,6 @@ export interface ReferralAgent {
   isSimulated?: boolean;
 }
 
-export interface TelegramUser {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  language_code?: string;
-  photo_url?: string;
-}
-
 export interface GameState {
   user: {
     id?: number;
@@ -88,7 +79,6 @@ export interface GameState {
   completeMission: (reward: { coins?: number; keys?: number; fragments?: number; baseMaterials?: number; xp?: boolean; xpAmount?: number; clue?: number; activityScore?: number; isDaily?: boolean }) => void;
   finalizeOnboarding: (data: { name: string; crew: any; baseStyle: string } | null) => void;
   buyItem: (item: { cost: number; reward: Partial<GameState['resources']> }) => boolean;
-  syncWithBackend: (initData: string) => Promise<void>;
   triggerHaptic: (style?: 'light' | 'medium' | 'heavy' | 'success' | 'error') => void;
   claimReferralCommission: () => void;
   addMockReferral: () => void;
@@ -406,44 +396,6 @@ export const useUserStore = create<GameState>((set, get) => ({
     return false;
   },
 
-  syncWithBackend: async (initData: string) => {
-    set({ isLoading: true });
-    try {
-      // Increase timeout to 15s for mobile carrier data links
-      const response = await axios.post('/api/auth/telegram', { initData }, { timeout: 15000 });
-      // If server returned structured data
-      if (response.data && response.data.user) {
-        const serverUser = response.data.user;
-        const currentLocal = get();
-        
-        const mergedUser = {
-          ...currentLocal.user,
-          name: serverUser.username || serverUser.first_name || currentLocal.user.name || "Agent",
-          avatar: serverUser.photo_url || currentLocal.user.avatar,
-          id: serverUser.id,
-        };
-
-        // If backend returns validated game resources, update them safely
-        const nextState = {
-          user: mergedUser,
-          resources: response.data.resources || currentLocal.resources,
-          crew: response.data.crew || currentLocal.crew,
-          base: response.data.base || currentLocal.base,
-          unlockedTabs: currentLocal.unlockedTabs,
-          riddleState: currentLocal.riddleState,
-        };
-
-        set(nextState);
-        localStorage.setItem('cluevault_game_state_zustand', JSON.stringify(nextState));
-        console.log("[Auth] Session handshake verified.");
-      }
-    } catch (e: any) {
-      console.warn("[Auth] Handshake signal latency detected. Falling back to encrypted local cache.", e.message);
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
   claimReferralCommission: () => {
     const { user, resources } = get();
     const comm = user.referralCommission || 0;
@@ -587,18 +539,15 @@ export const useUserStore = create<GameState>((set, get) => ({
   },
 
   triggerHaptic: (style = 'light') => {
-    const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
-    if (tg?.HapticFeedback) {
-      if (style === 'success') {
-        tg.HapticFeedback.notificationOccurred('success');
-      } else if (style === 'error') {
-        tg.HapticFeedback.notificationOccurred('error');
-      } else {
-        tg.HapticFeedback.impactOccurred(style);
-      }
-    } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(style === 'success' ? [10, 30, 10] : 10);
-    }
+    if (typeof navigator === 'undefined' || !navigator.vibrate) return;
+    const patterns: Record<string, number | number[]> = {
+      light: 10,
+      medium: 20,
+      heavy: 40,
+      success: [10, 50, 10],
+      error: [40, 30, 40],
+    };
+    navigator.vibrate(patterns[style] ?? 10);
   },
 
   upgradeBaseRoom: (roomId, coinCost, matCost) => {

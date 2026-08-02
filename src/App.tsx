@@ -188,7 +188,6 @@ function AppContent() {
     resources, 
     finalizeOnboarding, 
     triggerHaptic, 
-    syncWithBackend,
     isLoading
   } = useUserStore();
 
@@ -773,10 +772,7 @@ function AppInner() {
   }, [store]);
 
   return (
-    <TwaAnalyticsProvider
-      projectId={import.meta.env.VITE_TELEMETREE_PROJECT_ID || "9caafff9-ae99-42ca-b794-b88002ebe65e"}
-      apiKey={import.meta.env.VITE_TELEMETREE_API_KEY || "eyJhcHBfbmFtZSI6ImNsdWV2YXVsdCIsImFwcF91cmwiOiJodHRwczovL3QubWUvY2x1ZXZhdWx0Ym90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vY2x1ZS12YXVsdC52ZXJjZWwuYXBwLyJ9!6Y2ufwQNDoAHOR3+U+W/dtYypxTxe5zw8UxBWh11OXc="}
-    >
+    <TwaAnalyticsProvider>
       <TelegramProvider>
         <SupabaseSyncProvider>
           <GameContext.Provider value={{ 
